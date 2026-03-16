@@ -1,26 +1,141 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg-sidebar: #2D5A42;        /* forest green medium — sesuai referensi */
+  --bg-sidebar-hover: #376B50;  /* hover sedikit lebih terang */
+  --bg-sidebar-active: #3E8055; /* active lebih terang/vibrant */
+  --bg-page: #F0F2F0;
+  --bg-card: #FFFFFF;
+  --bg-card-dark: #2D5A42;      /* sama dengan sidebar supaya seragam */
+  --bg-login-outer: #2D5A42;    /* sesuai sidebar */
+
+  --green-primary: #3A8C4A;     /* primary lebih vibrant */
+  --green-light: #4CAF50;
+  --green-badge: #255C35;
+  --green-accent: #86CFA0;      /* accent sedikit lebih terang */
+
+  --text-primary: #1A1A1A;
+  --text-secondary: #6B7280;
+  --text-on-dark: #FFFFFF;
+  --text-on-dark-muted: #B0CDB8; /* sedikit lebih terang agar lebih terbaca */
+
+  --status-normal: #2E7D32;
+  --status-high: #D97706;
+  --status-danger: #DC2626;
+  --status-optimal: #1D4ED8;
+
+  --border-light: #E5E7EB;
+  --border-card: #D1D5DB;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  background-color: var(--bg-page);
+  color: var(--text-primary);
+}
+
+.font-mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .5; }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Form input standard */
+.form-input {
+  border: 1px solid #D1D5DB;
+  border-radius: 12px;
+  padding: 10px 16px;
+  font-size: 14px;
+  transition: border-color 150ms, box-shadow 150ms;
+  background: white;
+}
+
+.form-input:focus {
+  border-color: #2E7D32;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(46, 125, 50, 0.1);
+}
+
+.form-input.error {
+  border-color: #DC2626;
+}
+
+.form-input.disabled {
+  background: #F3F4F6;
+  cursor: not-allowed;
+}
+
+.badge-clickable:hover {
+  filter: brightness(0.95);
+  cursor: pointer;
+}
+
+.row-attention {
+  background: #FEF2F2;
+  border-left: 3px solid #EF4444;
+  transition: background 200ms;
+}
+
+.row-attention:hover {
+  background: #FEE2E2;
+}
+
+.dot-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes modalEnter {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-modalEnter {
+  animation: modalEnter 0.2s ease-out;
+}
+
+@keyframes drawerEnter {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.animate-drawerEnter {
+  animation: drawerEnter 0.2s ease-out;
+}
+
+@keyframes itemSlideIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.invoice-item-enter {
+  animation: itemSlideIn 0.2s ease-out;
+}
+
+@keyframes progressFill {
+  from { width: 0%; }
+  to   { width: var(--target-width); }
+}
+
+.quick-amount-btn:hover {
+  background: #DCFCE7;
+  border-color: #16A34A;
+  color: #15803D;
 }

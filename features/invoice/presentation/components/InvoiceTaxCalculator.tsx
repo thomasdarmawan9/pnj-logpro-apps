@@ -1,0 +1,69 @@
+'use client'
+
+function formatRupiah(amount: number): string {
+  return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(amount)
+}
+
+interface Props {
+  subtotal: number
+  taxPercent: number
+  taxEnabled: boolean
+  isPkp?: boolean
+  onToggleTax: (enabled: boolean) => void
+  onChangeTaxPercent: (percent: number) => void
+}
+
+export default function InvoiceTaxCalculator({ subtotal, taxPercent, taxEnabled, isPkp, onToggleTax, onChangeTaxPercent }: Props) {
+  const taxAmount = taxEnabled ? Math.round(subtotal * taxPercent / 100) : 0
+  const netto = subtotal + taxAmount
+
+  return (
+    <div className="space-y-3">
+      {isPkp !== undefined && (
+        <div className="rounded-lg px-3 py-2 text-xs" style={{ backgroundColor: isPkp ? '#DCFCE7' : '#F3F4F6', color: isPkp ? '#166534' : '#6B7280' }}>
+          {isPkp ? '✓ Customer PKP — PPN 1,1% disarankan' : 'Customer Non-PKP — PPN tidak dikenakan secara default'}
+        </div>
+      )}
+
+      <div className="space-y-2">
+        <div className="flex justify-between items-center text-sm">
+          <span className="text-gray-500">Sub Total</span>
+          <span className="font-mono font-medium" style={{ fontFamily: 'var(--font-mono)' }}>{formatRupiah(subtotal)}</span>
+        </div>
+        <div className="border-t" style={{ borderColor: 'var(--border-card)' }} />
+        <div className="flex justify-between items-center text-sm">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => onToggleTax(!taxEnabled)}
+              className="relative inline-flex h-5 w-9 items-center rounded-full transition-colors"
+              style={{ backgroundColor: taxEnabled ? 'var(--green-primary)' : '#D1D5DB' }}
+            >
+              <span className="sr-only">Toggle PPN</span>
+              <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${taxEnabled ? 'translate-x-4' : 'translate-x-1'}`} />
+            </button>
+            <span className="text-gray-600">PPN</span>
+            <input
+              type="number"
+              min="0"
+              max="100"
+              step="0.1"
+              className="w-16 text-center form-input text-sm py-1"
+              value={taxPercent}
+              disabled={!taxEnabled}
+              onChange={e => onChangeTaxPercent(Number(e.target.value))}
+            />
+            <span className="text-gray-500">%</span>
+          </div>
+          <span className="font-mono text-gray-500 italic" style={{ fontFamily: 'var(--font-mono)' }}>{formatRupiah(taxAmount)}</span>
+        </div>
+        <div className="border-t-2 border-double" style={{ borderColor: '#9CA3AF' }} />
+        <div className="flex justify-between items-center">
+          <span className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>NETTO</span>
+          <span className="text-lg font-bold font-mono" style={{ fontFamily: 'var(--font-mono)', color: '#166534' }}>
+            {formatRupiah(netto)}
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}
