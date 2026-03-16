@@ -1,36 +1,185 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# PNJ Control — Sistem Manajemen Armada & Operasional
 
-## Getting Started
+Aplikasi manajemen operasional berbasis web untuk **PT. Pelangi Nuansa Jaya (PNJ)**, mencakup pengelolaan Surat Jalan, Invoice, dan Stok Barang secara terpadu.
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Fitur Utama
+
+### 📋 Modul Surat Jalan
+- Pembuatan dan pengelolaan Surat Jalan (SJ) pengiriman
+- Alur status operasional: Draft → Assigned → Delivered → Void
+- Penugasan armada & supir (dari master atau input manual)
+- Upload foto bukti pengiriman (POD)
+- Generate PDF Surat Jalan
+- Filter & pencarian berdasarkan status, tanggal, customer
+
+### 🧾 Modul Invoice
+- Pembuatan invoice dengan kalkulasi pajak (PPN)
+- Lampirkan Surat Jalan ke Invoice
+- Pencatatan pembayaran bertahap (partial payment)
+- Alur status: Draft → Sent → Outstanding → Paid → Void
+- Progress bar pembayaran realtime
+- Generate PDF Invoice
+- Laporan Aging AR
+
+### 📦 Modul Manajemen Stok
+- Dashboard saldo stok per barang dengan indikator level (hijau/amber/merah)
+- Grafik pergerakan stok 30 hari (Recharts)
+- **Stok Masuk**: pencatatan penerimaan barang dari kapal/supplier per batch
+- **Stok Keluar**: pencatatan distribusi per trip, bisa referensikan SJ atau input manual
+- Laporan Rekap dengan *running balance* per baris (format dokumen PDF)
+- Validasi ketat: saldo stok tidak boleh negatif
+- Master Barang: kelola kode, nama, kategori, satuan
+
+### 🔐 Autentikasi & Role
+| Role | Akses |
+|------|-------|
+| `super_admin` | Full access — termasuk hapus data |
+| `admin_ops` | Buat & edit SJ, Stok Masuk/Keluar, Master Barang |
+| `admin_finance` | Buat & kelola Invoice; view-only untuk SJ & Stok |
+
+---
+
+## Tech Stack
+
+| Kategori | Teknologi |
+|----------|-----------|
+| Framework | Next.js 16 (App Router) |
+| UI Library | React 19 |
+| Language | TypeScript 5 |
+| State Management | Redux Toolkit + React Redux |
+| Styling | Tailwind CSS v4 |
+| Charts | Recharts |
+| Icons | Lucide React |
+| Linting | ESLint (eslint-config-next) |
+
+---
+
+## Arsitektur
+
+Proyek ini menggunakan **Clean Architecture** dengan pemisahan yang jelas antar lapisan:
+
+```
+features/
+└── [module]/
+    ├── domain/
+    │   ├── entities/        ← TypeScript interfaces & types
+    │   └── value-objects/
+    ├── application/
+    │   ├── dto/             ← Data Transfer Objects
+    │   ├── use-cases/       ← Business logic
+    │   └── validators/      ← Validation rules
+    ├── infrastructure/
+    │   └── repositories/    ← Interface + Mock implementation
+    └── presentation/
+        ├── pages/           ← Page components
+        ├── components/      ← UI components & modals
+        └── hooks/           ← Custom React hooks
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+State global dikelola dengan **Redux Toolkit** (slice per modul: `authSlice`, `suratJalanSlice`, `invoiceSlice`, `stockSlice`).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Struktur Direktori
 
-## Learn More
+```
+logproapp/
+├── app/                        # Next.js App Router routes
+│   ├── dashboard/
+│   ├── invoice/
+│   ├── surat-jalan/
+│   ├── stok/
+│   └── login/
+├── components/
+│   ├── layout/                 # DashboardLayout, Sidebar, Topbar
+│   ├── dashboard/              # MetricCard, RevenueChart, dll
+│   ├── toast/                  # Toast notification system
+│   └── ui/                     # Badge, StatusBadge
+├── features/
+│   ├── invoice/
+│   ├── surat-jalan/
+│   └── stock/
+├── store/
+│   ├── index.ts
+│   └── slices/
+└── lib/
+    └── mockData/               # Mock data untuk development
+```
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Cara Menjalankan
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Prerequisites
+- Node.js 20+
+- npm
 
-## Deploy on Vercel
+### Instalasi
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+# Clone repository
+git clone https://github.com/your-username/logproapp.git
+cd logproapp
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+# Install dependencies
+npm install
+
+# Jalankan development server
+npm run dev
+```
+
+Buka [http://localhost:3000](http://localhost:3000) di browser.
+
+### Login
+
+Gunakan kredensial berikut untuk masuk:
+
+| Field | Value |
+|-------|-------|
+| Email | `admin@pnj.co.id` |
+| Password | `pnj2026` |
+
+### Scripts
+
+```bash
+npm run dev      # Development server (Turbopack)
+npm run build    # Production build
+npm run start    # Jalankan production build
+npm run lint     # Cek kode dengan ESLint
+```
+
+---
+
+## Halaman & Routes
+
+| Route | Deskripsi |
+|-------|-----------|
+| `/dashboard` | Dashboard utama — metrik & aktivitas |
+| `/surat-jalan` | Daftar Surat Jalan |
+| `/surat-jalan/create` | Buat SJ baru |
+| `/surat-jalan/[uuid]` | Detail SJ |
+| `/invoice` | Daftar Invoice |
+| `/invoice/create` | Buat Invoice baru |
+| `/invoice/[uuid]` | Detail Invoice |
+| `/stok` | Dashboard Stok |
+| `/stok/barang` | Master Barang |
+| `/stok/masuk` | Daftar Stok Masuk |
+| `/stok/masuk/create` | Input Stok Masuk |
+| `/stok/keluar` | Daftar Stok Keluar |
+| `/stok/keluar/create` | Input Stok Keluar |
+| `/stok/laporan` | Laporan Rekap Stok |
+
+---
+
+## Catatan Development
+
+- Semua data saat ini menggunakan **mock repository** (in-memory) — belum terhubung ke backend/database.
+- Untuk koneksi ke backend nyata, implementasikan interface di `features/[module]/infrastructure/repositories/` sesuai kontrak yang sudah tersedia.
+- Design system menggunakan CSS variables di `app/globals.css` (warna, font, spacing).
+- Font: **Plus Jakarta Sans** (UI) + **JetBrains Mono** (kode/angka).
+
+---
+
+*PT. Pelangi Nuansa Jaya — Internal Operations System*
