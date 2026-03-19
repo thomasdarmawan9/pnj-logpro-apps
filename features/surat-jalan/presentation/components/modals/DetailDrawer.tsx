@@ -25,7 +25,7 @@ export default function DetailDrawer({ open, sj, onClose, onViewDetail, onPrint 
   return (
     <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="absolute right-0 top-0 h-full w-[480px] bg-white shadow-2xl animate-drawerEnter flex flex-col">
+      <div className="absolute right-0 top-0 h-full w-120 bg-white shadow-2xl animate-drawerEnter flex flex-col">
         <div className="sticky top-0 bg-white border-b p-5 flex items-start justify-between" style={{ borderColor: 'var(--border-card)' }}>
           <div>
             <div className="text-lg font-semibold">{sj.sj_number}</div>

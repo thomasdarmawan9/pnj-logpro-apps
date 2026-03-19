@@ -1,9 +1,11 @@
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
+import { useState } from 'react'
 import {
   LayoutDashboard, FileText, Receipt, Truck, FolderOpen,
-  Users, User, BarChart2, Settings, LogOut, X, ChevronLeft, ChevronRight, Package
+  Users, User, BarChart3, Settings, LogOut, X, ChevronLeft, ChevronRight,
+  Package, CreditCard, TrendingUp, Activity, ChevronDown
 } from 'lucide-react'
 import { useDispatch, useSelector } from 'react-redux'
 import { logout } from '@/store/slices/authSlice'
@@ -22,8 +24,14 @@ const navItemsBase = [
   { icon: User, label: 'Supir', href: '/master/supir' },
 ]
 
+const laporanChildren = [
+  { icon: CreditCard,  label: 'Aging AR',         href: '/laporan/aging-ar',    roles: ['super_admin', 'admin_finance'] },
+  { icon: TrendingUp,  label: 'Profit & Loss',     href: '/laporan/profit-loss', roles: ['super_admin'] },
+  { icon: Truck,       label: 'Utilisasi Armada',  href: '/laporan/utilisasi',   roles: ['super_admin'] },
+  { icon: Activity,    label: 'Audit Trail',       href: '/laporan/audit-trail', roles: ['super_admin'] },
+]
+
 const bottomNavItems = [
-  { icon: BarChart2, label: 'Laporan', href: '/laporan/aging-ar' },
   { icon: Settings, label: 'Pengaturan', href: '/settings/users' },
 ]
 
@@ -42,12 +50,19 @@ export default function Sidebar({ isCollapsed, onToggleCollapse, onClose }: Side
   const badgeCountSource = sjList.length ? sjList : MOCK_SURAT_JALAN
   const sjBadgeCount = badgeCountSource.filter(sj => sj.status === StatusOperasional.DELIVERED && sj.invoice_attachment_status === StatusLampiran.NO_INVOICE).length
 
+  const isLaporanActive = pathname.startsWith('/laporan')
+  const [laporanOpen, setLaporanOpen] = useState(isLaporanActive)
+
   const navItems = navItemsBase.map(item => {
     if (item.href === '/surat-jalan') {
       return { ...item, badge: sjBadgeCount || undefined, badgeColor: '#DC2626' }
     }
     return item
   })
+
+  const visibleLaporanChildren = laporanChildren.filter(child =>
+    !user || child.roles.includes(user.role)
+  )
 
   const handleLogout = () => {
     dispatch(logout())
@@ -119,17 +134,16 @@ export default function Sidebar({ isCollapsed, onToggleCollapse, onClose }: Side
         }}
       >
         <div
-          className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
-          style={{ backgroundColor: 'var(--green-primary)' }}
+          className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 bg-white overflow-hidden"
         >
-          <Truck size={16} color="white" />
+          <img src="/pnj-logo.png" alt="PNJ Logo" className="w-7 h-7 object-contain" />
         </div>
         {!isCollapsed && (
           <>
             <div className="flex-1 min-w-0">
               <div className="text-white font-bold text-sm leading-tight">PNJ Control</div>
               <div className="text-[11px] leading-tight" style={{ color: 'var(--text-on-dark-muted)' }}>
-                Manajemen Armada
+                Manajemen Logistik
               </div>
             </div>
             {onClose && (
@@ -149,6 +163,68 @@ export default function Sidebar({ isCollapsed, onToggleCollapse, onClose }: Side
 
         {/* Divider */}
         <div className="my-2 border-t" style={{ borderColor: 'rgba(165, 184, 165, 0.2)' }} />
+
+        {/* Laporan section */}
+        {!isCollapsed ? (
+          <div>
+            <button
+              onClick={() => setLaporanOpen(o => !o)}
+              className="w-full flex items-center gap-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 px-3"
+              style={{
+                backgroundColor: isLaporanActive ? 'var(--bg-sidebar-active)' : 'transparent',
+                color: isLaporanActive ? '#FFFFFF' : 'var(--text-on-dark-muted)',
+              }}
+              onMouseEnter={e => { if (!isLaporanActive) (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'var(--bg-sidebar-hover)' }}
+              onMouseLeave={e => { if (!isLaporanActive) (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent' }}
+            >
+              <BarChart3 size={16} className="shrink-0" />
+              <span className="flex-1 text-left">Laporan</span>
+              <ChevronDown
+                size={12}
+                className="shrink-0 transition-transform duration-200"
+                style={{ transform: laporanOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
+              />
+            </button>
+            {laporanOpen && (
+              <div className="ml-4 mt-0.5 space-y-0.5 border-l pl-2" style={{ borderColor: 'rgba(165, 184, 165, 0.25)' }}>
+                {visibleLaporanChildren.map(child => {
+                  const isActive = pathname === child.href || pathname.startsWith(child.href)
+                  return (
+                    <button
+                      key={child.href}
+                      onClick={() => router.push(child.href)}
+                      className="w-full flex items-center gap-2 py-2 px-2 rounded-lg text-xs font-medium transition-all duration-150"
+                      style={{
+                        backgroundColor: isActive ? 'var(--bg-sidebar-active)' : 'transparent',
+                        color: isActive ? '#FFFFFF' : 'var(--text-on-dark-muted)',
+                      }}
+                      onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'var(--bg-sidebar-hover)' }}
+                      onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent' }}
+                    >
+                      <child.icon size={13} className="shrink-0" />
+                      <span className="truncate">{child.label}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        ) : (
+          /* Collapsed: just the icon */
+          <button
+            onClick={() => router.push('/laporan/aging-ar')}
+            title="Laporan"
+            className="w-full flex items-center justify-center py-2.5 rounded-xl transition-all duration-150 relative"
+            style={{
+              backgroundColor: isLaporanActive ? 'var(--bg-sidebar-active)' : 'transparent',
+              color: isLaporanActive ? '#FFFFFF' : 'var(--text-on-dark-muted)',
+            }}
+            onMouseEnter={e => { if (!isLaporanActive) (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'var(--bg-sidebar-hover)' }}
+            onMouseLeave={e => { if (!isLaporanActive) (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent' }}
+          >
+            <BarChart3 size={16} />
+          </button>
+        )}
 
         <div className="space-y-0.5">
           {bottomNavItems.map(item => <NavItem key={item.href} item={item} />)}

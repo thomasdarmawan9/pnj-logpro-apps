@@ -3,6 +3,7 @@ import authReducer from './slices/authSlice'
 import suratJalanReducer from './slices/suratJalanSlice'
 import invoiceReducer from './slices/invoiceSlice'
 import stockReducer from './slices/stockSlice'
+import reportsReducer from './slices/reportsSlice'
 
 export const store = configureStore({
   reducer: {
@@ -10,6 +11,7 @@ export const store = configureStore({
     suratJalan: suratJalanReducer,
     invoice: invoiceReducer,
     stock: stockReducer,
+    reports: reportsReducer,
   },
 })
 

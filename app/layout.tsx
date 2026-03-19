@@ -3,8 +3,8 @@ import './globals.css'
 import { ReduxProvider } from '@/components/providers/ReduxProvider'
 
 export const metadata: Metadata = {
-  title: 'PNJ Control - Sistem Manajemen Armada',
-  description: 'Aplikasi Manajemen Armada PT. Pelangi Nuansa Jaya',
+  title: 'PNJ Control - Sistem Manajemen Logistik',
+  description: 'Aplikasi Manajemen Logistik PT. Pelangi Nuansa Jaya',
 }
 
 export default function RootLayout({

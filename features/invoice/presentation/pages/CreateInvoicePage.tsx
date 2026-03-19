@@ -282,7 +282,7 @@ export default function CreateInvoicePage() {
           {selectedProject && (
             <div className="rounded-xl border p-4" style={{ borderColor: '#BFDBFE', backgroundColor: '#EFF6FF' }}>
               <div className="flex items-start gap-2">
-                <Info size={16} className="text-blue-500 mt-0.5 flex-shrink-0" />
+                <Info size={16} className="text-blue-500 mt-0.5 shrink-0" />
                 <div>
                   <p className="text-sm text-blue-800">Ada SJ di proyek ini yang bisa dilampirkan ke invoice setelah disimpan.</p>
                   <p className="text-xs text-blue-600 mt-1">Lampirkan SJ dilakukan setelah invoice dibuat.</p>

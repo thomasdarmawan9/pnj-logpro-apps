@@ -12,7 +12,7 @@ export default function SJFilterBar({ filters, onChange, onReset }: SJFilterBarP
   return (
     <div className="rounded-xl px-5 py-4 shadow-sm mb-5 bg-white border" style={{ borderColor: 'var(--border-card)' }}>
       <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[240px]">
+        <div className="relative flex-1 min-w-60">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           <input
             className="form-input w-full"

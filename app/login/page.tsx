@@ -111,20 +111,20 @@ export default function LoginPage() {
       </svg>
 
       <div className="relative w-full max-w-[440px] px-4">
-        {/* Floating icon */}
+        {/* Floating logo */}
         <div className="flex justify-center mb-0 relative z-10">
           <div
-            className="w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg"
-            style={{ backgroundColor: '#255C35', marginBottom: '-32px' }}
+            className="w-20 h-20 rounded-2xl flex items-center justify-center shadow-lg bg-white"
+            style={{ marginBottom: '-40px' }}
           >
-            <Truck size={32} color="#81C784" />
+            <img src="/pnj-logo.png" alt="PNJ Logo" className="w-14 h-14 object-contain" />
           </div>
         </div>
 
         {/* Card */}
-        <div className="bg-white rounded-3xl shadow-2xl pt-12 pb-10 px-10 animate-fadeIn">
+        <div className="bg-white rounded-3xl shadow-2xl pt-14 pb-10 px-10 animate-fadeIn">
           <h1 className="text-[22px] font-bold text-center" style={{ color: 'var(--text-primary)' }}>
-            Sistem Manajemen Armada
+            Sistem Manajemen Logistik
           </h1>
           <p className="text-sm text-center mt-1 mb-8" style={{ color: 'var(--text-secondary)' }}>
             Masuk untuk mengakses dashboard operasional
