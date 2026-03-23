@@ -1,6 +1,6 @@
 # PNJ Control — Sistem Manajemen Armada & Operasional
 
-Aplikasi manajemen operasional berbasis web untuk **PT. Pelangi Nuansa Jaya (PNJ)**, mencakup pengelolaan Surat Jalan, Invoice, dan Stok Barang secara terpadu.
+Aplikasi manajemen operasional berbasis web untuk **PT. Pelangi Nuansa Jaya (PNJ)**, mencakup pengelolaan Surat Jalan, Invoice, Stok Barang, Master Data, Laporan, dan Pengaturan Sistem secara terpadu.
 
 ---
 
@@ -12,16 +12,15 @@ Aplikasi manajemen operasional berbasis web untuk **PT. Pelangi Nuansa Jaya (PNJ
 - Penugasan armada & supir (dari master atau input manual)
 - Upload foto bukti pengiriman (POD)
 - Generate PDF Surat Jalan
-- Filter & pencarian berdasarkan status, tanggal, customer
+- Filter & pencarian berdasarkan status, tanggal, customer, proyek
 
 ### 🧾 Modul Invoice
-- Pembuatan invoice dengan kalkulasi pajak (PPN)
+- Pembuatan invoice dengan kalkulasi pajak (PPN) — otomatis berdasarkan status PKP customer
 - Lampirkan Surat Jalan ke Invoice
 - Pencatatan pembayaran bertahap (partial payment)
 - Alur status: Draft → Sent → Outstanding → Paid → Void
 - Progress bar pembayaran realtime
 - Generate PDF Invoice
-- Laporan Aging AR
 
 ### 📦 Modul Manajemen Stok
 - Dashboard saldo stok per barang dengan indikator level (hijau/amber/merah)
@@ -32,12 +31,29 @@ Aplikasi manajemen operasional berbasis web untuk **PT. Pelangi Nuansa Jaya (PNJ
 - Validasi ketat: saldo stok tidak boleh negatif
 - Master Barang: kelola kode, nama, kategori, satuan
 
+### 🗂️ Modul Master Data
+- **Master Customer** — CRUD customer dengan status PKP, NPWP, data PIC & kontak; filter by PKP/piutang
+- **Master Armada** — CRUD kendaraan dengan kategori (Truck, Trailer, Mobil Keluarga, Alat Berat, Lainnya), status aktif/nonaktif/terjual; proteksi unit TBD
+- **Master Supir** — CRUD supir dengan pelacakan SIM (nomor, tanggal kadaluarsa); badge & alert otomatis untuk SIM expired/expiring soon
+- **Master Proyek & Kontrak** — CRUD proyek terhubung ke customer; halaman detail per-proyek dengan ringkasan keuangan (revenue, biaya ops, gross profit), tab Surat Jalan & Invoice
+
+### 📊 Modul Laporan
+- **Aging AR** — Analisis piutang menurut bucket umur (Current, 1–30, 31–60, 61–90, >90 hari); export Excel
+- **Profit & Loss** — Laporan laba-rugi per proyek dalam periode tertentu; export Excel
+- **Utilisasi Armada** *(super_admin only)* — Persentase utilisasi per unit kendaraan dengan bar chart (Recharts); filter periode & kategori; export Excel
+- **Audit Trail** *(super_admin only)* — Log aktivitas seluruh pengguna sistem
+
+### ⚙️ Modul Pengaturan Sistem *(super_admin only)*
+- **User Management** — CRUD akun pengguna; reset password; lock/unlock akun; role-based access
+- **Nomor Otomatis** — Konfigurasi format & urutan nomor SJ, Invoice, Stok Masuk, Stok Keluar; live preview format
+- **Profil Perusahaan** — Nama, alamat, kontak, rekening bank, logo, dan persentase pajak default; preview kop surat langsung di halaman
+
 ### 🔐 Autentikasi & Role
 | Role | Akses |
 |------|-------|
-| `super_admin` | Full access — termasuk hapus data |
-| `admin_ops` | Buat & edit SJ, Stok Masuk/Keluar, Master Barang |
-| `admin_finance` | Buat & kelola Invoice; view-only untuk SJ & Stok |
+| `super_admin` | Full access — termasuk Laporan, Pengaturan, hapus data |
+| `admin_ops` | Buat & edit SJ, Stok Masuk/Keluar, Master Data |
+| `admin_finance` | Buat & kelola Invoice; view-only untuk SJ, Stok, Master Customer |
 
 ---
 
@@ -52,6 +68,7 @@ Aplikasi manajemen operasional berbasis web untuk **PT. Pelangi Nuansa Jaya (PNJ
 | Styling | Tailwind CSS v4 |
 | Charts | Recharts |
 | Icons | Lucide React |
+| Export | ExcelJS |
 | Linting | ESLint (eslint-config-next) |
 
 ---
@@ -78,7 +95,7 @@ features/
         └── hooks/           ← Custom React hooks
 ```
 
-State global dikelola dengan **Redux Toolkit** (slice per modul: `authSlice`, `suratJalanSlice`, `invoiceSlice`, `stockSlice`).
+State global dikelola dengan **Redux Toolkit** (slice per modul: `authSlice`, `suratJalanSlice`, `invoiceSlice`, `stockSlice`, `masterSlice`, `settingsSlice`).
 
 ---
 
@@ -91,21 +108,41 @@ logproapp/
 │   ├── invoice/
 │   ├── surat-jalan/
 │   ├── stok/
+│   ├── master/
+│   │   ├── customer/
+│   │   ├── armada/
+│   │   ├── supir/
+│   │   └── proyek/
+│   │       └── [uuid]/
+│   ├── laporan/
+│   │   ├── aging-ar/
+│   │   ├── profit-loss/
+│   │   ├── utilisasi/
+│   │   └── audit-trail/
+│   ├── settings/
+│   │   ├── users/
+│   │   ├── numbering/
+│   │   └── company/
 │   └── login/
 ├── components/
-│   ├── layout/                 # DashboardLayout, Sidebar, Topbar
+│   ├── layout/                 # DashboardLayout, Sidebar (collapsible), Topbar
 │   ├── dashboard/              # MetricCard, RevenueChart, dll
 │   ├── toast/                  # Toast notification system
-│   └── ui/                     # Badge, StatusBadge
+│   └── ui/                     # FleetCategoryBadge, FleetStatusBadge, SIMStatusBadge
 ├── features/
 │   ├── invoice/
 │   ├── surat-jalan/
-│   └── stock/
+│   ├── stock/
+│   ├── master/
+│   ├── reports/
+│   └── settings/
 ├── store/
 │   ├── index.ts
 │   └── slices/
 └── lib/
-    └── mockData/               # Mock data untuk development
+    ├── mockData/               # Mock data untuk development
+    ├── formatters.ts           # formatRupiah, formatDate, dll
+    └── exportFleetUtilization.ts
 ```
 
 ---
@@ -136,10 +173,9 @@ Buka [http://localhost:3000](http://localhost:3000) di browser.
 
 Gunakan kredensial berikut untuk masuk:
 
-| Field | Value |
-|-------|-------|
-| Email | `admin@pnj.co.id` |
-| Password | `pnj2026` |
+| Email | Password | Role |
+|-------|----------|------|
+| `admin@pnj.co.id` | `pnj2026` | super_admin |
 
 ### Scripts
 
@@ -154,22 +190,34 @@ npm run lint     # Cek kode dengan ESLint
 
 ## Halaman & Routes
 
-| Route | Deskripsi |
-|-------|-----------|
-| `/dashboard` | Dashboard utama — metrik & aktivitas |
-| `/surat-jalan` | Daftar Surat Jalan |
-| `/surat-jalan/create` | Buat SJ baru |
-| `/surat-jalan/[uuid]` | Detail SJ |
-| `/invoice` | Daftar Invoice |
-| `/invoice/create` | Buat Invoice baru |
-| `/invoice/[uuid]` | Detail Invoice |
-| `/stok` | Dashboard Stok |
-| `/stok/barang` | Master Barang |
-| `/stok/masuk` | Daftar Stok Masuk |
-| `/stok/masuk/create` | Input Stok Masuk |
-| `/stok/keluar` | Daftar Stok Keluar |
-| `/stok/keluar/create` | Input Stok Keluar |
-| `/stok/laporan` | Laporan Rekap Stok |
+| Route | Deskripsi | Role |
+|-------|-----------|------|
+| `/dashboard` | Dashboard utama — metrik & aktivitas | Semua |
+| `/surat-jalan` | Daftar Surat Jalan | Semua |
+| `/surat-jalan/create` | Buat SJ baru | super_admin, admin_ops |
+| `/surat-jalan/[uuid]` | Detail SJ | Semua |
+| `/invoice` | Daftar Invoice | Semua |
+| `/invoice/create` | Buat Invoice baru | super_admin, admin_finance |
+| `/invoice/[uuid]` | Detail Invoice | Semua |
+| `/stok` | Dashboard Stok | Semua |
+| `/stok/barang` | Master Barang | Semua |
+| `/stok/masuk` | Daftar Stok Masuk | Semua |
+| `/stok/masuk/create` | Input Stok Masuk | super_admin, admin_ops |
+| `/stok/keluar` | Daftar Stok Keluar | Semua |
+| `/stok/keluar/create` | Input Stok Keluar | super_admin, admin_ops |
+| `/stok/laporan` | Laporan Rekap Stok | Semua |
+| `/master/customer` | Master Customer | Semua |
+| `/master/armada` | Master Armada | Semua |
+| `/master/supir` | Master Supir | Semua |
+| `/master/proyek` | Daftar Proyek & Kontrak | Semua |
+| `/master/proyek/[uuid]` | Detail Proyek | Semua |
+| `/laporan/aging-ar` | Laporan Aging Piutang AR | super_admin, admin_finance |
+| `/laporan/profit-loss` | Laporan Profit & Loss | super_admin |
+| `/laporan/utilisasi` | Laporan Utilisasi Armada | super_admin |
+| `/laporan/audit-trail` | Log Aktivitas Sistem | super_admin |
+| `/settings/users` | Manajemen Pengguna | super_admin |
+| `/settings/numbering` | Pengaturan Nomor Otomatis | super_admin |
+| `/settings/company` | Profil Perusahaan | super_admin |
 
 ---
 
@@ -179,6 +227,7 @@ npm run lint     # Cek kode dengan ESLint
 - Untuk koneksi ke backend nyata, implementasikan interface di `features/[module]/infrastructure/repositories/` sesuai kontrak yang sudah tersedia.
 - Design system menggunakan CSS variables di `app/globals.css` (warna, font, spacing).
 - Font: **Plus Jakarta Sans** (UI) + **JetBrains Mono** (kode/angka).
+- Sidebar mendukung mode **collapsed** (icon-only) dan **expanded** dengan grup navigasi yang bisa dilipat (Master Data, Laporan, Pengaturan).
 
 ---
 
