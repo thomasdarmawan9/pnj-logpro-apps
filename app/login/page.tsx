@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useDispatch } from 'react-redux'
-import { Mail, Lock, Eye, EyeOff, Truck } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff } from 'lucide-react'
 import { loginSuccess, loginFailed } from '@/store/slices/authSlice'
 import { MOCK_CREDENTIALS, MOCK_USER } from '@/lib/mockData'
 import { useSelector } from 'react-redux'
@@ -117,7 +117,8 @@ export default function LoginPage() {
             className="w-20 h-20 rounded-2xl flex items-center justify-center shadow-lg bg-white"
             style={{ marginBottom: '-40px' }}
           >
-            <img src="/pnj-logo.png" alt="PNJ Logo" className="w-14 h-14 object-contain" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/pnj-logo.png" alt="PNJ Logo" className="w-14 h-14 object-contain" />
           </div>
         </div>
 

@@ -9,7 +9,7 @@ import { getAgingARReport } from '../../application/use-cases/GetAgingARReport'
 import { getProfitLossReport } from '../../application/use-cases/GetProfitLossReport'
 import { getAuditTrail } from '../../application/use-cases/GetAuditTrail'
 
-const CACHE_TTL_MS = 10 * 60 * 1000 // 10 minutes
+const _CACHE_TTL_MS = 10 * 60 * 1000 // 10 minutes (reserved for future cache implementation)
 
 class MockReportsRepository implements IReportsRepository {
   private agingARCache: { data: AgingARSummary; timestamp: number } | null = null

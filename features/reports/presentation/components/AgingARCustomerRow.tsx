@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { AgingARCustomer } from '@/features/reports/domain/entities/AgingARReport'
-import { AgingBucket, AGING_BUCKET_CONFIG, ALL_BUCKETS } from '@/features/reports/domain/value-objects/AgingBucket'
+import { AGING_BUCKET_CONFIG, ALL_BUCKETS } from '@/features/reports/domain/value-objects/AgingBucket'
 import { formatRupiah, formatDate } from '@/lib/formatters'
 
 interface AgingARCustomerRowProps {

@@ -1,4 +1,4 @@
-import { ProfitLossSummary, ProfitLossProject } from '../../domain/entities/ProfitLossReport'
+import { ProfitLossSummary } from '../../domain/entities/ProfitLossReport'
 import { ProfitLossFilterDto } from '../dto/ProfitLossFilterDto'
 import { MOCK_PROFIT_LOSS } from '@/lib/mockData/reports'
 

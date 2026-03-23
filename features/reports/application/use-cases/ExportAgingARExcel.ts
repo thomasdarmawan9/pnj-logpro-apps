@@ -1,6 +1,5 @@
 import { AgingARSummary } from '../../domain/entities/AgingARReport'
-import { ALL_BUCKETS, AGING_BUCKET_CONFIG } from '../../domain/value-objects/AgingBucket'
-import { formatRupiah, formatDate } from '@/lib/formatters'
+import { formatDate } from '@/lib/formatters'
 
 export async function exportAgingARExcel(data: AgingARSummary): Promise<void> {
   const ExcelJS = (await import('exceljs')).default
