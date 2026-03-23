@@ -95,9 +95,9 @@ export default function ProjectListPage() {
       {/* Summary Cards */}
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: 'Aktif', count: summary.active, ...STATUS_CONFIG.active },
-          { label: 'Selesai', count: summary.completed, ...STATUS_CONFIG.completed },
-          { label: 'Ditunda', count: summary.on_hold, ...STATUS_CONFIG.on_hold },
+          { count: summary.active, ...STATUS_CONFIG.active },
+          { count: summary.completed, ...STATUS_CONFIG.completed },
+          { count: summary.on_hold, ...STATUS_CONFIG.on_hold },
         ].map(s => (
           <div key={s.label} className="rounded-2xl p-4" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-card)' }}>
             <div className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>{s.count}</div>

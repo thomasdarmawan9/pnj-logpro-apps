@@ -36,7 +36,7 @@ export default function UserManagementPage() {
     return !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
   })
 
-  const isSelf = (u: SystemUser) => u.uuid === currentUser?.uuid
+  const isSelf = (u: SystemUser) => u.email === currentUser?.email
   const isLocked = (u: SystemUser) => u.locked_until != null && new Date(u.locked_until) > new Date()
 
   const handleToggleStatus = async (user: SystemUser) => {

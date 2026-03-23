@@ -110,7 +110,7 @@ export default function LoginPage() {
         />
       </svg>
 
-      <div className="relative w-full max-w-[440px] px-4">
+      <div className="relative w-full max-w-110 px-4">
         {/* Floating logo */}
         <div className="flex justify-center mb-0 relative z-10">
           <div

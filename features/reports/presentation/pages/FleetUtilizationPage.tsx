@@ -229,10 +229,25 @@ export default function FleetUtilizationPage() {
               tick={{ fontSize: 11, fontFamily: 'JetBrains Mono, monospace' }}
             />
             <Tooltip
-              formatter={(value: number) => [`${Number(value).toFixed(1)}%`, 'Utilisasi']}
-              labelFormatter={(label: string) => label}
+              formatter={(value) => {
+                const num = typeof value === 'number' ? value : Number(value)
+                const display = Number.isFinite(num) ? `${num.toFixed(1)}%` : '—'
+                return [display, 'Utilisasi']
+              }}
+              labelFormatter={(label) => (typeof label === 'string' ? label : '')}
             />
-            <Bar dataKey="pct" radius={[0, 4, 4, 0]} label={{ position: 'right', fontSize: 11, formatter: (v: number) => v > 0 ? `${v.toFixed(1)}%` : 'Tidak ada trip' }}>
+            <Bar
+              dataKey="pct"
+              radius={[0, 4, 4, 0]}
+              label={{
+                position: 'right',
+                fontSize: 11,
+                formatter: (v) => {
+                  const num = typeof v === 'number' ? v : Number(v)
+                  return Number.isFinite(num) && num > 0 ? `${num.toFixed(1)}%` : 'Tidak ada trip'
+                },
+              }}
+            >
               {chartData.map((entry, idx) => (
                 <Cell key={idx} fill={barColor(entry.pct)} />
               ))}

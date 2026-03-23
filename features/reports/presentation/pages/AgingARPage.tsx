@@ -119,7 +119,7 @@ export default function AgingARPage() {
             </select>
           </div>
           {/* Search */}
-          <div className="flex flex-col gap-1 flex-1 min-w-[200px]">
+          <div className="flex flex-col gap-1 flex-1 min-w-50">
             <label className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Pencarian</label>
             <div className="relative">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#9CA3AF' }} />
