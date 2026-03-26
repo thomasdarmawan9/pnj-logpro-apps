@@ -1,0 +1,13 @@
+{
+  "development": {
+    "username": "pnj_user",
+    "password": "PNJ@db2026",
+    "database": "pnj_db",
+    "host":     "127.0.0.1",
+    "dialect":  "postgres"
+  },
+  "production": {
+    "use_env_variable": "DATABASE_URL",
+    "dialect": "postgres"
+  }
+}
