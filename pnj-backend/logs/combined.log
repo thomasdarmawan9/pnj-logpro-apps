@@ -1,6 +1,0 @@
-{"level":"info","message":"Folder dibuat: /Users/thomasdarmawan/Documents/github/logproapp/pnj-backend/uploads","timestamp":"2026-03-25 12:15:25"}
-{"level":"info","message":"Folder dibuat: /Users/thomasdarmawan/Documents/github/logproapp/pnj-backend/pdfs","timestamp":"2026-03-25 12:15:25"}
-{"level":"info","message":"Koneksi database PostgreSQL berhasil.","timestamp":"2026-03-25 12:15:25"}
-{"level":"info","message":"Redis terhubung.","timestamp":"2026-03-25 12:15:25"}
-{"level":"info","message":"PNJ Backend berjalan di port 3001 (development)","timestamp":"2026-03-25 12:15:26"}
-{"level":"info","message":"Health check: http://localhost:3001/health","timestamp":"2026-03-25 12:15:26"}
