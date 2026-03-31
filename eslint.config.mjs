@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // pnj-backend is a CommonJS Express app, not part of the Next.js project
+    "pnj-backend/**",
   ]),
   {
     rules: {
