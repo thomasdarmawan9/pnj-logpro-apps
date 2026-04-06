@@ -20,4 +20,5 @@ export interface ISuratJalanRepository {
   deliver(uuid: string, input: DeliverSJInput): Promise<SuratJalan>
   void(uuid: string, reason: string): Promise<SuratJalan>
   delete(uuid: string): Promise<void>
+  attachToInvoice(sjUuid: string, invoiceId: number, invoiceUuid: string, invoiceNumber: string): Promise<SuratJalan>
 }

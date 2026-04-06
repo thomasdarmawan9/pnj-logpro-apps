@@ -1,11 +1,13 @@
 import { IReportsRepository } from './IReportsRepository'
 import { AgingARSummary } from '../../domain/entities/AgingARReport'
+import { AgingARProjectDetail } from '../../domain/entities/AgingARProjectDetail'
 import { ProfitLossSummary } from '../../domain/entities/ProfitLossReport'
 import { AuditLog } from '../../domain/entities/AuditLog'
 import { AgingARFilterDto } from '../../application/dto/AgingARFilterDto'
 import { ProfitLossFilterDto } from '../../application/dto/ProfitLossFilterDto'
 import { AuditTrailFilterDto } from '../../application/dto/AuditTrailFilterDto'
 import { getAgingARReport } from '../../application/use-cases/GetAgingARReport'
+import { getAgingARProjectDetail } from '../../application/use-cases/GetAgingARProjectDetail'
 import { getProfitLossReport } from '../../application/use-cases/GetProfitLossReport'
 import { getAuditTrail } from '../../application/use-cases/GetAuditTrail'
 
@@ -18,6 +20,11 @@ class MockReportsRepository implements IReportsRepository {
   async getAgingAR(filters: AgingARFilterDto): Promise<AgingARSummary> {
     await this.simulateDelay()
     return getAgingARReport.execute(filters)
+  }
+
+  async getAgingARProjectDetail(projectId: number): Promise<AgingARProjectDetail> {
+    await this.simulateDelay()
+    return getAgingARProjectDetail.execute(projectId)
   }
 
   async getProfitLoss(filters: ProfitLossFilterDto): Promise<ProfitLossSummary> {

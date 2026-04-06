@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronRight, ExternalLink } from 'lucide-react'
 import { AgingARCustomer } from '@/features/reports/domain/entities/AgingARReport'
 import { AGING_BUCKET_CONFIG, ALL_BUCKETS } from '@/features/reports/domain/value-objects/AgingBucket'
 import { formatRupiah, formatDate } from '@/lib/formatters'
@@ -128,9 +128,21 @@ export default function AgingARCustomerRow({ customer, index }: AgingARCustomerR
                         <td className="px-8 py-2 font-mono font-medium" style={{ color: 'var(--text-primary)' }}>
                           ↳ #{inv.invoice_number}
                         </td>
-                        <td className="px-3 py-2" style={{ color: 'var(--text-secondary)' }}>
-                          <div className="truncate max-w-40">{inv.project_name}</div>
-                          <div className="font-mono text-[10px]">{inv.contract_number}</div>
+                        <td className="px-3 py-2">
+                          <a
+                            href={`/laporan/aging-ar/detail?project_id=${inv.project_id}`}
+                            className="flex items-center gap-1 group w-fit"
+                            onClick={e => e.stopPropagation()}
+                          >
+                            <span
+                              className="truncate max-w-40 text-xs font-medium group-hover:underline"
+                              style={{ color: 'var(--green-primary)' }}
+                            >
+                              {inv.project_name}
+                            </span>
+                            <ExternalLink size={10} style={{ color: 'var(--green-primary)', flexShrink: 0 }} />
+                          </a>
+                          <div className="font-mono text-[10px]" style={{ color: 'var(--text-secondary)' }}>{inv.contract_number}</div>
                         </td>
                         <td className="px-3 py-2" style={{ color: 'var(--text-secondary)' }}>{formatDate(inv.invoice_date)}</td>
                         <td className="px-3 py-2" style={{ color: 'var(--text-secondary)' }}>{formatDate(inv.due_date)}</td>

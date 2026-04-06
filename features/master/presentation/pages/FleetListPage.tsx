@@ -54,7 +54,7 @@ export default function FleetListPage() {
   return (
     <div className="animate-fadeIn space-y-5">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
+      <div data-tour="armada-header" className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <nav className="text-xs mb-1.5 flex items-center gap-1" style={{ color: 'var(--text-secondary)' }}>
             <span>Dashboard</span><span>/</span><span>Master Data</span><span>/</span>
@@ -62,13 +62,13 @@ export default function FleetListPage() {
           </nav>
           <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Master Armada</h1>
         </div>
-        <button onClick={() => openForm(null)} className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: 'var(--green-primary)' }}>
+        <button data-tour="armada-add-btn" onClick={() => openForm(null)} className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: 'var(--green-primary)' }}>
           <Plus size={15} /> Tambah Armada
         </button>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div data-tour="armada-summary" className="grid grid-cols-3 gap-4">
         {[
           { label: 'Aktif', count: activeCount, color: '#D1FAE5', text: '#065F46' },
           { label: 'Tidak Aktif', count: inactiveCount, color: '#FEF3C7', text: '#92400E' },

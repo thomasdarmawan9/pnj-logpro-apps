@@ -264,33 +264,36 @@ export default function Sidebar({ isCollapsed, onToggleCollapse, onClose }: Side
         {/* Main Items */}
         <div className="space-y-0.5">
           {navWithBadges.map(item => (
-            <NavItem
-              key={item.href}
-              href={item.href}
-              icon={item.icon}
-              label={item.label}
-              badge={'badge' in item ? item.badge : undefined}
-              badgeColor={'badgeColor' in item ? item.badgeColor : undefined}
-              isCollapsed={isCollapsed}
-              pathname={pathname}
-            />
+            <div key={item.href} data-tour={`sidebar-${item.href.replace('/', '')}`}>
+              <NavItem
+                href={item.href}
+                icon={item.icon}
+                label={item.label}
+                badge={'badge' in item ? item.badge : undefined}
+                badgeColor={'badgeColor' in item ? item.badgeColor : undefined}
+                isCollapsed={isCollapsed}
+                pathname={pathname}
+              />
+            </div>
           ))}
         </div>
 
         <div className="my-2 border-t" style={{ borderColor: 'rgba(165, 184, 165, 0.2)' }} />
 
         {/* Master Data Group */}
-        <CollapsibleGroup
-          icon={Database}
-          label="Master Data"
-          isActive={isMasterActive}
-          isOpen={masterOpen}
-          onToggle={() => setMasterOpen(o => !o)}
-          items={masterChildrenWithBadge}
-          isCollapsed={isCollapsed}
-          pathname={pathname}
-          userRole={user?.role}
-        />
+        <div data-tour="sidebar-master">
+          <CollapsibleGroup
+            icon={Database}
+            label="Master Data"
+            isActive={isMasterActive}
+            isOpen={masterOpen}
+            onToggle={() => setMasterOpen(o => !o)}
+            items={masterChildrenWithBadge}
+            isCollapsed={isCollapsed}
+            pathname={pathname}
+            userRole={user?.role}
+          />
+        </div>
 
         <div className="my-1" />
 

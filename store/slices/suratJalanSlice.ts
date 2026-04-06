@@ -1,10 +1,12 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit'
 import { SuratJalan, SJFilterState, PaginationState } from '../../features/surat-jalan/domain/entities/SuratJalan'
 import { suratJalanRepository } from '../../features/surat-jalan/infrastructure/repositories/MockSuratJalanRepository'
+import { invoiceRepository } from '../../features/invoice/infrastructure/repositories/MockInvoiceRepository'
 import { AssignSJInput } from '../../features/surat-jalan/application/use-cases/AssignSuratJalan'
 import { DeliverSJInput } from '../../features/surat-jalan/application/use-cases/DeliverSuratJalan'
 import { CreateSJDto } from '../../features/surat-jalan/application/dto/CreateSJDto'
 import { UpdateSJDto } from '../../features/surat-jalan/application/dto/UpdateSJDto'
+import { AvailableInvoice } from '../../features/invoice/domain/entities/Invoice'
 
 interface SuratJalanState {
   list: SuratJalan[]
@@ -13,12 +15,16 @@ interface SuratJalanState {
   pagination: PaginationState
   isLoading: boolean
   isDetailLoading: boolean
+  isSubmitting: boolean
   error: string | null
   isVoidModalOpen: boolean
   isUploadPODModalOpen: boolean
   isDetailDrawerOpen: boolean
   isAssignModalOpen: boolean
   isGeneratePDFModalOpen: boolean
+  isAttachInvoiceModalOpen: boolean
+  availableInvoices: AvailableInvoice[]
+  isLoadingInvoices: boolean
   selectedUuid: string | null
 }
 
@@ -38,12 +44,16 @@ const initialState: SuratJalanState = {
   pagination: { page: 1, perPage: 15, total: 0 },
   isLoading: false,
   isDetailLoading: false,
+  isSubmitting: false,
   error: null,
   isVoidModalOpen: false,
   isUploadPODModalOpen: false,
   isDetailDrawerOpen: false,
   isAssignModalOpen: false,
   isGeneratePDFModalOpen: false,
+  isAttachInvoiceModalOpen: false,
+  availableInvoices: [],
+  isLoadingInvoices: false,
   selectedUuid: null,
 }
 
@@ -139,6 +149,36 @@ export const deleteSuratJalan = createAsyncThunk(
   }
 )
 
+export const fetchAvailableInvoices = createAsyncThunk(
+  'suratJalan/fetchAvailableInvoices',
+  async ({ projectId, sjUuid }: { projectId: number; sjUuid: string }, { rejectWithValue }) => {
+    try {
+      return await invoiceRepository.getAvailableForAttachment(projectId, sjUuid)
+    } catch {
+      return rejectWithValue('Gagal memuat daftar invoice')
+    }
+  }
+)
+
+export const attachSuratJalanToInvoice = createAsyncThunk(
+  'suratJalan/attachToInvoice',
+  async (
+    { sjUuid, invoiceId, invoiceUuid, invoiceNumber, sjEntry }:
+    { sjUuid: string; invoiceId: number; invoiceUuid: string; invoiceNumber: string; sjEntry: import('../../features/invoice/domain/entities/Invoice').AttachedSJ },
+    { rejectWithValue }
+  ) => {
+    try {
+      const [updatedSJ] = await Promise.all([
+        suratJalanRepository.attachToInvoice(sjUuid, invoiceId, invoiceUuid, invoiceNumber),
+        invoiceRepository.attachSJDirect(invoiceUuid, sjEntry),
+      ])
+      return updatedSJ
+    } catch {
+      return rejectWithValue('Gagal melampirkan SJ ke invoice')
+    }
+  }
+)
+
 function updateSJInList(list: SuratJalan[], updated: SuratJalan): SuratJalan[] {
   return list.map(sj => sj.uuid === updated.uuid ? updated : sj)
 }
@@ -204,6 +244,15 @@ const suratJalanSlice = createSlice({
       state.isGeneratePDFModalOpen = false
       state.selectedUuid = null
     },
+    openAttachInvoiceModal(state, action: PayloadAction<string>) {
+      state.isAttachInvoiceModalOpen = true
+      state.selectedUuid = action.payload
+    },
+    closeAttachInvoiceModal(state) {
+      state.isAttachInvoiceModalOpen = false
+      state.selectedUuid = null
+      state.availableInvoices = []
+    },
     clearError(state) {
       state.error = null
     },
@@ -256,6 +305,28 @@ const suratJalanSlice = createSlice({
         state.list = state.list.filter(sj => sj.uuid !== action.payload)
         state.pagination.total = Math.max(0, state.pagination.total - 1)
       })
+      .addCase(fetchAvailableInvoices.pending, state => { state.isLoadingInvoices = true })
+      .addCase(fetchAvailableInvoices.fulfilled, (state, action) => {
+        state.isLoadingInvoices = false
+        state.availableInvoices = action.payload
+      })
+      .addCase(fetchAvailableInvoices.rejected, (state, action) => {
+        state.isLoadingInvoices = false
+        state.error = action.payload as string
+      })
+      .addCase(attachSuratJalanToInvoice.pending, state => { state.isSubmitting = true })
+      .addCase(attachSuratJalanToInvoice.fulfilled, (state, action) => {
+        state.isSubmitting = false
+        state.list = updateSJInList(state.list, action.payload)
+        if (state.selectedSJ?.uuid === action.payload.uuid) state.selectedSJ = action.payload
+        state.isAttachInvoiceModalOpen = false
+        state.selectedUuid = null
+        state.availableInvoices = []
+      })
+      .addCase(attachSuratJalanToInvoice.rejected, (state, action) => {
+        state.isSubmitting = false
+        state.error = action.payload as string
+      })
   },
 })
 
@@ -266,6 +337,7 @@ export const {
   openDetailDrawer, closeDetailDrawer,
   openAssignModal, closeAssignModal,
   openGeneratePDFModal, closeGeneratePDFModal,
+  openAttachInvoiceModal, closeAttachInvoiceModal,
   clearError,
 } = suratJalanSlice.actions
 

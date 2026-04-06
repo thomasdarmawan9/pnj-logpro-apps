@@ -10,6 +10,8 @@ export interface AgingInvoice {
   remaining_amount: number
   days_overdue: number
   aging_bucket: AgingBucket
+  project_id: number
+  project_code: string
   project_name: string
   contract_number: string
   sent_at: string | null

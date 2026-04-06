@@ -6,6 +6,7 @@ import stockReducer from './slices/stockSlice'
 import reportsReducer from './slices/reportsSlice'
 import masterReducer from './slices/masterSlice'
 import settingsReducer from './slices/settingsSlice'
+import tourReducer from './slices/tourSlice'
 
 export const store = configureStore({
   reducer: {
@@ -16,6 +17,7 @@ export const store = configureStore({
     reports: reportsReducer,
     master: masterReducer,
     settings: settingsReducer,
+    tour: tourReducer,
   },
 })
 

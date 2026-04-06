@@ -1,3 +1,14 @@
+export interface AvailableInvoice {
+  id: number
+  uuid: string
+  invoice_number: string
+  status: InvoiceStatus
+  invoice_date: string
+  due_date: string
+  total_amount: number
+  remaining_amount: number
+}
+
 export enum InvoiceStatus {
   DRAFT       = 'draft',
   SENT        = 'sent',

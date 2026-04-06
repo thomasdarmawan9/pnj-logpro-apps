@@ -58,7 +58,7 @@ export default function CustomerListPage() {
   return (
     <div className="animate-fadeIn space-y-5">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
+      <div data-tour="customer-header" className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <nav className="text-xs mb-1.5 flex items-center gap-1" style={{ color: 'var(--text-secondary)' }}>
             <span>Dashboard</span><span>/</span><span>Master Data</span><span>/</span>
@@ -71,6 +71,7 @@ export default function CustomerListPage() {
         </div>
         {canEdit && (
           <button
+            data-tour="customer-add-btn"
             onClick={() => openForm(null)}
             className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white"
             style={{ backgroundColor: 'var(--green-primary)' }}
@@ -81,7 +82,7 @@ export default function CustomerListPage() {
       </div>
 
       {/* Filter */}
-      <div className="bg-white rounded-xl border shadow-sm px-5 py-4" style={{ borderColor: 'var(--border-card)' }}>
+      <div data-tour="customer-filter" className="bg-white rounded-xl border shadow-sm px-5 py-4" style={{ borderColor: 'var(--border-card)' }}>
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-60">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
@@ -135,7 +136,7 @@ export default function CustomerListPage() {
       </div>
 
       {/* Table */}
-      <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-card)' }}>
+      <div data-tour="customer-table" className="rounded-2xl overflow-hidden" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-card)' }}>
         {isLoading ? (
           <div className="flex items-center justify-center py-16">
             <div className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: 'var(--green-primary)', borderTopColor: 'transparent' }} />

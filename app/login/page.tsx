@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useDispatch } from 'react-redux'
 import { Mail, Lock, Eye, EyeOff } from 'lucide-react'
 import { loginSuccess, loginFailed } from '@/store/slices/authSlice'
+import { startTour } from '@/store/slices/tourSlice'
 import { MOCK_CREDENTIALS, MOCK_USER } from '@/lib/mockData'
 import { useSelector } from 'react-redux'
 import { RootState } from '@/store'
@@ -56,6 +57,7 @@ export default function LoginPage() {
 
     if (email === MOCK_CREDENTIALS.email && password === MOCK_CREDENTIALS.password) {
       dispatch(loginSuccess(MOCK_USER))
+      dispatch(startTour())
       document.cookie = 'pnj_auth=true; path=/'
       router.push('/dashboard')
     } else {

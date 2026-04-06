@@ -170,6 +170,21 @@ export class MockSuratJalanRepository implements ISuratJalanRepository {
     await simulateDelay()
     store = store.filter(sj => sj.uuid !== uuid)
   }
+
+  async attachToInvoice(sjUuid: string, invoiceId: number, invoiceUuid: string, invoiceNumber: string): Promise<SuratJalan> {
+    await simulateDelay()
+    const idx = store.findIndex(sj => sj.uuid === sjUuid)
+    if (idx === -1) throw new Error('SJ tidak ditemukan')
+    const updated: SuratJalan = {
+      ...store[idx],
+      invoice_id: invoiceId,
+      invoice_attachment_status: StatusLampiran.ATTACHED,
+      invoice: { id: invoiceId, invoice_number: invoiceNumber },
+      updated_at: new Date().toISOString(),
+    }
+    store = store.map(sj => sj.uuid === sjUuid ? updated : sj)
+    return updated
+  }
 }
 
 export const suratJalanRepository = new MockSuratJalanRepository()

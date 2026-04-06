@@ -17,8 +17,12 @@ import {
   closeVoidModal,
   openGeneratePDFModal,
   closeGeneratePDFModal,
+  openAttachInvoiceModal,
+  closeAttachInvoiceModal,
   fetchSuratJalanDetail,
   deleteSuratJalan,
+  fetchAvailableInvoices,
+  attachSuratJalanToInvoice,
 } from '@/store/slices/suratJalanSlice'
 import useSuratJalanList from '../hooks/useSuratJalanList'
 import useSJStatusTransition from '../hooks/useSJStatusTransition'
@@ -30,7 +34,9 @@ import ConfirmasiTibaModal from '../components/modals/ConfirmasiTibaModal'
 import VoidModal from '../components/modals/VoidModal'
 import GeneratePDFModal from '../components/modals/GeneratePDFModal'
 import DetailDrawer from '../components/modals/DetailDrawer'
+import AttachToInvoiceModal from '../components/modals/AttachToInvoiceModal'
 import { StatusLampiran, StatusOperasional } from '../../domain/entities/SuratJalan'
+import { AvailableInvoice } from '@/features/invoice/domain/entities/Invoice'
 import { MOCK_SURAT_JALAN } from '@/lib/mockData/suratJalan'
 import { useToast } from '@/components/toast/useToast'
 
@@ -40,7 +46,11 @@ export default function SuratJalanListPage() {
   const { push: pushToast } = useToast()
   const { list, filters, pagination, isLoading, error, setFilters, resetFilters, setPage, setPerPage } = useSuratJalanList()
   const { assign, deliver, voidSJ } = useSJStatusTransition()
-  const { isVoidModalOpen, isUploadPODModalOpen, isDetailDrawerOpen, isAssignModalOpen, isGeneratePDFModalOpen, selectedUuid, selectedSJ } = useSelector((state: RootState) => state.suratJalan)
+  const {
+    isVoidModalOpen, isUploadPODModalOpen, isDetailDrawerOpen, isAssignModalOpen,
+    isGeneratePDFModalOpen, isAttachInvoiceModalOpen, availableInvoices, isLoadingInvoices,
+    isSubmitting, selectedUuid, selectedSJ,
+  } = useSelector((state: RootState) => state.suratJalan)
   const role = useSelector((state: RootState) => state.auth.user?.role || 'super_admin')
 
   const [selectedRows, setSelectedRows] = useState<string[]>([])
@@ -79,7 +89,37 @@ export default function SuratJalanListPage() {
     if (action === 'deliver') return dispatch(openUploadPODModal(uuid))
     if (action === 'void') return dispatch(openVoidModal(uuid))
     if (action === 'delete') return dispatch(deleteSuratJalan(uuid))
-    if (action === 'attach') return pushToast({ title: 'Simulasi', description: 'Lampirkan ke Invoice belum diimplementasikan', variant: 'info' })
+    if (action === 'attach') {
+      const sj = list.find(s => s.uuid === uuid)
+      if (!sj) return
+      dispatch(openAttachInvoiceModal(uuid))
+      dispatch(fetchAvailableInvoices({ projectId: sj.project_id, sjUuid: uuid }))
+      return
+    }
+  }
+
+  const handleAttachConfirm = (invoice: AvailableInvoice) => {
+    if (!currentSJ) return
+    dispatch(attachSuratJalanToInvoice({
+      sjUuid: currentSJ.uuid,
+      invoiceId: invoice.id,
+      invoiceUuid: invoice.uuid,
+      invoiceNumber: invoice.invoice_number,
+      sjEntry: {
+        uuid: currentSJ.uuid,
+        sj_number: currentSJ.sj_number,
+        sj_date: currentSJ.sj_date,
+        origin: currentSJ.origin,
+        destination: currentSJ.destination,
+        fleet_label: `${currentSJ.fleet.name} ${currentSJ.fleet.plate_number}`,
+        driver_name: currentSJ.driver?.name || currentSJ.driver_name_manual || '-',
+        status: currentSJ.status,
+      },
+    })).then(result => {
+      if (result.meta.requestStatus === 'fulfilled') {
+        pushToast({ title: 'Berhasil', description: `SJ ${currentSJ.sj_number} dilampirkan ke Invoice No. ${invoice.invoice_number}`, variant: 'success' })
+      }
+    })
   }
 
   const totalPages = Math.ceil(pagination.total / pagination.perPage) || 1
@@ -121,7 +161,6 @@ export default function SuratJalanListPage() {
               <th className="px-4 py-3 text-left">Tgl SJ</th>
               <th className="px-4 py-3 text-left">Proyek & Customer</th>
               <th className="px-4 py-3 text-left">Armada & Supir</th>
-              <th className="px-4 py-3 text-right">Biaya Ops</th>
               <th className="px-4 py-3 text-left">Status Ops</th>
               <th className="px-4 py-3 text-left">Status Invoice</th>
               <th className="px-4 py-3 text-right">Aksi</th>
@@ -131,7 +170,7 @@ export default function SuratJalanListPage() {
             {isLoading && (
               Array.from({ length: 5 }).map((_, idx) => (
                 <tr key={idx} className="border-t" style={{ borderColor: 'var(--border-card)' }}>
-                  <td className="px-4 py-4" colSpan={9}>
+                  <td className="px-4 py-4" colSpan={8}>
                     <div className="h-4 bg-gray-100 rounded w-full animate-pulse" />
                   </td>
                 </tr>
@@ -139,7 +178,7 @@ export default function SuratJalanListPage() {
             )}
             {!isLoading && list.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-4 py-10 text-center text-sm text-gray-500">
+                <td colSpan={8} className="px-4 py-10 text-center text-sm text-gray-500">
                   Tidak ada surat jalan yang cocok dengan filter ini.
                 </td>
               </tr>
@@ -263,6 +302,16 @@ export default function SuratJalanListPage() {
         onClose={() => dispatch(closeDetailDrawer())}
         onViewDetail={(uuid) => router.push(`/surat-jalan/${uuid}`)}
         onPrint={(uuid) => dispatch(openGeneratePDFModal(uuid))}
+      />
+
+      <AttachToInvoiceModal
+        open={isAttachInvoiceModalOpen}
+        sj={currentSJ}
+        availableInvoices={availableInvoices}
+        isLoadingInvoices={isLoadingInvoices}
+        isSubmitting={isSubmitting}
+        onClose={() => dispatch(closeAttachInvoiceModal())}
+        onConfirm={handleAttachConfirm}
       />
     </DashboardLayout>
   )

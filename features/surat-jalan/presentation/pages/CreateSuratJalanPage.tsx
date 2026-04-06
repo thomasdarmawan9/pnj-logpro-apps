@@ -21,19 +21,22 @@ export default function CreateSuratJalanPage() {
   const { push: pushToast } = useToast()
 
   const { form, updateField, errors, validate, isDirty } = useSuratJalanForm({ mode: 'create' })
-  const [driverMode, setDriverMode] = useState<'master' | 'manual'>('master')
+  const [driverMode, setDriverMode] = useState<'master' | 'tbd'>('master')
   const [selectedProject, setSelectedProject] = useState(projectOptions.find(p => p.id === form.project_id) || null)
   const [selectedArmada, setSelectedArmada] = useState(armadaOptions.find(a => a.id === form.fleet_id) || null)
   const [selectedDriver, setSelectedDriver] = useState(driverOptions.find(d => d.id === form.driver_id) || null)
 
-  const canPublish = selectedArmada && !selectedArmada.isTBD && ((driverMode === 'master' && selectedDriver) || (driverMode === 'manual' && form.driver_name_manual?.trim()))
+  const canPublish = selectedArmada && !selectedArmada.isTBD && (
+    driverMode === 'tbd' ||
+    (driverMode === 'master' && selectedDriver)
+  )
 
   const summary = useMemo(() => ({
     noSJ: 'SJ-2026-090',
     proyek: selectedProject?.name || '-',
     customer: selectedProject?.customer || '-',
     armada: selectedArmada?.name || '-',
-    supir: selectedDriver?.name || form.driver_name_manual || '-',
+    supir: driverMode === 'tbd' ? 'Belum ditentukan' : (selectedDriver?.name || '-'),
     rute: `${form.origin || '-'} → ${form.destination || '-'}`,
     tanggal: formatLongDate(form.sj_date),
   }), [form, selectedArmada, selectedDriver, selectedProject])
@@ -46,7 +49,7 @@ export default function CreateSuratJalanPage() {
       project_id: selectedProject?.id || 0,
       fleet_id: selectedArmada?.id || 0,
       driver_id: driverMode === 'master' ? selectedDriver?.id || null : null,
-      driver_name_manual: driverMode === 'manual' ? form.driver_name_manual || '' : null,
+      driver_name_manual: driverMode === 'tbd' ? 'Belum Ditentukan' : null,
       publish,
     }))
     pushToast({ title: 'Surat jalan dibuat', description: publish ? 'SJ berhasil diterbitkan' : 'SJ disimpan sebagai draft', variant: 'success' })
@@ -119,13 +122,23 @@ export default function CreateSuratJalanPage() {
           <SJFormSupirSection
             mode={driverMode}
             driver={selectedDriver}
-            manualName={form.driver_name_manual || ''}
-            onModeChange={setDriverMode}
+            onModeChange={(mode) => {
+              setDriverMode(mode)
+              if (mode === 'master') {
+                updateField('driver_name_manual', '')
+              } else {
+                setSelectedDriver(null)
+                updateField('driver_id', null)
+                updateField('driver_name_manual', 'Belum Ditentukan')
+              }
+            }}
             onDriverChange={(driver) => {
               setSelectedDriver(driver)
               updateField('driver_id', driver?.id || null)
+              if (driver) {
+                updateField('driver_name_manual', '')
+              }
             }}
-            onManualNameChange={value => updateField('driver_name_manual', value)}
             errors={errors}
           />
 

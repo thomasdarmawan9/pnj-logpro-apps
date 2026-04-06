@@ -11,6 +11,7 @@ export default function DashboardPage() {
     <DashboardLayout>
       {/* Filter Bar */}
       <div
+        data-tour="dashboard-filter"
         className="flex flex-wrap items-center gap-3 rounded-xl px-5 py-3 mb-6 shadow-sm"
         style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-card)' }}
       >
@@ -38,7 +39,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+      <div data-tour="dashboard-metrics" className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
         {metricCards.map(card => (
           <MetricCard
             key={card.id}
@@ -53,13 +54,15 @@ export default function DashboardPage() {
       </div>
 
       {/* Two panels */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+      <div data-tour="dashboard-charts" className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <DonutChart />
         <RevenueChart />
       </div>
 
       {/* Activity table */}
-      <ActivityTable />
+      <div data-tour="dashboard-activity">
+        <ActivityTable />
+      </div>
     </DashboardLayout>
   )
 }

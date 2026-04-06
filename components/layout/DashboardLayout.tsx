@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
+import AppTour from '@/components/tour/AppTour'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -14,6 +15,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: 'var(--bg-page)' }}>
+      <AppTour />
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
@@ -41,19 +43,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       )}
 
-      {/* Main content — desktop */}
+      {/* Main content */}
       <div
-        className="hidden md:block transition-all duration-300"
-        style={{ marginLeft: `${contentOffset}px` }}
+        className="transition-all duration-300 ml-0 md:ml-[var(--content-offset)]"
+        style={{ ['--content-offset' as string]: `${contentOffset}px` }}
       >
         <Topbar onMenuClick={() => setSidebarOpen(true)} />
-        <main className="p-6 animate-fadeIn">{children}</main>
-      </div>
-
-      {/* Main content — mobile */}
-      <div className="md:hidden">
-        <Topbar onMenuClick={() => setSidebarOpen(true)} />
-        <main className="p-4 animate-fadeIn">{children}</main>
+        <main className="p-4 md:p-6 animate-fadeIn">{children}</main>
       </div>
     </div>
   )

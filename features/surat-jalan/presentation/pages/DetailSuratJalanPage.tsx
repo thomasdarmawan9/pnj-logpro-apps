@@ -14,6 +14,10 @@ import {
   closeVoidModal,
   openGeneratePDFModal,
   closeGeneratePDFModal,
+  openAttachInvoiceModal,
+  closeAttachInvoiceModal,
+  fetchAvailableInvoices,
+  attachSuratJalanToInvoice,
 } from '@/store/slices/suratJalanSlice'
 import useSuratJalanDetail from '../hooks/useSuratJalanDetail'
 import useSJStatusTransition from '../hooks/useSJStatusTransition'
@@ -23,9 +27,11 @@ import AssignModal from '../components/modals/AssignModal'
 import ConfirmasiTibaModal from '../components/modals/ConfirmasiTibaModal'
 import VoidModal from '../components/modals/VoidModal'
 import GeneratePDFModal from '../components/modals/GeneratePDFModal'
+import AttachToInvoiceModal from '../components/modals/AttachToInvoiceModal'
 import { StatusLampiran, StatusOperasional } from '../../domain/entities/SuratJalan'
 import { formatLongDate, formatRupiah, formatShortDate, formatTimeWIB } from '../utils/format'
 import { useToast } from '@/components/toast/useToast'
+import { AvailableInvoice } from '@/features/invoice/domain/entities/Invoice'
 
 interface DetailSuratJalanPageProps {
   uuid: string
@@ -37,10 +43,36 @@ export default function DetailSuratJalanPage({ uuid }: DetailSuratJalanPageProps
   const { push: pushToast } = useToast()
   const { selectedSJ, isDetailLoading } = useSuratJalanDetail(uuid)
   const { assign, deliver, voidSJ } = useSJStatusTransition()
-  const { isAssignModalOpen, isUploadPODModalOpen, isVoidModalOpen, isGeneratePDFModalOpen } = useSelector((state: RootState) => state.suratJalan)
+  const {
+    isAssignModalOpen, isUploadPODModalOpen, isVoidModalOpen, isGeneratePDFModalOpen,
+    isAttachInvoiceModalOpen, availableInvoices, isLoadingInvoices, isSubmitting,
+  } = useSelector((state: RootState) => state.suratJalan)
   const role = useSelector((state: RootState) => state.auth.user?.role || 'super_admin')
 
   const [tab, setTab] = useState<'info' | 'pod' | 'history'>('info')
+
+  const handleAttachConfirm = (invoice: AvailableInvoice) => {
+    dispatch(attachSuratJalanToInvoice({
+      sjUuid: selectedSJ!.uuid,
+      invoiceId: invoice.id,
+      invoiceUuid: invoice.uuid,
+      invoiceNumber: invoice.invoice_number,
+      sjEntry: {
+        uuid: selectedSJ!.uuid,
+        sj_number: selectedSJ!.sj_number,
+        sj_date: selectedSJ!.sj_date,
+        origin: selectedSJ!.origin,
+        destination: selectedSJ!.destination,
+        fleet_label: `${selectedSJ!.fleet.name} ${selectedSJ!.fleet.plate_number}`,
+        driver_name: selectedSJ!.driver?.name || selectedSJ!.driver_name_manual || '-',
+        status: selectedSJ!.status,
+      },
+    })).then(result => {
+      if (result.meta.requestStatus === 'fulfilled') {
+        pushToast({ title: 'Berhasil', description: `SJ dilampirkan ke Invoice No. ${invoice.invoice_number}`, variant: 'success' })
+      }
+    })
+  }
 
   const events = useMemo(() => {
     if (!selectedSJ) return []
@@ -265,7 +297,10 @@ export default function DetailSuratJalanPage({ uuid }: DetailSuratJalanPageProps
                   <button
                     className="w-full px-4 py-2 rounded-lg border text-blue-700"
                     style={{ borderColor: 'var(--border-card)' }}
-                    onClick={() => pushToast({ title: 'Simulasi', description: 'Lampirkan ke Invoice belum diimplementasikan', variant: 'info' })}
+                    onClick={() => {
+                      dispatch(openAttachInvoiceModal(selectedSJ.uuid))
+                      dispatch(fetchAvailableInvoices({ projectId: selectedSJ.project_id, sjUuid: selectedSJ.uuid }))
+                    }}
                   >
                     Lampirkan ke Invoice
                   </button>
@@ -303,7 +338,10 @@ export default function DetailSuratJalanPage({ uuid }: DetailSuratJalanPageProps
                   <button
                     className="mt-3 px-3 py-1.5 rounded-lg border"
                     style={{ borderColor: 'var(--border-card)' }}
-                    onClick={() => pushToast({ title: 'Simulasi', description: 'Lampirkan ke Invoice belum diimplementasikan', variant: 'info' })}
+                    onClick={() => {
+                      dispatch(openAttachInvoiceModal(selectedSJ.uuid))
+                      dispatch(fetchAvailableInvoices({ projectId: selectedSJ.project_id, sjUuid: selectedSJ.uuid }))
+                    }}
                   >
                     Lampirkan ke Invoice
                   </button>
@@ -364,6 +402,16 @@ export default function DetailSuratJalanPage({ uuid }: DetailSuratJalanPageProps
         open={isGeneratePDFModalOpen}
         sj={selectedSJ}
         onClose={() => dispatch(closeGeneratePDFModal())}
+      />
+
+      <AttachToInvoiceModal
+        open={isAttachInvoiceModalOpen}
+        sj={selectedSJ}
+        availableInvoices={availableInvoices}
+        isLoadingInvoices={isLoadingInvoices}
+        isSubmitting={isSubmitting}
+        onClose={() => dispatch(closeAttachInvoiceModal())}
+        onConfirm={handleAttachConfirm}
       />
     </DashboardLayout>
   )

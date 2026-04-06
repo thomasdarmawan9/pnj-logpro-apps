@@ -70,7 +70,7 @@ export default function DriverListPage() {
   return (
     <div className="animate-fadeIn space-y-5">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
+      <div data-tour="supir-header" className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <nav className="text-xs mb-1.5 flex items-center gap-1" style={{ color: 'var(--text-secondary)' }}>
             <span>Dashboard</span><span>/</span><span>Master Data</span><span>/</span>
@@ -79,7 +79,7 @@ export default function DriverListPage() {
           <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Master Supir</h1>
           <p className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>{drivers.length} supir terdaftar</p>
         </div>
-        <button onClick={() => openForm(null)} className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: 'var(--green-primary)' }}>
+        <button data-tour="supir-add-btn" onClick={() => openForm(null)} className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: 'var(--green-primary)' }}>
           <Plus size={15} /> Tambah Supir
         </button>
       </div>
@@ -166,7 +166,7 @@ export default function DriverListPage() {
       </div>
 
       {/* Table */}
-      <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-card)' }}>
+      <div data-tour="supir-table" className="rounded-2xl overflow-hidden" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-card)' }}>
         {isLoading ? (
           <div className="flex items-center justify-center py-16">
             <div className="w-6 h-6 rounded-full border-2 animate-spin" style={{ borderColor: 'var(--green-primary)', borderTopColor: 'transparent' }} />

@@ -1,4 +1,4 @@
-import { Invoice, InvoiceStatus, InvoiceFilterState, PaginationState, AttachedSJ, Payment } from '../../domain/entities/Invoice'
+import { Invoice, InvoiceStatus, InvoiceFilterState, PaginationState, AttachedSJ, Payment, AvailableInvoice } from '../../domain/entities/Invoice'
 import { IInvoiceRepository, PaginatedResult } from './IInvoiceRepository'
 import { CreateInvoiceDto } from '../../application/dto/CreateInvoiceDto'
 import { UpdateInvoiceDto } from '../../application/dto/UpdateInvoiceDto'
@@ -245,6 +245,42 @@ export class MockInvoiceRepository implements IInvoiceRepository {
   async getAttachableSJ(_projectCode: string): Promise<AttachedSJ[]> {
     await simulateDelay(200)
     return MOCK_ATTACHABLE_SJ
+  }
+
+  async getAvailableForAttachment(projectId: number, sjUuid: string): Promise<AvailableInvoice[]> {
+    await simulateDelay(200)
+    const canAttach: InvoiceStatus[] = [InvoiceStatus.DRAFT, InvoiceStatus.SENT, InvoiceStatus.OUTSTANDING]
+    return store
+      .filter(inv =>
+        inv.project_id === projectId &&
+        canAttach.includes(inv.status) &&
+        !inv.attached_sj.some(s => s.uuid === sjUuid)
+      )
+      .map(inv => ({
+        id: inv.id!,
+        uuid: inv.uuid,
+        invoice_number: inv.invoice_number,
+        status: inv.status,
+        invoice_date: inv.invoice_date,
+        due_date: inv.due_date,
+        total_amount: inv.total_amount,
+        remaining_amount: inv.remaining_amount,
+      }))
+  }
+
+  async attachSJDirect(invoiceUuid: string, sjEntry: AttachedSJ): Promise<Invoice> {
+    await simulateDelay()
+    const idx = store.findIndex(inv => inv.uuid === invoiceUuid)
+    if (idx === -1) throw new Error('Invoice tidak ditemukan')
+    const existing = store[idx]
+    if (existing.attached_sj.some(s => s.uuid === sjEntry.uuid)) return existing
+    const updated: Invoice = {
+      ...existing,
+      attached_sj: [...existing.attached_sj, sjEntry],
+      updated_at: new Date().toISOString(),
+    }
+    store = store.map(inv => inv.uuid === invoiceUuid ? updated : inv)
+    return updated
   }
 }
 

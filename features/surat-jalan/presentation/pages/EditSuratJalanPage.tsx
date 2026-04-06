@@ -26,7 +26,7 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
   const { selectedSJ, isDetailLoading } = useSuratJalanDetail(uuid)
   const { form, setForm, updateField, errors, validate } = useSuratJalanForm({ mode: 'edit' })
 
-  const [driverMode, setDriverMode] = useState<'master' | 'manual'>('master')
+  const [driverMode, setDriverMode] = useState<'master' | 'tbd'>('master')
   const [selectedArmada, setSelectedArmada] = useState(armadaOptions.find(a => a.id === form.fleet_id) || null)
   const [selectedDriver, setSelectedDriver] = useState(driverOptions.find(d => d.id === form.driver_id) || null)
 
@@ -51,7 +51,8 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
       })
       setSelectedArmada(armadaOptions.find(a => a.id === selectedSJ.fleet_id) || null)
       setSelectedDriver(driverOptions.find(d => d.id === selectedSJ.driver_id) || null)
-      setDriverMode(selectedSJ.driver_id ? 'master' : 'manual')
+      if (selectedSJ.driver_id) setDriverMode('master')
+      else setDriverMode('tbd')
     }
   }, [selectedSJ, router, setForm])
 
@@ -64,7 +65,7 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
       dto: {
         fleet_id: selectedArmada?.id,
         driver_id: driverMode === 'master' ? selectedDriver?.id || null : null,
-        driver_name_manual: driverMode === 'manual' ? form.driver_name_manual || '' : null,
+        driver_name_manual: driverMode === 'tbd' ? 'Belum Ditentukan' : null,
         origin: form.origin,
         destination: form.destination,
         cargo_description: form.cargo_description || null,
@@ -151,13 +152,23 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
           <SJFormSupirSection
             mode={driverMode}
             driver={selectedDriver}
-            manualName={form.driver_name_manual || ''}
-            onModeChange={setDriverMode}
+            onModeChange={(mode) => {
+              setDriverMode(mode)
+              if (mode === 'master') {
+                updateField('driver_name_manual', '')
+              } else {
+                setSelectedDriver(null)
+                updateField('driver_id', null)
+                updateField('driver_name_manual', 'Belum Ditentukan')
+              }
+            }}
             onDriverChange={(driver) => {
               setSelectedDriver(driver)
               updateField('driver_id', driver?.id || null)
+              if (driver) {
+                updateField('driver_name_manual', '')
+              }
             }}
-            onManualNameChange={value => updateField('driver_name_manual', value)}
             errors={errors}
           />
 

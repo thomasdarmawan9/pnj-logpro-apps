@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { MoreHorizontal, Eye, Printer, Pencil, CheckCircle, AlertTriangle, Paperclip, Trash2, Play } from 'lucide-react'
 import { SuratJalan, StatusLampiran, StatusOperasional } from '../../domain/entities/SuratJalan'
 import SJStatusBadge from './SJStatusBadge'
-import { formatRupiah, formatShortDate } from '../utils/format'
+import { formatShortDate } from '../utils/format'
 
 interface SJTableRowProps {
   sj: SuratJalan
@@ -88,7 +88,6 @@ export default function SJTableRow({ sj, checked, onToggle, onAction, role }: SJ
           {sj.driver?.name || sj.driver_name_manual || 'Belum ada supir'}
         </div>
       </td>
-      <td className="px-4 py-3 text-sm text-right font-mono">{formatRupiah(sj.operational_cost)}</td>
       <td className="px-4 py-3">
         <SJStatusBadge statusOps={sj.status} />
       </td>

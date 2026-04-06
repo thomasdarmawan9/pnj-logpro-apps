@@ -79,7 +79,7 @@ export default function ProjectListPage() {
   return (
     <div className="animate-fadeIn space-y-5">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
+      <div data-tour="proyek-header" className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <nav className="text-xs mb-1.5 flex items-center gap-1" style={{ color: 'var(--text-secondary)' }}>
             <span>Dashboard</span><span>/</span><span>Master Data</span><span>/</span>
@@ -87,13 +87,13 @@ export default function ProjectListPage() {
           </nav>
           <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Proyek & Kontrak</h1>
         </div>
-        <button onClick={() => openForm(null)} className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: 'var(--green-primary)' }}>
+        <button data-tour="proyek-add-btn" onClick={() => openForm(null)} className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: 'var(--green-primary)' }}>
           <Plus size={15} /> Tambah Proyek
         </button>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div data-tour="proyek-summary" className="grid grid-cols-3 gap-4">
         {[
           { count: summary.active, ...STATUS_CONFIG.active },
           { count: summary.completed, ...STATUS_CONFIG.completed },
