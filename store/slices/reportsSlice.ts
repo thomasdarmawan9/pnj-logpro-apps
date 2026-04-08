@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit'
 import { AgingARSummary } from '@/features/reports/domain/entities/AgingARReport'
 import { AgingARProjectDetail } from '@/features/reports/domain/entities/AgingARProjectDetail'
+import { AgingARCustomerDetail } from '@/features/reports/domain/entities/AgingARCustomerDetail'
 import { ProfitLossSummary } from '@/features/reports/domain/entities/ProfitLossReport'
 import { AuditLog } from '@/features/reports/domain/entities/AuditLog'
 import { AgingBucket } from '@/features/reports/domain/value-objects/AgingBucket'
@@ -52,6 +53,12 @@ interface ReportsState {
     isLoading: boolean
     error: string | null
   }
+  agingARCustomerDetail: {
+    data: AgingARCustomerDetail | null
+    currentCustomerId: number | null
+    isLoading: boolean
+    error: string | null
+  }
   profitLoss: {
     data: ProfitLossSummary | null
     filters: ProfitLossFilterState
@@ -85,6 +92,12 @@ const initialState: ReportsState = {
   agingARDetail: {
     data: null,
     currentProjectId: null,
+    isLoading: false,
+    error: null,
+  },
+  agingARCustomerDetail: {
+    data: null,
+    currentCustomerId: null,
     isLoading: false,
     error: null,
   },
@@ -125,6 +138,13 @@ export const fetchAgingAR = createAsyncThunk(
     const state = (getState() as { reports: ReportsState }).reports
     const filters = state.agingAR.filters
     return await reportsRepository.getAgingAR(filters)
+  }
+)
+
+export const fetchAgingARCustomerDetail = createAsyncThunk(
+  'reports/fetchAgingARCustomerDetail',
+  async (customerId: number) => {
+    return await reportsRepository.getAgingARCustomerDetail(customerId)
   }
 )
 
@@ -188,6 +208,22 @@ const reportsSlice = createSlice({
       .addCase(fetchAgingARProjectDetail.rejected, (state, action) => {
         state.agingARDetail.isLoading = false
         state.agingARDetail.error = action.error.message ?? 'Terjadi kesalahan'
+      })
+
+    // Aging AR Customer Detail
+    builder
+      .addCase(fetchAgingARCustomerDetail.pending, (state, action) => {
+        state.agingARCustomerDetail.isLoading = true
+        state.agingARCustomerDetail.error = null
+        state.agingARCustomerDetail.currentCustomerId = action.meta.arg
+      })
+      .addCase(fetchAgingARCustomerDetail.fulfilled, (state, action) => {
+        state.agingARCustomerDetail.isLoading = false
+        state.agingARCustomerDetail.data = action.payload
+      })
+      .addCase(fetchAgingARCustomerDetail.rejected, (state, action) => {
+        state.agingARCustomerDetail.isLoading = false
+        state.agingARCustomerDetail.error = action.error.message ?? 'Terjadi kesalahan'
       })
 
     // Aging AR

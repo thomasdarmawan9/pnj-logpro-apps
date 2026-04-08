@@ -13,10 +13,8 @@ interface SJFormSupirSectionProps {
 export default function SJFormSupirSection({
   mode,
   driver,
-  manualName,
   onModeChange,
   onDriverChange,
-  onManualNameChange,
   errors,
 }: SJFormSupirSectionProps) {
   return (

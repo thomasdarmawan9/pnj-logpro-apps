@@ -52,7 +52,7 @@ export default function ProjectListPage() {
     const matchSearch = !q ||
       p.name.toLowerCase().includes(q) ||
       p.code.toLowerCase().includes(q) ||
-      p.contract_number.toLowerCase().includes(q) ||
+      (p.contract_number ?? '').toLowerCase().includes(q) ||
       p.customer.name.toLowerCase().includes(q)
     const matchCustomer = filterCustomer === 'all' || String(p.customer_id) === filterCustomer
     const matchStatus = filterStatus === 'all' || p.status === filterStatus

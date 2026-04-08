@@ -12,7 +12,7 @@ import SJFormProyekSection from '../components/SJFormProyekSection'
 import SJFormArmadaSection from '../components/SJFormArmadaSection'
 import SJFormSupirSection from '../components/SJFormSupirSection'
 import useSuratJalanForm from '../hooks/useSuratJalanForm'
-import { formatLongDate, formatRupiah } from '../utils/format'
+import { formatLongDate } from '../utils/format'
 import { armadaOptions, driverOptions, projectOptions } from '../utils/mockOptions'
 
 export default function CreateSuratJalanPage() {
@@ -26,9 +26,9 @@ export default function CreateSuratJalanPage() {
   const [selectedArmada, setSelectedArmada] = useState(armadaOptions.find(a => a.id === form.fleet_id) || null)
   const [selectedDriver, setSelectedDriver] = useState(driverOptions.find(d => d.id === form.driver_id) || null)
 
-  const canPublish = selectedArmada && !selectedArmada.isTBD && (
+  const canPublish = !!selectedArmada && (
     driverMode === 'tbd' ||
-    (driverMode === 'master' && selectedDriver)
+    (driverMode === 'master' && !!selectedDriver)
   )
 
   const summary = useMemo(() => ({
@@ -39,7 +39,7 @@ export default function CreateSuratJalanPage() {
     supir: driverMode === 'tbd' ? 'Belum ditentukan' : (selectedDriver?.name || '-'),
     rute: `${form.origin || '-'} → ${form.destination || '-'}`,
     tanggal: formatLongDate(form.sj_date),
-  }), [form, selectedArmada, selectedDriver, selectedProject])
+  }), [form, selectedArmada, selectedDriver, selectedProject, driverMode])
 
   const handleSubmit = (publish: boolean) => {
     const valid = validate(publish)
@@ -194,19 +194,8 @@ export default function CreateSuratJalanPage() {
           </div>
 
           <div className="rounded-xl bg-white p-6 border mt-4" style={{ borderColor: 'var(--border-card)' }}>
-            <div className="text-sm font-semibold mb-4">Biaya Operasional</div>
+            <div className="text-sm font-semibold mb-4">Catatan Internal</div>
             <label className="text-xs font-medium" style={{ color: '#374151' }}>
-              Biaya Operasional (Uang Jalan + Estimasi BBM)
-              <input
-                className="form-input w-full mt-1"
-                value={form.operational_cost}
-                onChange={e => updateField('operational_cost', Number(e.target.value))}
-                placeholder="Rp 0"
-              />
-              <div className="text-[11px] text-gray-400 mt-1">Digunakan untuk kalkulasi Profit & Loss per proyek</div>
-            </label>
-
-            <label className="text-xs font-medium mt-4 block" style={{ color: '#374151' }}>
               Catatan Internal (tidak tampil di PDF)
               <textarea
                 className="form-input w-full mt-1"
@@ -234,7 +223,7 @@ export default function CreateSuratJalanPage() {
               className="px-4 py-2 rounded-lg text-white"
               style={{ backgroundColor: canPublish ? 'var(--green-primary)' : '#A7D7B2' }}
               disabled={!canPublish}
-              title={!canPublish ? 'Pilih armada dan supir terlebih dahulu' : undefined}
+              title={!canPublish ? 'Pilih armada terlebih dahulu' : undefined}
             >
               Buat & Terbitkan →
             </button>
@@ -274,11 +263,6 @@ export default function CreateSuratJalanPage() {
             </div>
           )}
 
-          <div className="rounded-xl bg-white p-5 border" style={{ borderColor: 'var(--border-card)' }}>
-            <div className="text-sm font-semibold mb-3">Estimasi Biaya</div>
-            <div className="text-xs text-gray-500">Biaya Operasional</div>
-            <div className="text-sm font-mono">{formatRupiah(form.operational_cost || 0)}</div>
-          </div>
         </div>
       </div>
     </DashboardLayout>

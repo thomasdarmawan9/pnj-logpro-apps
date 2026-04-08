@@ -260,11 +260,6 @@ export default function DetailInvoicePage({ uuid }: Props) {
             <span className="inline-block mt-2 text-xs px-2 py-0.5 rounded-full font-semibold" style={{ backgroundColor: invoice.customer.is_pkp ? '#DCFCE7' : '#F3F4F6', color: invoice.customer.is_pkp ? '#166534' : '#6B7280' }}>
               {invoice.customer.is_pkp ? 'PKP' : 'Non-PKP'}
             </span>
-            <div className="border-t mt-3 pt-3" style={{ borderColor: 'var(--border-card)' }}>
-              <button className="text-xs font-medium" style={{ color: 'var(--green-primary)' }}>
-                Lihat Semua Invoice Customer →
-              </button>
-            </div>
           </div>
 
           {/* Project info */}
@@ -276,9 +271,6 @@ export default function DetailInvoicePage({ uuid }: Props) {
               <div>SJ di proyek: {invoice.attached_sj.length} SJ</div>
               <div>Invoice aktif: 1 outstanding</div>
             </div>
-            <button className="mt-2 text-xs font-medium" style={{ color: 'var(--green-primary)' }}>
-              Lihat Laporan Proyek →
-            </button>
           </div>
         </div>
       </div>

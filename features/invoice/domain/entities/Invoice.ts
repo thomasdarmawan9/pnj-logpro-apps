@@ -87,6 +87,8 @@ export interface Invoice {
   subtotal_amount: number
   tax_percent: number
   tax_amount: number
+  pph_percent: number
+  pph_amount: number
   total_amount: number
   paid_amount: number
   remaining_amount: number

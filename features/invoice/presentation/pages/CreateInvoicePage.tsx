@@ -29,7 +29,10 @@ export default function CreateInvoicePage() {
   const formRef = useRef<HTMLDivElement>(null)
 
   const {
-    header, taxPercent, taxEnabled, selectedProject, updateHeader, selectProject, toggleTax, setTaxPercent, isDueDatePast, projects,
+    header, taxPercent, taxEnabled, pphPercent, pphEnabled,
+    selectedProject, updateHeader, selectProject,
+    toggleTax, setTaxPercent, togglePph, setPphPercent,
+    isDueDatePast, projects,
   } = useInvoiceForm()
 
   const {
@@ -43,13 +46,15 @@ export default function CreateInvoicePage() {
   }
 
   const taxAmount = taxEnabled ? calculateTax(subtotalAmount, taxPercent) : 0
-  const nettoAmount = totalAmount(subtotalAmount, taxAmount)
+  const pphAmount = pphEnabled ? Math.round(subtotalAmount * pphPercent / 100) : 0
+  const nettoAmount = totalAmount(subtotalAmount, taxAmount) - pphAmount
 
   const getDto = (sendImmediately = false) => ({
     project_id: header.project_id!,
     invoice_date: header.invoice_date,
     due_date: header.due_date,
     tax_percent: taxEnabled ? taxPercent : 0,
+    pph_percent: pphEnabled ? pphPercent : 0,
     notes: header.notes || null,
     items: items.map((item, idx) => ({
       fleet_id: item.fleet_id ?? null,
@@ -237,9 +242,13 @@ export default function CreateInvoicePage() {
               subtotal={subtotalAmount}
               taxPercent={taxPercent}
               taxEnabled={taxEnabled}
+              pphPercent={pphPercent}
+              pphEnabled={pphEnabled}
               isPkp={selectedProject?.customer.is_pkp}
               onToggleTax={toggleTax}
               onChangeTaxPercent={setTaxPercent}
+              onTogglePph={togglePph}
+              onChangePphPercent={setPphPercent}
             />
           </div>
         </div>
@@ -260,7 +269,8 @@ export default function CreateInvoicePage() {
               <div className="text-gray-500">{items.length} baris item</div>
               <div className="border-t my-2" style={{ borderColor: 'var(--border-card)' }} />
               <div><span className="text-gray-400">Sub Total :</span> {formatRupiah(subtotalAmount)}</div>
-              {taxEnabled && <div><span className="text-gray-400">PPN {taxPercent}%  :</span> {formatRupiah(taxAmount)}</div>}
+              {taxEnabled && <div><span className="text-gray-400">PPN {taxPercent}%  :</span> + {formatRupiah(taxAmount)}</div>}
+              {pphEnabled && <div style={{ color: '#DC2626' }}><span className="text-gray-400">PPh {pphPercent}%  :</span> − {formatRupiah(pphAmount)}</div>}
               <div className="font-bold"><span className="text-gray-400">NETTO     :</span> {formatRupiah(nettoAmount)}</div>
             </div>
           </div>

@@ -76,8 +76,12 @@ export default function ProjectDetailPage({ uuid }: Props) {
               <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>{project.name}</h1>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
                 <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>{project.customer.name}</span>
-                <span style={{ color: 'var(--text-secondary)' }}>·</span>
-                <span className="text-sm italic" style={{ color: 'var(--text-secondary)' }}>{project.contract_number}</span>
+                {project.contract_number && (
+                  <>
+                    <span style={{ color: 'var(--text-secondary)' }}>·</span>
+                    <span className="text-sm italic" style={{ color: 'var(--text-secondary)' }}>{project.contract_number}</span>
+                  </>
+                )}
               </div>
               <div className="flex items-center gap-2 mt-2">
                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: statusCfg.bg, color: statusCfg.text }}>

@@ -1,7 +1,7 @@
 'use client'
 
 import { AgingARSummary } from '@/features/reports/domain/entities/AgingARReport'
-import { ALL_BUCKETS, AGING_BUCKET_CONFIG } from '@/features/reports/domain/value-objects/AgingBucket'
+import { AgingBucket } from '@/features/reports/domain/value-objects/AgingBucket'
 import { formatRupiah } from '@/lib/formatters'
 import AgingARCustomerRow from './AgingARCustomerRow'
 
@@ -36,6 +36,16 @@ export default function AgingARTable({ data, isLoading }: AgingARTableProps) {
     )
   }
 
+  const invoices = data.customers.flatMap(customer => customer.invoices)
+  const paidInvoices = invoices.filter(inv => inv.remaining_amount <= 0 || inv.paid_amount >= inv.total_amount)
+  const totalBelumJatuhTempo = data.bucket_totals[AgingBucket.CURRENT] ?? 0
+  const totalSudahJatuhTempo =
+    (data.bucket_totals[AgingBucket.DAYS_1_30] ?? 0) +
+    (data.bucket_totals[AgingBucket.DAYS_31_60] ?? 0) +
+    (data.bucket_totals[AgingBucket.DAYS_61_90] ?? 0) +
+    (data.bucket_totals[AgingBucket.OVER_90] ?? 0)
+  const totalSudahLunas = paidInvoices.reduce((sum, inv) => sum + inv.total_amount, 0)
+
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
@@ -44,15 +54,15 @@ export default function AgingARTable({ data, isLoading }: AgingARTableProps) {
             <th className="px-4 py-3 text-left font-semibold" style={{ color: 'var(--text-secondary)' }}>
               Customer & NPWP
             </th>
-            {ALL_BUCKETS.map(bucket => (
-              <th
-                key={bucket}
-                className="px-3 py-3 text-right font-semibold whitespace-nowrap"
-                style={{ color: AGING_BUCKET_CONFIG[bucket].color, minWidth: '130px' }}
-              >
-                {AGING_BUCKET_CONFIG[bucket].label}
-              </th>
-            ))}
+            <th className="px-3 py-3 text-right font-semibold whitespace-nowrap" style={{ color: '#15803D', minWidth: '150px' }}>
+              Belum Jatuh Tempo
+            </th>
+            <th className="px-3 py-3 text-right font-semibold whitespace-nowrap" style={{ color: '#B91C1C', minWidth: '150px' }}>
+              Sudah Jatuh Tempo
+            </th>
+            <th className="px-3 py-3 text-right font-semibold whitespace-nowrap" style={{ color: '#1D4ED8', minWidth: '150px' }}>
+              Sudah Lunas
+            </th>
             <th className="px-3 py-3 text-right font-semibold whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>
               Total Piutang
             </th>
@@ -71,11 +81,15 @@ export default function AgingARTable({ data, isLoading }: AgingARTableProps) {
             <td className="px-4 py-3 font-bold text-sm" style={{ color: 'var(--text-primary)' }}>
               Grand Total
             </td>
-            {ALL_BUCKETS.map(bucket => (
-              <td key={bucket} className="px-3 py-3 text-right font-bold font-mono text-sm" style={{ color: AGING_BUCKET_CONFIG[bucket].color }}>
-                {data.bucket_totals[bucket] > 0 ? formatRupiah(data.bucket_totals[bucket]) : '—'}
-              </td>
-            ))}
+            <td className="px-3 py-3 text-right font-bold font-mono text-sm" style={{ color: '#15803D' }}>
+              {totalBelumJatuhTempo > 0 ? formatRupiah(totalBelumJatuhTempo) : '—'}
+            </td>
+            <td className="px-3 py-3 text-right font-bold font-mono text-sm" style={{ color: '#B91C1C' }}>
+              {totalSudahJatuhTempo > 0 ? formatRupiah(totalSudahJatuhTempo) : '—'}
+            </td>
+            <td className="px-3 py-3 text-right font-bold font-mono text-sm" style={{ color: '#1D4ED8' }}>
+              {totalSudahLunas > 0 ? formatRupiah(totalSudahLunas) : '—'}
+            </td>
             <td className="px-3 py-3 text-right font-bold font-mono text-sm" style={{ color: 'var(--text-primary)' }}>
               {formatRupiah(data.total_outstanding)}
             </td>

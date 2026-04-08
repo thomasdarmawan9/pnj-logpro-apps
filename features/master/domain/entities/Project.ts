@@ -5,7 +5,7 @@ export interface Project {
   uuid: string
   code: string
   name: string
-  contract_number: string
+  contract_number: string | null
   customer_id: number
   customer: { id: number; name: string; is_pkp: boolean }
   description: string | null
@@ -61,5 +61,18 @@ export const MOCK_PROJECTS: Project[] = [
     invoice_paid_amount: 38500000, total_operational_cost: 41200000,
     gross_profit: -2700000,
     created_at: '2025-12-01T00:00:00Z',
+  },
+  {
+    id: 4, uuid: 'proj-004', code: 'PRJ-2026-004',
+    name: 'Pengiriman Harian Samarinda',
+    contract_number: null,
+    customer_id: 2, customer: { id: 2, name: 'PT. Borneo Maju', is_pkp: false },
+    start_date: '2026-02-01', end_date: null, status: 'active',
+    description: 'Pengiriman rutin tanpa kontrak formal, berdasarkan PO harian',
+    sj_count: 5, sj_delivered_count: 5,
+    invoice_count: 0, invoice_outstanding_amount: 0,
+    invoice_paid_amount: 0, total_operational_cost: 3200000,
+    gross_profit: -3200000,
+    created_at: '2026-02-01T00:00:00Z',
   },
 ]

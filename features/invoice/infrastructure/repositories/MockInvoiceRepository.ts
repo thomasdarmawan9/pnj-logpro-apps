@@ -78,6 +78,8 @@ export class MockInvoiceRepository implements IInvoiceRepository {
     }))
     const subtotal = items.reduce((sum, i) => sum + i.subtotal, 0)
     const taxAmount = Math.round(subtotal * dto.tax_percent / 100)
+    const pphAmount = Math.round(subtotal * (dto.pph_percent ?? 0) / 100)
+    const totalAmount = subtotal + taxAmount - pphAmount
     const inv: Invoice = {
       id: nextId,
       uuid: `inv-${Date.now()}`,
@@ -92,9 +94,11 @@ export class MockInvoiceRepository implements IInvoiceRepository {
       subtotal_amount: subtotal,
       tax_percent: dto.tax_percent,
       tax_amount: taxAmount,
-      total_amount: subtotal + taxAmount,
+      pph_percent: dto.pph_percent ?? 0,
+      pph_amount: pphAmount,
+      total_amount: totalAmount,
       paid_amount: 0,
-      remaining_amount: subtotal + taxAmount,
+      remaining_amount: totalAmount,
       status: dto.send_immediately ? InvoiceStatus.OUTSTANDING : InvoiceStatus.DRAFT,
       notes: dto.notes ?? null,
       sent_at: dto.send_immediately ? now : null,
@@ -122,7 +126,13 @@ export class MockInvoiceRepository implements IInvoiceRepository {
     if (dto.tax_percent !== undefined) {
       updated.tax_percent = dto.tax_percent
       updated.tax_amount = Math.round(updated.subtotal_amount * dto.tax_percent / 100)
-      updated.total_amount = updated.subtotal_amount + updated.tax_amount
+    }
+    if (dto.pph_percent !== undefined) {
+      updated.pph_percent = dto.pph_percent
+      updated.pph_amount = Math.round(updated.subtotal_amount * dto.pph_percent / 100)
+    }
+    if (dto.tax_percent !== undefined || dto.pph_percent !== undefined) {
+      updated.total_amount = updated.subtotal_amount + updated.tax_amount - updated.pph_amount
       updated.remaining_amount = updated.total_amount - updated.paid_amount
     }
     if (dto.items !== undefined) {
@@ -144,10 +154,12 @@ export class MockInvoiceRepository implements IInvoiceRepository {
       }))
       const subtotal = newItems.reduce((sum, i) => sum + i.subtotal, 0)
       const taxAmt = Math.round(subtotal * updated.tax_percent / 100)
+      const pphAmt = Math.round(subtotal * updated.pph_percent / 100)
       updated.items = newItems
       updated.subtotal_amount = subtotal
       updated.tax_amount = taxAmt
-      updated.total_amount = subtotal + taxAmt
+      updated.pph_amount = pphAmt
+      updated.total_amount = subtotal + taxAmt - pphAmt
       updated.remaining_amount = updated.total_amount - updated.paid_amount
     }
     store = store.map(inv => inv.uuid === uuid ? updated : inv)

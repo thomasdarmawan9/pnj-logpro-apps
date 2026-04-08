@@ -38,7 +38,7 @@ export default function SJFormArmadaSection({ value, onChange, showTBDWarning, e
 
       {showTBDWarning && value?.isTBD && (
         <div className="mt-3 rounded-lg border px-3 py-2 text-xs" style={{ borderColor: '#FDE68A', backgroundColor: '#FFFBEB', color: '#92400E' }}>
-          Armada belum ditentukan. SJ akan dibuat sebagai Draft hingga armada dipilih.
+          Armada belum ditentukan. SJ tetap bisa diterbitkan dan bisa diubah armadanya nanti melalui Edit SJ.
         </div>
       )}
     </div>

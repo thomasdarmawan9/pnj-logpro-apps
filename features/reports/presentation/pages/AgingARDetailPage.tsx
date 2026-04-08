@@ -20,6 +20,10 @@ import {
   XCircle,
   Receipt,
   CreditCard,
+  Trash2,
+  TrendingUp,
+  TrendingDown,
+  BarChart3,
 } from 'lucide-react'
 import { RootState } from '@/store'
 import { useAgingARDetail } from '../hooks/useAgingARDetail'
@@ -54,6 +58,42 @@ const METHOD_LABEL: Record<string, string> = {
   transfer: 'Transfer Bank',
   cash: 'Tunai',
   check: 'Cek',
+}
+
+// ─── Operational Categories (standard logistics/transport) ────────────────────
+
+const OPERATIONAL_CATEGORIES = [
+  { value: 'bbm',         label: 'BBM (Solar / Bensin)' },
+  { value: 'tol',         label: 'Biaya Tol' },
+  { value: 'uang_jalan',  label: 'Uang Jalan Supir' },
+  { value: 'bongkar_muat',label: 'Bongkar / Muat' },
+  { value: 'parkir',      label: 'Biaya Parkir' },
+  { value: 'servis',      label: 'Perawatan / Servis' },
+  { value: 'sewa',        label: 'Sewa Kendaraan' },
+  { value: 'admin',       label: 'Biaya Administrasi' },
+  { value: 'lainnya',     label: 'Lain-lain' },
+]
+
+type OperationalItem = {
+  id: string
+  date: string
+  category: string   // value from OPERATIONAL_CATEGORIES
+  description: string
+  sj_uuid: string    // '' = manual, otherwise linked to a SJ
+  amount: number
+}
+
+function buildOperationalItems(suratJalan: ProjectDetailSuratJalan[]): OperationalItem[] {
+  return suratJalan
+    .filter(sj => sj.operational_cost > 0)
+    .map(sj => ({
+      id: `sj-${sj.uuid}`,
+      date: sj.sj_date,
+      category: 'bbm',
+      description: `${sj.origin} → ${sj.destination}`,
+      sj_uuid: sj.uuid,
+      amount: sj.operational_cost,
+    }))
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -110,11 +150,404 @@ function SummaryCard({ label, value, sub, accent }: { label: string; value: stri
   )
 }
 
+function OperationalReportSection({
+  suratJalanList,
+  totalInvoiced,
+}: {
+  suratJalanList: ProjectDetailSuratJalan[]
+  totalInvoiced: number
+}) {
+  const initial = buildOperationalItems(suratJalanList)
+  const [isEditing, setIsEditing] = useState(false)
+  const [draftItems, setDraftItems] = useState<OperationalItem[]>(initial)
+  const [confirmedItems, setConfirmedItems] = useState<OperationalItem[]>(initial)
+
+  // Re-sync when SJ list changes (e.g. data loaded async)
+  useEffect(() => {
+    const built = buildOperationalItems(suratJalanList)
+    setDraftItems(built)
+    setConfirmedItems(built)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [suratJalanList.length])
+
+  const handleEdit = () => setIsEditing(true)
+
+  const handleCancel = () => {
+    setDraftItems(confirmedItems)
+    setIsEditing(false)
+  }
+
+  const handleConfirm = () => {
+    setConfirmedItems(draftItems)
+    setIsEditing(false)
+  }
+
+  const handleChange = (id: string, patch: Partial<OperationalItem>) => {
+    setDraftItems(items => items.map(item => item.id === id ? { ...item, ...patch } : item))
+  }
+
+  const handleAdd = () => {
+    setDraftItems(items => ([
+      ...items,
+      { id: `manual-${Date.now()}`, date: new Date().toISOString().split('T')[0], category: '', description: '', sj_uuid: '', amount: 0 },
+    ]))
+  }
+
+  const handleDelete = (id: string) => {
+    setDraftItems(items => items.filter(item => item.id !== id))
+  }
+
+  // Breakdown + profitability always reflect confirmedItems
+  const totalBiaya = confirmedItems.reduce((sum, item) => sum + (item.amount || 0), 0)
+  const grossProfit = totalInvoiced - totalBiaya
+  const marginPct = totalInvoiced > 0 ? (grossProfit / totalInvoiced) * 100 : 0
+  const isProfitable = grossProfit >= 0
+  const byCategory = OPERATIONAL_CATEGORIES.map(cat => ({
+    ...cat,
+    total: confirmedItems.filter(i => i.category === cat.value).reduce((s, i) => s + (i.amount || 0), 0),
+  })).filter(c => c.total > 0)
+
+  // SJ options for dropdown reference
+  const sjOptions = suratJalanList.filter(sj => sj.status !== 'void')
+
+  const baseInputStyle: React.CSSProperties = {
+    padding: '6px 8px',
+    borderRadius: '8px',
+    border: '1px solid var(--border-light)',
+    backgroundColor: isEditing ? 'var(--bg-card)' : '#F9FAFB',
+    color: isEditing ? 'var(--text-primary)' : 'var(--text-secondary)',
+    fontSize: '12px',
+    width: '100%',
+    cursor: isEditing ? 'auto' : 'default',
+  }
+
+  // Draft total for footer display while editing
+  const draftTotal = draftItems.reduce((sum, item) => sum + (item.amount || 0), 0)
+
+  return (
+    <div className="space-y-4">
+
+      {/* ── Input Table ───────────────────────────────────────────────────── */}
+      <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: 'var(--bg-card)', border: `1px solid ${isEditing ? '#BFDBFE' : 'var(--border-card)'}`, transition: 'border-color 0.2s' }}>
+        {/* Header */}
+        <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${isEditing ? '#BFDBFE' : 'var(--border-light)'}`, backgroundColor: isEditing ? '#EFF6FF' : 'var(--bg-card)', transition: 'background-color 0.2s' }}>
+          <div className="flex items-center gap-2">
+            <BarChart3 size={16} style={{ color: isEditing ? '#1D4ED8' : 'var(--green-primary)' }} />
+            <h2 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Laporan Biaya Operasional</h2>
+            <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: isEditing ? '#DBEAFE' : '#F0FDF4', color: isEditing ? '#1D4ED8' : '#15803D' }}>
+              {isEditing ? `${draftItems.length} item (draft)` : `${confirmedItems.length} item`}
+            </span>
+            {isEditing && (
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium animate-pulse" style={{ backgroundColor: '#FEF3C7', color: '#B45309' }}>
+                Mode Edit
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {!isEditing ? (
+              <button
+                onClick={handleEdit}
+                className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all hover:brightness-95"
+                style={{ backgroundColor: '#1E3A1E', color: '#FFFFFF' }}
+              >
+                <CreditCard size={12} />
+                Tambah / Edit Biaya
+              </button>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-mono" style={{ color: 'var(--text-secondary)' }}>
+                  Draft: {formatRupiah(draftTotal)}
+                </span>
+                <button
+                  onClick={handleCancel}
+                  className="text-xs font-medium px-3 py-1.5 rounded-lg transition-all hover:brightness-95"
+                  style={{ backgroundColor: '#F3F4F6', color: '#6B7280', border: '1px solid #D1D5DB' }}
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={handleConfirm}
+                  className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all hover:brightness-95"
+                  style={{ backgroundColor: '#15803D', color: '#FFFFFF' }}
+                >
+                  <CheckCircle2 size={12} />
+                  Simpan & Terapkan
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr style={{ backgroundColor: '#F9FAFB', borderBottom: '1px solid var(--border-light)' }}>
+                <th className="px-4 py-2.5 text-left font-semibold" style={{ color: 'var(--text-secondary)', width: '130px' }}>Tanggal</th>
+                <th className="px-3 py-2.5 text-left font-semibold" style={{ color: 'var(--text-secondary)', width: '180px' }}>Kategori Biaya</th>
+                <th className="px-3 py-2.5 text-left font-semibold" style={{ color: 'var(--text-secondary)' }}>Keterangan</th>
+                <th className="px-3 py-2.5 text-left font-semibold" style={{ color: 'var(--text-secondary)', width: '200px' }}>Referensi SJ</th>
+                <th className="px-3 py-2.5 text-right font-semibold" style={{ color: 'var(--text-secondary)', width: '140px' }}>Nominal (Rp)</th>
+                {isEditing && <th className="px-2 py-2.5" style={{ width: '36px' }} />}
+              </tr>
+            </thead>
+            <tbody>
+              {(isEditing ? draftItems : confirmedItems).map(item => (
+                <tr key={item.id} className="border-t" style={{ borderColor: '#E5E7EB' }}>
+                  <td className="px-4 py-2">
+                    <input
+                      type="date"
+                      value={item.date}
+                      disabled={!isEditing}
+                      onChange={e => handleChange(item.id, { date: e.target.value })}
+                      className="form-input text-xs w-full"
+                      style={{ ...baseInputStyle }}
+                    />
+                  </td>
+                  <td className="px-3 py-2">
+                    <select
+                      value={item.category}
+                      disabled={!isEditing}
+                      onChange={e => handleChange(item.id, { category: e.target.value })}
+                      style={{ ...baseInputStyle }}
+                    >
+                      <option value="">— Pilih kategori —</option>
+                      {OPERATIONAL_CATEGORIES.map(cat => (
+                        <option key={cat.value} value={cat.value}>{cat.label}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="px-3 py-2">
+                    <input
+                      type="text"
+                      value={item.description}
+                      disabled={!isEditing}
+                      onChange={e => handleChange(item.id, { description: e.target.value })}
+                      placeholder={isEditing ? 'Keterangan singkat…' : '—'}
+                      className="form-input text-xs w-full"
+                      style={{ ...baseInputStyle }}
+                    />
+                  </td>
+                  <td className="px-3 py-2">
+                    <select
+                      value={item.sj_uuid}
+                      disabled={!isEditing}
+                      onChange={e => handleChange(item.id, { sj_uuid: e.target.value })}
+                      style={{ ...baseInputStyle }}
+                    >
+                      <option value="">Manual (tidak terkait SJ)</option>
+                      {sjOptions.map(sj => (
+                        <option key={sj.uuid} value={sj.uuid}>
+                          {sj.sj_number} – {sj.origin.substring(0, 12)}→{sj.destination.substring(0, 12)}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <input
+                      type="number"
+                      min={0}
+                      value={item.amount || ''}
+                      disabled={!isEditing}
+                      onChange={e => handleChange(item.id, { amount: Number(e.target.value) })}
+                      placeholder="0"
+                      className="form-input text-xs w-full text-right font-mono"
+                      style={{ ...baseInputStyle }}
+                    />
+                  </td>
+                  {isEditing && (
+                    <td className="px-2 py-2">
+                      <button
+                        onClick={() => handleDelete(item.id)}
+                        title="Hapus baris"
+                        className="p-1.5 rounded-lg transition-colors hover:brightness-95"
+                        style={{ backgroundColor: '#FEF2F2', color: '#DC2626' }}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+              {/* Empty state when not editing and no items */}
+              {!isEditing && confirmedItems.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-4 py-8 text-center text-xs" style={{ color: 'var(--text-secondary)' }}>
+                    Belum ada biaya operasional. Klik <strong>Tambah / Edit Biaya</strong> untuk menambahkan.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+            <tfoot>
+              <tr style={{ backgroundColor: '#F3F4F6', borderTop: '2px solid var(--border-light)' }}>
+                <td colSpan={isEditing ? 4 : 4} className="px-4 py-2.5 text-xs font-bold" style={{ color: 'var(--text-secondary)' }}>
+                  {isEditing ? 'TOTAL BIAYA (DRAFT)' : 'TOTAL BIAYA OPERASIONAL (TERKONFIRMASI)'}
+                </td>
+                <td className="px-3 py-2.5 text-right font-mono text-sm font-bold" style={{ color: isEditing ? '#1D4ED8' : 'var(--text-primary)' }}>
+                  {formatRupiah(isEditing ? draftTotal : totalBiaya)}
+                </td>
+                {isEditing && <td />}
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        {isEditing && (
+          <div className="px-5 py-3 flex items-center justify-between" style={{ borderTop: '1px solid #BFDBFE', backgroundColor: '#F0F9FF' }}>
+            <p className="text-[11px]" style={{ color: '#1D4ED8' }}>
+              Perubahan belum berdampak ke breakdown dan profitabilitas. Klik <strong>Simpan &amp; Terapkan</strong> untuk mengonfirmasi.
+            </p>
+            <button
+              onClick={handleAdd}
+              className="text-xs font-medium px-3 py-1.5 rounded-lg shrink-0"
+              style={{ backgroundColor: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }}
+            >
+              + Tambah Baris
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* ── Breakdown + Profitabilitas ────────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+        {/* Per-category breakdown */}
+        {byCategory.length > 0 && (
+          <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-card)' }}>
+            <div className="px-5 py-3.5 flex items-center gap-2" style={{ borderBottom: '1px solid var(--border-light)' }}>
+              <CreditCard size={14} style={{ color: 'var(--green-primary)' }} />
+              <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Breakdown per Kategori</h3>
+            </div>
+            <div className="divide-y" style={{ borderColor: '#F3F4F6' }}>
+              {byCategory.map(cat => {
+                const pct = totalBiaya > 0 ? (cat.total / totalBiaya) * 100 : 0
+                return (
+                  <div key={cat.value} className="px-5 py-3 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="text-xs font-medium truncate" style={{ color: 'var(--text-primary)' }}>{cat.label}</div>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      {/* Mini bar */}
+                      <div className="w-20 h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: '#E5E7EB' }}>
+                        <div
+                          className="h-full rounded-full"
+                          style={{ width: `${Math.min(pct, 100)}%`, backgroundColor: '#1E3A1E' }}
+                        />
+                      </div>
+                      <span className="text-[11px] w-8 text-right" style={{ color: 'var(--text-secondary)' }}>
+                        {pct.toFixed(0)}%
+                      </span>
+                      <span className="font-mono text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
+                        {formatRupiah(cat.total)}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
+              <div className="px-5 py-3 flex items-center justify-between" style={{ backgroundColor: '#F9FAFB' }}>
+                <span className="text-xs font-bold" style={{ color: 'var(--text-secondary)' }}>TOTAL</span>
+                <span className="font-mono text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{formatRupiah(totalBiaya)}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Profitability card */}
+        <div
+          className="rounded-2xl overflow-hidden"
+          style={{
+            backgroundColor: 'var(--bg-card)',
+            borderTop: '1px solid var(--border-card)',
+            borderRight: '1px solid var(--border-card)',
+            borderBottom: '1px solid var(--border-card)',
+            borderLeft: `4px solid ${isProfitable ? '#15803D' : '#B91C1C'}`,
+          }}
+        >
+          <div className="px-5 py-3.5 flex items-center gap-2" style={{ borderBottom: '1px solid var(--border-light)' }}>
+            {isProfitable
+              ? <TrendingUp size={14} style={{ color: '#15803D' }} />
+              : <TrendingDown size={14} style={{ color: '#B91C1C' }} />
+            }
+            <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Profitabilitas Proyek</h3>
+          </div>
+
+          <div className="px-5 py-4 space-y-3">
+            {/* Revenue */}
+            <div className="flex items-center justify-between text-xs">
+              <span style={{ color: 'var(--text-secondary)' }}>Total Nilai Ditagihkan (Revenue)</span>
+              <span className="font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>{formatRupiah(totalInvoiced)}</span>
+            </div>
+
+            {/* Biaya Operasional */}
+            <div className="flex items-center justify-between text-xs">
+              <span style={{ color: 'var(--text-secondary)' }}>
+                <span className="font-medium" style={{ color: '#DC2626' }}>(-)</span> Total Biaya Operasional
+              </span>
+              <span className="font-mono font-semibold" style={{ color: '#DC2626' }}>{formatRupiah(totalBiaya)}</span>
+            </div>
+
+            {/* Divider */}
+            <div style={{ borderTop: '1px dashed var(--border-light)' }} />
+
+            {/* Gross Profit */}
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>Estimasi Gross Profit</span>
+              <span
+                className="font-mono text-base font-bold"
+                style={{ color: isProfitable ? '#15803D' : '#B91C1C' }}
+              >
+                {isProfitable ? '' : '-'}{formatRupiah(Math.abs(grossProfit))}
+              </span>
+            </div>
+
+            {/* Margin bar */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>Margin</span>
+                <span
+                  className="text-sm font-bold font-mono"
+                  style={{ color: isProfitable ? '#15803D' : '#B91C1C' }}
+                >
+                  {marginPct.toFixed(1)}%
+                </span>
+              </div>
+              <div className="w-full h-2 rounded-full overflow-hidden" style={{ backgroundColor: '#E5E7EB' }}>
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{
+                    width: `${Math.min(Math.abs(marginPct), 100)}%`,
+                    backgroundColor: isProfitable
+                      ? marginPct >= 20 ? '#15803D' : marginPct >= 10 ? '#D97706' : '#EA580C'
+                      : '#B91C1C',
+                  }}
+                />
+              </div>
+              <div className="flex items-center justify-between mt-1">
+                <span className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>0%</span>
+                <span className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>
+                  {isProfitable
+                    ? marginPct >= 20 ? 'Margin sehat' : marginPct >= 10 ? 'Margin tipis' : 'Margin sangat tipis'
+                    : 'Merugi'}
+                </span>
+                <span className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>100%</span>
+              </div>
+            </div>
+
+            {/* Catatan */}
+            <div className="text-[10px] px-3 py-2 rounded-xl" style={{ backgroundColor: '#F9FAFB', color: 'var(--text-secondary)' }}>
+              * Gross profit dihitung dari total ditagihkan dikurangi biaya operasional yang Anda input di tabel. Angka ini adalah estimasi dan tidak termasuk biaya overhead kantor.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Invoice Row (expandable) ─────────────────────────────────────────────────
 
 function InvoiceRow({ invoice }: { invoice: ProjectDetailInvoice }) {
   const [expanded, setExpanded] = useState(false)
-  const invCfg = INVOICE_STATUS_CONFIG[invoice.status] ?? INVOICE_STATUS_CONFIG.draft
+  const _invCfg = INVOICE_STATUS_CONFIG[invoice.status] ?? INVOICE_STATUS_CONFIG.draft
   const bucketCfg = invoice.aging_bucket ? AGING_BUCKET_CONFIG[invoice.aging_bucket] : null
 
   return (
@@ -679,6 +1112,12 @@ export default function AgingARDetailPage() {
           </table>
         </div>
       </div>
+
+      {/* Laporan Operasional Section */}
+      <OperationalReportSection
+        suratJalanList={data.surat_jalan}
+        totalInvoiced={data.total_invoiced}
+      />
 
     </div>
   )

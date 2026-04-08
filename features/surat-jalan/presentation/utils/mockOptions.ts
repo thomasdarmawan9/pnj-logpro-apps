@@ -1,11 +1,12 @@
 import { MOCK_SURAT_JALAN } from '../../../../lib/mockData/suratJalan'
+import { MOCK_PROJECTS } from '../../../../features/master/domain/entities/Project'
 
 export interface ProjectOption {
   id: number
   name: string
   code: string
   customer: string
-  contractNumber: string
+  contractNumber: string | null
 }
 
 export interface ArmadaOption {
@@ -23,17 +24,13 @@ export interface DriverOption {
   status: 'active' | 'inactive'
 }
 
-export const projectOptions: ProjectOption[] = Array.from(
-  new Map(
-    MOCK_SURAT_JALAN.map(sj => [sj.project.id, {
-      id: sj.project.id,
-      name: sj.project.name,
-      code: sj.project.code,
-      customer: sj.customer.name,
-      contractNumber: sj.project.contract_number,
-    }])
-  ).values()
-)
+export const projectOptions: ProjectOption[] = MOCK_PROJECTS.map(p => ({
+  id: p.id,
+  name: p.name,
+  code: p.code,
+  customer: p.customer.name,
+  contractNumber: p.contract_number,
+}))
 
 export const armadaOptions: ArmadaOption[] = Array.from(
   new Map(

@@ -33,6 +33,8 @@ export default function EditInvoicePage({ uuid }: Props) {
   const [notes, setNotes] = useState('')
   const [taxPercent, setTaxPercent] = useState(0)
   const [taxEnabled, setTaxEnabled] = useState(false)
+  const [pphPercent, setPphPercent] = useState(2)
+  const [pphEnabled, setPphEnabled] = useState(false)
   const [dragFrom, setDragFrom] = useState<number | null>(null)
   const [dragOver, setDragOver] = useState<number | null>(null)
 
@@ -49,6 +51,8 @@ export default function EditInvoicePage({ uuid }: Props) {
       setNotes(invoice.notes ?? '')
       setTaxPercent(invoice.tax_percent)
       setTaxEnabled(invoice.tax_percent > 0)
+      setPphPercent(invoice.pph_percent > 0 ? invoice.pph_percent : 2)
+      setPphEnabled(invoice.pph_percent > 0)
       resetItems(invoice.items.map(item => ({
         uuid: item.uuid,
         fleet_id: item.fleet_id ?? null,
@@ -73,7 +77,8 @@ export default function EditInvoicePage({ uuid }: Props) {
   }
 
   const taxAmount = taxEnabled ? calculateTax(subtotalAmount, taxPercent) : 0
-  const nettoAmount = totalAmount(subtotalAmount, taxAmount)
+  const pphAmount = pphEnabled ? Math.round(subtotalAmount * pphPercent / 100) : 0
+  const nettoAmount = totalAmount(subtotalAmount, taxAmount) - pphAmount
   const today = new Date().toISOString().split('T')[0]
   const isDueDatePast = dueDate < today
 
@@ -82,6 +87,7 @@ export default function EditInvoicePage({ uuid }: Props) {
       due_date: dueDate,
       notes: notes || null,
       tax_percent: taxEnabled ? taxPercent : 0,
+      pph_percent: pphEnabled ? pphPercent : 0,
       items: items.map((item, idx) => ({
         fleet_id: item.fleet_id ?? null,
         fleet_label: item.fleet_label,
@@ -207,9 +213,13 @@ export default function EditInvoicePage({ uuid }: Props) {
               subtotal={subtotalAmount}
               taxPercent={taxPercent}
               taxEnabled={taxEnabled}
+              pphPercent={pphPercent}
+              pphEnabled={pphEnabled}
               isPkp={invoice?.customer.is_pkp}
               onToggleTax={e => { setTaxEnabled(e); setTaxPercent(e ? 1.1 : 0) }}
               onChangeTaxPercent={setTaxPercent}
+              onTogglePph={e => { setPphEnabled(e); if (e && pphPercent === 0) setPphPercent(2) }}
+              onChangePphPercent={setPphPercent}
             />
           </div>
         </div>
@@ -220,7 +230,8 @@ export default function EditInvoicePage({ uuid }: Props) {
             <h3 className="text-sm font-semibold mb-3 text-gray-700">Ringkasan</h3>
             <div className="text-sm space-y-2">
               <div className="flex justify-between"><span className="text-gray-500">Sub Total</span><span className="font-mono" style={{ fontFamily: 'var(--font-mono)' }}>{formatRupiah(subtotalAmount)}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">PPN</span><span className="font-mono" style={{ fontFamily: 'var(--font-mono)' }}>{formatRupiah(taxAmount)}</span></div>
+              {taxEnabled && <div className="flex justify-between"><span className="text-gray-500">PPN {taxPercent}%</span><span className="font-mono" style={{ fontFamily: 'var(--font-mono)' }}>+ {formatRupiah(taxAmount)}</span></div>}
+              {pphEnabled && <div className="flex justify-between"><span className="text-gray-500">PPh {pphPercent}%</span><span className="font-mono" style={{ fontFamily: 'var(--font-mono)', color: '#DC2626' }}>− {formatRupiah(pphAmount)}</span></div>}
               <div className="flex justify-between font-bold text-base border-t pt-2" style={{ borderColor: 'var(--border-card)' }}>
                 <span>NETTO</span>
                 <span className="font-mono" style={{ fontFamily: 'var(--font-mono)', color: '#166534' }}>{formatRupiah(nettoAmount)}</span>

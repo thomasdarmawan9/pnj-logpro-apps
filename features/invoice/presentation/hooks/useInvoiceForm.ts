@@ -22,6 +22,9 @@ export default function useInvoiceForm(initial?: Partial<InvoiceFormHeader>) {
   const [taxPercent, setTaxPercent] = useState(0)
   const [taxEnabled, setTaxEnabled] = useState(false)
 
+  const [pphPercent, setPphPercent] = useState(2)
+  const [pphEnabled, setPphEnabled] = useState(false)
+
   const selectedProject = MOCK_PROJECTS.find(p => p.id === header.project_id) ?? null
 
   const updateHeader = (field: keyof InvoiceFormHeader, value: string | number | null) => {
@@ -46,17 +49,26 @@ export default function useInvoiceForm(initial?: Partial<InvoiceFormHeader>) {
     setTaxPercent(enabled ? 1.1 : 0)
   }
 
+  const togglePph = (enabled: boolean) => {
+    setPphEnabled(enabled)
+    if (enabled && pphPercent === 0) setPphPercent(2)
+  }
+
   const isDueDatePast = header.due_date < today
 
   return {
     header,
     taxPercent,
     taxEnabled,
+    pphPercent,
+    pphEnabled,
     selectedProject,
     updateHeader,
     selectProject,
     toggleTax,
     setTaxPercent,
+    togglePph,
+    setPphPercent,
     isDueDatePast,
     projects: MOCK_PROJECTS,
   }

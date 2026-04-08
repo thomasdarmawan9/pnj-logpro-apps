@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { ChevronDown, ChevronRight, ExternalLink } from 'lucide-react'
 import { AgingARCustomer } from '@/features/reports/domain/entities/AgingARReport'
-import { AGING_BUCKET_CONFIG, ALL_BUCKETS } from '@/features/reports/domain/value-objects/AgingBucket'
+import { AGING_BUCKET_CONFIG, AgingBucket } from '@/features/reports/domain/value-objects/AgingBucket'
 import { formatRupiah, formatDate } from '@/lib/formatters'
 
 interface AgingARCustomerRowProps {
@@ -33,6 +33,16 @@ function OverdueBadge({ days }: { days: number }) {
 
 export default function AgingARCustomerRow({ customer, index }: AgingARCustomerRowProps) {
   const [expanded, setExpanded] = useState(false)
+
+  const unpaidInvoices = customer.invoices.filter(inv => inv.remaining_amount > 0)
+  const paidInvoices = customer.invoices.filter(inv => inv.remaining_amount <= 0 || inv.paid_amount >= inv.total_amount)
+  const belumJatuhTempo = unpaidInvoices
+    .filter(inv => inv.aging_bucket === AgingBucket.CURRENT)
+    .reduce((sum, inv) => sum + inv.remaining_amount, 0)
+  const sudahJatuhTempo = unpaidInvoices
+    .filter(inv => inv.aging_bucket !== AgingBucket.CURRENT)
+    .reduce((sum, inv) => sum + inv.remaining_amount, 0)
+  const sudahLunas = paidInvoices.reduce((sum, inv) => sum + inv.total_amount, 0)
 
   const rowBg =
     customer.oldest_invoice_days > 90 ? '#FEE2E2' :
@@ -69,22 +79,38 @@ export default function AgingARCustomerRow({ customer, index }: AgingARCustomerR
           </div>
         </td>
 
-        {/* Bucket columns */}
-        {ALL_BUCKETS.map(bucket => {
-          const val = customer.bucket_totals[bucket]
-          const cfg = AGING_BUCKET_CONFIG[bucket]
-          return (
-            <td key={bucket} className="px-3 py-3 text-right font-mono text-sm">
-              {val > 0 ? (
-                <span className="font-bold" style={{ color: cfg.color }}>
-                  {formatRupiah(val)}
-                </span>
-              ) : (
-                <span style={{ color: '#D1D5DB' }}>—</span>
-              )}
-            </td>
-          )
-        })}
+        {/* Belum Jatuh Tempo */}
+        <td className="px-3 py-3 text-right font-mono text-sm">
+          {belumJatuhTempo > 0 ? (
+            <span className="font-bold" style={{ color: '#15803D' }}>
+              {formatRupiah(belumJatuhTempo)}
+            </span>
+          ) : (
+            <span style={{ color: '#D1D5DB' }}>—</span>
+          )}
+        </td>
+
+        {/* Sudah Jatuh Tempo */}
+        <td className="px-3 py-3 text-right font-mono text-sm">
+          {sudahJatuhTempo > 0 ? (
+            <span className="font-bold" style={{ color: '#B91C1C' }}>
+              {formatRupiah(sudahJatuhTempo)}
+            </span>
+          ) : (
+            <span style={{ color: '#D1D5DB' }}>—</span>
+          )}
+        </td>
+
+        {/* Sudah Lunas */}
+        <td className="px-3 py-3 text-right font-mono text-sm">
+          {sudahLunas > 0 ? (
+            <span className="font-bold" style={{ color: '#1D4ED8' }}>
+              {formatRupiah(sudahLunas)}
+            </span>
+          ) : (
+            <span style={{ color: '#D1D5DB' }}>—</span>
+          )}
+        </td>
 
         {/* Total */}
         <td className="px-3 py-3 text-right font-mono text-sm font-bold" style={{ backgroundColor: 'rgba(0,0,0,0.02)', color: 'var(--text-primary)' }}>
@@ -94,11 +120,11 @@ export default function AgingARCustomerRow({ customer, index }: AgingARCustomerR
         {/* Actions */}
         <td className="px-3 py-3 text-center">
           <a
-            href={`/invoice?customer=${customer.customer_id}`}
+            href={`/laporan/aging-ar/customer?customer_id=${customer.customer_id}`}
             className="text-xs font-medium hover:underline"
             style={{ color: 'var(--green-primary)' }}
           >
-            Lihat Invoice →
+            Lihat Detail →
           </a>
         </td>
       </tr>
@@ -106,7 +132,7 @@ export default function AgingARCustomerRow({ customer, index }: AgingARCustomerR
       {/* Expanded invoice rows */}
       {expanded && (
         <tr>
-          <td colSpan={8} className="px-0 py-0">
+          <td colSpan={6} className="px-0 py-0">
             <div className="expanded-content" style={{ backgroundColor: '#F9FAFB', borderTop: '1px solid #E5E7EB', borderBottom: '1px solid #E5E7EB' }}>
               <table className="w-full text-xs">
                 <thead>

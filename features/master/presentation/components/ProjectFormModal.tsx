@@ -14,10 +14,14 @@ interface Props {
   onSubmit: (data: Omit<Project, 'id' | 'uuid' | 'code' | 'created_at' | 'sj_count' | 'sj_delivered_count' | 'invoice_count' | 'invoice_outstanding_amount' | 'invoice_paid_amount' | 'total_operational_cost' | 'gross_profit'>) => void
 }
 
-const empty = {
+const empty: {
+  name: string; contract_number: string | null; customer_id: number;
+  customer: { id: number; name: string; is_pkp: boolean };
+  start_date: string; end_date: string; status: ProjectStatus; description: string;
+} = {
   name: '', contract_number: '', customer_id: 0,
   customer: { id: 0, name: '', is_pkp: false },
-  start_date: '', end_date: '', status: 'active' as ProjectStatus, description: '',
+  start_date: '', end_date: '', status: 'active', description: '',
 }
 
 export default function ProjectFormModal({ open, data, customers, isLoading, onClose, onSubmit }: Props) {
@@ -50,7 +54,7 @@ export default function ProjectFormModal({ open, data, customers, isLoading, onC
     e.preventDefault()
     onSubmit({
       name: form.name.trim(),
-      contract_number: form.contract_number.trim(),
+      contract_number: form.contract_number?.trim() || null,
       customer_id: form.customer_id,
       customer: form.customer,
       start_date: form.start_date,
@@ -107,11 +111,9 @@ export default function ProjectFormModal({ open, data, customers, isLoading, onC
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-primary)' }}>
-                  No. Kontrak <span className="text-red-500">*</span>
-                </label>
-                <input className="form-input w-full" value={form.contract_number} onChange={e => setForm(p => ({ ...p, contract_number: e.target.value }))} placeholder="002/HRD/III/2026" required />
-                <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>Nomor kontrak wajib diisi. Akan tampil di header invoice.</p>
+                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-primary)' }}>No. Kontrak</label>
+                <input className="form-input w-full" value={form.contract_number ?? ''} onChange={e => setForm(p => ({ ...p, contract_number: e.target.value }))} placeholder="002/HRD/III/2026 (opsional)" />
+                <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>Jika diisi, akan tampil di header invoice.</p>
               </div>
             </div>
           </div>
@@ -141,7 +143,7 @@ export default function ProjectFormModal({ open, data, customers, isLoading, onC
 
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-medium" style={{ backgroundColor: 'var(--bg-page)', color: 'var(--text-secondary)', border: '1px solid var(--border-card)' }}>Batal</button>
-            <button type="submit" disabled={isLoading || !form.name.trim() || !form.contract_number.trim() || !form.customer_id || !form.start_date} className="px-5 py-2 rounded-xl text-sm font-medium text-white disabled:opacity-50" style={{ backgroundColor: 'var(--green-primary)' }}>
+            <button type="submit" disabled={isLoading || !form.name.trim() || !form.customer_id || !form.start_date} className="px-5 py-2 rounded-xl text-sm font-medium text-white disabled:opacity-50" style={{ backgroundColor: 'var(--green-primary)' }}>
               {isLoading ? 'Menyimpan...' : 'Simpan Proyek'}
             </button>
           </div>
