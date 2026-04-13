@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { useRouter } from 'next/navigation'
 import DashboardLayout from '@/components/layout/DashboardLayout'
@@ -18,9 +18,11 @@ import {
   closeAttachInvoiceModal,
   fetchAvailableInvoices,
   attachSuratJalanToInvoice,
+  updateSuratJalan,
 } from '@/store/slices/suratJalanSlice'
 import useSuratJalanDetail from '../hooks/useSuratJalanDetail'
 import useSJStatusTransition from '../hooks/useSJStatusTransition'
+import SJLampiranUploadZone from '../components/SJLampiranUploadZone'
 import SJStatusBadge from '../components/SJStatusBadge'
 import SJTimeline from '../components/SJTimeline'
 import AssignModal from '../components/modals/AssignModal'
@@ -29,7 +31,7 @@ import VoidModal from '../components/modals/VoidModal'
 import GeneratePDFModal from '../components/modals/GeneratePDFModal'
 import AttachToInvoiceModal from '../components/modals/AttachToInvoiceModal'
 import { StatusLampiran, StatusOperasional } from '../../domain/entities/SuratJalan'
-import { formatLongDate, formatRupiah, formatShortDate, formatTimeWIB } from '../utils/format'
+import { formatLongDate, formatShortDate, formatTimeWIB } from '../utils/format'
 import { useToast } from '@/components/toast/useToast'
 import { AvailableInvoice } from '@/features/invoice/domain/entities/Invoice'
 
@@ -49,7 +51,24 @@ export default function DetailSuratJalanPage({ uuid }: DetailSuratJalanPageProps
   } = useSelector((state: RootState) => state.suratJalan)
   const role = useSelector((state: RootState) => state.auth.user?.role || 'super_admin')
 
-  const [tab, setTab] = useState<'info' | 'pod' | 'history'>('info')
+  const [tab, setTab] = useState<'info' | 'lampiran' | 'history'>('info')
+  const [lampiranPaths, setLampiranPaths] = useState<string[]>([])
+  const [isSavingLampiran, setIsSavingLampiran] = useState(false)
+
+  useEffect(() => {
+    if (selectedSJ) setLampiranPaths(selectedSJ.lampiran_paths ?? [])
+  }, [selectedSJ])
+
+  const handleSaveLampiran = async () => {
+    if (!selectedSJ) return
+    setIsSavingLampiran(true)
+    await dispatch(updateSuratJalan({
+      uuid: selectedSJ.uuid,
+      dto: { lampiran_paths: lampiranPaths.length > 0 ? lampiranPaths : null },
+    }))
+    setIsSavingLampiran(false)
+    pushToast({ title: 'Lampiran disimpan', description: 'Dokumen terlampir berhasil diperbarui.', variant: 'success' })
+  }
 
   const handleAttachConfirm = (invoice: AvailableInvoice) => {
     dispatch(attachSuratJalanToInvoice({
@@ -144,10 +163,10 @@ export default function DetailSuratJalanPage({ uuid }: DetailSuratJalanPageProps
                 Informasi SJ
               </button>
               <button
-                className={`pb-2 text-sm ${tab === 'pod' ? 'font-semibold text-green-700' : 'text-gray-500'}`}
-                onClick={() => setTab('pod')}
+                className={`pb-2 text-sm ${tab === 'lampiran' ? 'font-semibold text-green-700' : 'text-gray-500'}`}
+                onClick={() => setTab('lampiran')}
               >
-                Foto Bukti Pengiriman
+                Dokumen Terlampir
               </button>
               <button
                 className={`pb-2 text-sm ${tab === 'history' ? 'font-semibold text-green-700' : 'text-gray-500'}`}
@@ -189,9 +208,7 @@ export default function DetailSuratJalanPage({ uuid }: DetailSuratJalanPageProps
                 </div>
 
                 <div className="rounded-xl bg-gray-50 p-4">
-                  <div className="text-xs text-gray-500">Biaya Ops</div>
-                  <div className="text-sm font-mono">{formatRupiah(selectedSJ.operational_cost)}</div>
-                  <div className="text-xs text-gray-500 mt-2">Tiba Pukul</div>
+                  <div className="text-xs text-gray-500">Tiba Pukul</div>
                   <div className="text-sm">{selectedSJ.delivered_at ? `${formatTimeWIB(selectedSJ.delivered_at)} WIB (${formatShortDate(selectedSJ.delivered_at)})` : '-'}</div>
                   <div className="text-xs text-gray-500 mt-2">Catatan</div>
                   <div className="text-sm">{selectedSJ.internal_notes || '-'}</div>
@@ -199,37 +216,45 @@ export default function DetailSuratJalanPage({ uuid }: DetailSuratJalanPageProps
               </div>
             )}
 
-            {tab === 'pod' && (
-              <div className="mt-4">
-                {!selectedSJ.pod_photo_path ? (
-                  <div className="text-center text-sm text-gray-500 py-8">
-                    Belum ada foto bukti pengiriman.
-                    {selectedSJ.status === StatusOperasional.DELIVERED && (
-                      <div className="mt-3">
-                        <button
-                          onClick={() => dispatch(openUploadPODModal(selectedSJ.uuid))}
-                          className="px-4 py-2 rounded-lg text-white"
-                          style={{ backgroundColor: 'var(--green-primary)' }}
-                        >
-                          Upload Foto Bukti Pengiriman
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div>
+            {tab === 'lampiran' && (
+              <div className="mt-4 space-y-4">
+                {/* POD photo — ditampilkan sebagai salah satu dokumen (read-only) */}
+                {selectedSJ.pod_photo_path && (
+                  <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border-card)' }}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={selectedSJ.pod_photo_path} alt="Bukti Pengiriman" className="rounded-xl w-full" />
-                    <div className="text-xs text-gray-500 mt-2">Foto Bukti Pengiriman · {formatShortDate(selectedSJ.updated_at)}</div>
-                    <button
-                      onClick={() => dispatch(openUploadPODModal(selectedSJ.uuid))}
-                      className="mt-3 px-4 py-2 rounded-lg border"
-                      style={{ borderColor: 'var(--border-card)' }}
-                    >
-                      Ganti Foto Bukti Pengiriman
-                    </button>
+                    <img src={selectedSJ.pod_photo_path} alt="Foto Pengiriman" className="w-full max-h-64 object-cover" />
+                    <div className="px-3 py-2 flex items-center justify-between bg-gray-50">
+                      <div>
+                        <div className="text-xs font-medium">Foto Pengiriman</div>
+                        <div className="text-[11px] text-gray-400">{formatShortDate(selectedSJ.updated_at)}</div>
+                      </div>
+                      <button
+                        onClick={() => dispatch(openUploadPODModal(selectedSJ.uuid))}
+                        className="text-xs px-2 py-1 rounded border"
+                        style={{ borderColor: 'var(--border-card)' }}
+                      >
+                        Ganti
+                      </button>
+                    </div>
                   </div>
                 )}
+
+                {/* Upload zone — bisa dipakai untuk semua status */}
+                <div>
+                  <div className="text-xs font-medium text-gray-600 mb-2">Dokumen Lampiran (maks. 3)</div>
+                  <SJLampiranUploadZone value={lampiranPaths} onChange={setLampiranPaths} />
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    onClick={handleSaveLampiran}
+                    disabled={isSavingLampiran}
+                    className="px-4 py-2 rounded-lg text-sm text-white disabled:opacity-60"
+                    style={{ backgroundColor: 'var(--green-primary)' }}
+                  >
+                    {isSavingLampiran ? 'Menyimpan...' : 'Simpan Lampiran'}
+                  </button>
+                </div>
               </div>
             )}
 
@@ -268,7 +293,7 @@ export default function DetailSuratJalanPage({ uuid }: DetailSuratJalanPageProps
                   style={{ backgroundColor: 'var(--green-primary)' }}
                   onClick={() => dispatch(openUploadPODModal(selectedSJ.uuid))}
                 >
-                  Konfirmasi Tiba + Upload Foto Bukti Pengiriman
+                  Konfirmasi Tiba & Pengiriman
                 </button>
                 <button className="w-full px-4 py-2 rounded-lg border" style={{ borderColor: 'var(--border-card)' }} onClick={() => router.push(`/surat-jalan/${selectedSJ.uuid}/edit`)}>
                   Edit SJ
@@ -365,8 +390,6 @@ export default function DetailSuratJalanPage({ uuid }: DetailSuratJalanPageProps
             <div className="text-sm font-semibold mb-3">Quick Stats Proyek</div>
             <div className="text-xs text-gray-500">Revenue proyek ini</div>
             <div className="text-sm">Rp 120.000.000</div>
-            <div className="text-xs text-gray-500 mt-2">Biaya ops proyek ini</div>
-            <div className="text-sm">Rp 45.000.000</div>
             <div className="text-xs text-gray-500 mt-2">Estimasi margin</div>
             <div className="text-sm">Rp 75.000.000</div>
             <button className="text-sm text-green-700 mt-3">Lihat Laporan P&L →</button>

@@ -103,6 +103,7 @@ export class MockInvoiceRepository implements IInvoiceRepository {
       notes: dto.notes ?? null,
       sent_at: dto.send_immediately ? now : null,
       void_reason: null,
+      lampiran_paths: null,
       attached_sj: [],
       payments: [],
       created_by: 1,
@@ -135,6 +136,7 @@ export class MockInvoiceRepository implements IInvoiceRepository {
       updated.total_amount = updated.subtotal_amount + updated.tax_amount - updated.pph_amount
       updated.remaining_amount = updated.total_amount - updated.paid_amount
     }
+    if (dto.lampiran_paths !== undefined) updated.lampiran_paths = dto.lampiran_paths
     if (dto.items !== undefined) {
       const newItems = dto.items.map((item, idx2) => ({
         id: (existing.id ?? 0) * 100 + idx2,

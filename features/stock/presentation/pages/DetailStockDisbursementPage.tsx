@@ -92,7 +92,6 @@ export default function DetailStockDisbursementPage({ uuid }: Props) {
                 <StockItemBadge code={d.stock_item.code} />
                 <span className="font-semibold text-gray-900">{d.stock_item.name}</span>
               </div>
-              {d.stock_item.category && <div className="text-xs text-gray-500">{d.stock_item.category}</div>}
             </div>
             <div className="text-right">
               <div className="text-3xl font-bold text-red-600 font-mono" style={{ fontFamily: 'JetBrains Mono, monospace' }}>

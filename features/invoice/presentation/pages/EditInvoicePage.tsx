@@ -15,6 +15,7 @@ import { useInvoiceItems } from '../hooks/useInvoiceItems'
 import InvoiceItemRow from '../components/InvoiceItemRow'
 import InvoiceTaxCalculator from '../components/InvoiceTaxCalculator'
 import InvoiceStatusBadge from '../components/InvoiceStatusBadge'
+import InvoiceLampiranUploadZone from '../components/InvoiceLampiranUploadZone'
 
 function formatRupiah(amount: number): string {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(amount)
@@ -37,6 +38,7 @@ export default function EditInvoicePage({ uuid }: Props) {
   const [pphEnabled, setPphEnabled] = useState(false)
   const [dragFrom, setDragFrom] = useState<number | null>(null)
   const [dragOver, setDragOver] = useState<number | null>(null)
+  const [lampiranPaths, setLampiranPaths] = useState<string[]>([])
 
   const { items, subtotalAmount, addItem, updateItem, removeItem, reorderItems, resetItems, calculateTax, totalAmount } = useInvoiceItems()
 
@@ -49,6 +51,7 @@ export default function EditInvoicePage({ uuid }: Props) {
       }
       setDueDate(invoice.due_date)
       setNotes(invoice.notes ?? '')
+      setLampiranPaths(invoice.lampiran_paths ?? [])
       setTaxPercent(invoice.tax_percent)
       setTaxEnabled(invoice.tax_percent > 0)
       setPphPercent(invoice.pph_percent > 0 ? invoice.pph_percent : 2)
@@ -88,6 +91,7 @@ export default function EditInvoicePage({ uuid }: Props) {
       notes: notes || null,
       tax_percent: taxEnabled ? taxPercent : 0,
       pph_percent: pphEnabled ? pphPercent : 0,
+      lampiran_paths: lampiranPaths.length > 0 ? lampiranPaths : null,
       items: items.map((item, idx) => ({
         fleet_id: item.fleet_id ?? null,
         fleet_label: item.fleet_label,
@@ -220,6 +224,16 @@ export default function EditInvoicePage({ uuid }: Props) {
               onChangeTaxPercent={setTaxPercent}
               onTogglePph={e => { setPphEnabled(e); if (e && pphPercent === 0) setPphPercent(2) }}
               onChangePphPercent={setPphPercent}
+            />
+          </div>
+
+          {/* Lampiran */}
+          <div className="bg-white rounded-xl border p-6" style={{ borderColor: 'var(--border-card)' }}>
+            <h2 className="text-base font-semibold mb-1">Lampiran Dokumen</h2>
+            <p className="text-xs text-gray-500 mb-4">Upload foto atau file PDF sebagai dokumen pendukung invoice ini.</p>
+            <InvoiceLampiranUploadZone
+              value={lampiranPaths}
+              onChange={setLampiranPaths}
             />
           </div>
         </div>

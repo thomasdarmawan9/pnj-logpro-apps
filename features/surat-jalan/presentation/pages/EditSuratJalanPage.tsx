@@ -12,6 +12,7 @@ import useSuratJalanDetail from '../hooks/useSuratJalanDetail'
 import useSuratJalanForm from '../hooks/useSuratJalanForm'
 import SJFormArmadaSection from '../components/SJFormArmadaSection'
 import SJFormSupirSection from '../components/SJFormSupirSection'
+import SJLampiranUploadZone from '../components/SJLampiranUploadZone'
 import { armadaOptions, driverOptions } from '../utils/mockOptions'
 import { StatusOperasional } from '../../domain/entities/SuratJalan'
 
@@ -29,6 +30,7 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
   const [driverMode, setDriverMode] = useState<'master' | 'tbd'>('master')
   const [selectedArmada, setSelectedArmada] = useState(armadaOptions.find(a => a.id === form.fleet_id) || null)
   const [selectedDriver, setSelectedDriver] = useState(driverOptions.find(d => d.id === form.driver_id) || null)
+  const [lampiranPaths, setLampiranPaths] = useState<string[]>([])
 
   useEffect(() => {
     if (selectedSJ) {
@@ -51,6 +53,7 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
       })
       setSelectedArmada(armadaOptions.find(a => a.id === selectedSJ.fleet_id) || null)
       setSelectedDriver(driverOptions.find(d => d.id === selectedSJ.driver_id) || null)
+      setLampiranPaths(selectedSJ.lampiran_paths ?? [])
       if (selectedSJ.driver_id) setDriverMode('master')
       else setDriverMode('tbd')
     }
@@ -71,6 +74,7 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
         cargo_description: form.cargo_description || null,
         operational_cost: form.operational_cost,
         internal_notes: form.internal_notes || null,
+        lampiran_paths: lampiranPaths.length > 0 ? lampiranPaths : null,
       },
     }))
     pushToast({ title: 'Perubahan disimpan', description: 'Surat jalan berhasil diperbarui', variant: 'success' })
@@ -240,6 +244,15 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
                 onChange={e => updateField('internal_notes', e.target.value)}
               />
             </label>
+          </div>
+
+          <div className="rounded-xl bg-white p-6 border" style={{ borderColor: 'var(--border-card)' }}>
+            <div className="text-sm font-semibold mb-1">Lampiran Dokumen</div>
+            <div className="text-xs text-gray-500 mb-4">Upload foto atau file PDF sebagai dokumen pendukung SJ ini.</div>
+            <SJLampiranUploadZone
+              value={lampiranPaths}
+              onChange={setLampiranPaths}
+            />
           </div>
 
           <div className="flex items-center gap-3 mt-6">

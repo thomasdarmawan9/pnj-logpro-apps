@@ -7,4 +7,5 @@ export interface UpdateInvoiceDto {
   pph_percent?: number
   notes?: string | null
   items?: CreateInvoiceItemDto[]
+  lampiran_paths?: string[] | null
 }

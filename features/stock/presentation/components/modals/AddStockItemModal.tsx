@@ -6,7 +6,6 @@ import { StockItem } from '@/features/stock/domain/entities/StockItem'
 import { CreateStockItemDto } from '@/features/stock/application/dto/CreateStockItemDto'
 import { validateStockItem } from '@/features/stock/application/validators/StockItemValidator'
 
-const CATEGORY_SUGGESTIONS = ['Tiang', 'Pipa', 'Aksesori', 'Material', 'Lainnya']
 const UNIT_SUGGESTIONS = ['Batang', 'Pcs', 'Unit', 'Set', 'Kg', 'Meter', 'Lembar', 'Buah']
 
 interface AddStockItemModalProps {
@@ -33,7 +32,6 @@ export default function AddStockItemModal({
   const [form, setForm] = useState({
     code: '',
     name: '',
-    category: '',
     unit: '',
     description: '',
   })
@@ -45,12 +43,11 @@ export default function AddStockItemModal({
         setForm({
           code: editingItem.code,
           name: editingItem.name,
-          category: editingItem.category ?? '',
           unit: editingItem.unit,
           description: editingItem.description ?? '',
         })
       } else {
-        setForm({ code: '', name: '', category: '', unit: '', description: '' })
+        setForm({ code: '', name: '', unit: '', description: '' })
       }
       setErrors({})
     }
@@ -77,7 +74,7 @@ export default function AddStockItemModal({
     const dto: CreateStockItemDto = {
       code: form.code.trim().toUpperCase(),
       name: form.name.trim(),
-      category: form.category.trim() || null,
+      category: null,
       unit: form.unit.trim(),
       description: form.description.trim() || null,
     }
@@ -132,22 +129,6 @@ export default function AddStockItemModal({
               placeholder="Contoh: Tiang Beton TM 12/200"
             />
             {errors.name && <p className="text-xs text-red-600 mt-1">{errors.name}</p>}
-          </div>
-
-          {/* Category */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Kategori</label>
-            <input
-              type="text"
-              list="category-list"
-              className="form-input w-full"
-              value={form.category}
-              onChange={e => handleChange('category', e.target.value)}
-              placeholder="Pilih atau ketik kategori"
-            />
-            <datalist id="category-list">
-              {CATEGORY_SUGGESTIONS.map(c => <option key={c} value={c} />)}
-            </datalist>
           </div>
 
           {/* Unit */}

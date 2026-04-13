@@ -17,7 +17,20 @@ interface Props {
   errors?: Record<string, string>
 }
 
-const UNIT_OPTIONS = ['Unit', 'Hari', 'Bulan', 'Trip', 'Paket']
+const UNIT_OPTIONS = [
+  'Unit',
+  'Hari',
+  'Bulan',
+  'Trip',
+  'Paket',
+  'Meter Kubik',
+  'Kilogram',
+  'Ton',
+  'Karton',
+  'Lembar',
+  'Liter',
+  'Meter',
+]
 
 function parseRupiah(val: string): number {
   return Number(val.replace(/\D/g, '')) || 0
@@ -152,7 +165,7 @@ export default function InvoiceItemRow({ item, index, onChange, onRemove, onDrag
           </select>
         </div>
         <div>
-          <label className="text-xs font-medium text-gray-600 mb-1 block">Harga/Unit *</label>
+          <label className="text-xs font-medium text-gray-600 mb-1 block">Harga/{item.unit} *</label>
           <input
             className={`form-input w-full text-sm ${errors[`${errPrefix}.unit_price`] ? 'border-red-400' : ''}`}
             value={item.unit_price > 0 ? item.unit_price.toLocaleString('id-ID') : ''}

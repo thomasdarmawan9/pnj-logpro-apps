@@ -34,7 +34,7 @@ export default function DonutChart() {
 
       {/* Donut */}
       <div className="relative mt-4" style={{ height: '200px' }}>
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height={200}>
           <PieChart>
             <Pie
               data={donutData}
@@ -72,7 +72,7 @@ export default function DonutChart() {
       <div className="flex justify-center gap-6 mt-4">
         {donutData.map(d => (
           <div key={d.name} className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: d.color }} />
+            <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: d.color }} />
             <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>{d.name}</span>
             <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>{d.value}</span>
           </div>

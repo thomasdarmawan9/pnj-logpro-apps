@@ -85,6 +85,7 @@ class MockStockRepository implements IStockRepository {
         stock_item: stockItem,
         qty: item.qty,
         notes: item.notes,
+        kategori_name: item.kategori_name ?? null,
       }
     })
 

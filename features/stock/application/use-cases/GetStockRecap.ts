@@ -26,6 +26,7 @@ export function calculateRunningBalance(
           qty_out: null,
           balance: 0,
           notes: item.notes,
+          kategori_name: item.kategori_name ?? null,
         })
       }
     })
@@ -45,6 +46,7 @@ export function calculateRunningBalance(
         qty_out: disb.qty,
         balance: 0,
         notes: disb.notes,
+        kategori_name: null,
       })
     }
   })

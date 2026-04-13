@@ -8,6 +8,7 @@ export interface StockReceiptItem {
   stock_item: StockItem
   qty: number
   notes: string | null
+  kategori_name: string | null
 }
 
 export interface StockReceipt {

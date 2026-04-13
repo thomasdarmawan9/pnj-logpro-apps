@@ -96,6 +96,7 @@ export interface Invoice {
   notes: string | null
   sent_at: string | null
   void_reason: string | null
+  lampiran_paths: string[] | null
   attached_sj: AttachedSJ[]
   payments: Payment[]
   created_by?: number

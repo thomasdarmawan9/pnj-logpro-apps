@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useDispatch, useSelector } from 'react-redux'
 import { ArrowLeft, Printer, DollarSign, Paperclip, Pencil, Send, AlertTriangle, FileText } from 'lucide-react'
@@ -13,7 +13,7 @@ import {
   openSendInvoiceModal, closeSendInvoiceModal,
   openVoidInvoiceModal, closeVoidInvoiceModal,
   openGeneratePDFModal, closeGeneratePDFModal,
-  fetchAttachableSJ, sendInvoice, voidInvoice, attachSJ, detachSJ,
+  fetchAttachableSJ, sendInvoice, voidInvoice, attachSJ, detachSJ, updateInvoice,
 } from '@/store/slices/invoiceSlice'
 import { InvoiceStatus } from '../../domain/entities/Invoice'
 import useInvoiceDetail from '../hooks/useInvoiceDetail'
@@ -29,6 +29,7 @@ import RecordPaymentModal from '../components/modals/RecordPaymentModal'
 import AttachSJModal from '../components/modals/AttachSJModal'
 import DetachSJConfirmModal from '../components/modals/DetachSJConfirmModal'
 import GeneratePDFModal from '../components/modals/GeneratePDFModal'
+import InvoiceLampiranUploadZone from '../components/InvoiceLampiranUploadZone'
 
 function formatRupiah(amount: number): string {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(amount)
@@ -51,7 +52,13 @@ export default function DetailInvoicePage({ uuid }: Props) {
   const { invoice, isLoading } = useInvoiceDetail(uuid)
   const { attachableSJ, modals } = useSelector((state: RootState) => state.invoice)
   const role = useSelector((state: RootState) => state.auth.user?.role ?? 'super_admin')
-  const [activeTab, setActiveTab] = useState<'items' | 'sj' | 'payments'>('items')
+  const [activeTab, setActiveTab] = useState<'items' | 'sj' | 'payments' | 'lampiran'>('items')
+  const [lampiranPaths, setLampiranPaths] = useState<string[]>([])
+  const [isSavingLampiran, setIsSavingLampiran] = useState(false)
+
+  useEffect(() => {
+    if (invoice) setLampiranPaths(invoice.lampiran_paths ?? [])
+  }, [invoice])
 
   const now = new Date()
   const isOverdue = invoice?.status === InvoiceStatus.OUTSTANDING && new Date(invoice.due_date) < now
@@ -68,6 +75,13 @@ export default function DetailInvoicePage({ uuid }: Props) {
   }
 
   const canManage = invoice.status !== InvoiceStatus.PAID && invoice.status !== InvoiceStatus.VOID
+
+  const handleSaveLampiran = async () => {
+    setIsSavingLampiran(true)
+    await dispatch(updateInvoice({ uuid, dto: { lampiran_paths: lampiranPaths.length > 0 ? lampiranPaths : null } }))
+    setIsSavingLampiran(false)
+    pushToast({ title: 'Lampiran disimpan', description: 'Dokumen terlampir berhasil diperbarui.', variant: 'success' })
+  }
 
   return (
     <DashboardLayout>
@@ -141,6 +155,7 @@ export default function DetailInvoicePage({ uuid }: Props) {
               { id: 'items', label: `Rincian Item (${invoice.items.length})` },
               { id: 'sj', label: `Surat Jalan Terlampir (${invoice.attached_sj.length})` },
               { id: 'payments', label: `Riwayat Pembayaran (${invoice.payments.length})` },
+              { id: 'lampiran', label: `Dokumen Terlampir (${(invoice.lampiran_paths ?? []).length})` },
             ].map(tab => (
               <button
                 key={tab.id}
@@ -196,6 +211,22 @@ export default function DetailInvoicePage({ uuid }: Props) {
               onAddPayment={() => dispatch(openRecordPaymentModal())}
               isOverdue={isOverdue}
             />
+          )}
+
+          {activeTab === 'lampiran' && (
+            <div className="space-y-4">
+              <InvoiceLampiranUploadZone value={lampiranPaths} onChange={setLampiranPaths} />
+              <div className="flex justify-end">
+                <button
+                  onClick={handleSaveLampiran}
+                  disabled={isSavingLampiran}
+                  className="px-4 py-2 rounded-xl text-sm text-white disabled:opacity-60"
+                  style={{ backgroundColor: 'var(--green-primary)' }}
+                >
+                  {isSavingLampiran ? 'Menyimpan...' : 'Simpan Lampiran'}
+                </button>
+              </div>
+            </div>
           )}
         </div>
 

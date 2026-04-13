@@ -10,6 +10,7 @@ export interface StockRecapRow {
   qty_out: number | null
   balance: number
   notes: string | null
+  kategori_name: string | null
 }
 
 export interface StockFilters {

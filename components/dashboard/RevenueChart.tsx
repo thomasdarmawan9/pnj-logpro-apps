@@ -49,7 +49,7 @@ export default function RevenueChart() {
 
       {/* Chart */}
       <div style={{ height: '180px' }}>
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height={180}>
           <LineChart data={revenueData} margin={{ top: 5, right: 10, bottom: 5, left: -20 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
             <XAxis

@@ -53,9 +53,6 @@ export default function StockBalanceCard({ item, receipts, disbursements }: Stoc
           <div className="font-semibold text-sm text-gray-900 leading-tight mt-1 truncate" title={item.name}>
             {item.name}
           </div>
-          {item.category && (
-            <div className="text-[11px] text-gray-500">{item.category}</div>
-          )}
         </div>
         {isLow && (
           <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-600">

@@ -181,6 +181,7 @@ export const SCENARIO_SJ_1: SuratJalan = {
   invoice: { id: 1, invoice_number: '2829' },
   delivered_at: '2026-03-14T14:30:00Z',
   pod_photo_path: '/mock/pod-sj-089.jpg',
+  lampiran_paths: null,
   void_reason: null,
   internal_notes: null,
   created_by: 1,
@@ -218,6 +219,7 @@ export const SCENARIO_SJ_2: SuratJalan = {
   invoice: { id: 1, invoice_number: '2829' },
   delivered_at: null,
   pod_photo_path: null,
+  lampiran_paths: null,
   void_reason: null,
   internal_notes: null,
   created_by: 1,
@@ -255,6 +257,7 @@ export const SCENARIO_SJ_3: SuratJalan = {
   invoice: null,
   delivered_at: null,
   pod_photo_path: null,
+  lampiran_paths: null,
   void_reason: null,
   internal_notes: 'Menunggu konfirmasi jadwal dari customer',
   created_by: 1,
@@ -346,6 +349,7 @@ export const SCENARIO_INVOICE: Invoice = {
   notes: null,
   sent_at: '2026-03-15T10:00:00Z',
   void_reason: null,
+  lampiran_paths: null,
   attached_sj: [
     {
       uuid: 'sj-001',                                   // → SCENARIO_SJ_1.uuid

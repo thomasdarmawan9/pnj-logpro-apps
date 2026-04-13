@@ -34,6 +34,7 @@ const laporanChildren = [
   { icon: TrendingUp,  label: 'Profit & Loss',     href: '/laporan/profit-loss', roles: ['super_admin'] },
   { icon: Truck,       label: 'Utilisasi Armada',  href: '/laporan/utilisasi',   roles: ['super_admin'] },
   { icon: Activity,    label: 'Audit Trail',       href: '/laporan/audit-trail', roles: ['super_admin'] },
+  { icon: Package,     label: 'Rekap Stok',        href: '/stok/laporan',        roles: ['super_admin', 'admin_ops'] },
 ]
 
 const settingsChildren = [

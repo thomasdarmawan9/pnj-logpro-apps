@@ -2,6 +2,7 @@ export interface CreateStockReceiptItemDto {
   stock_item_id: number
   qty: number
   notes: string | null
+  kategori_name?: string | null
 }
 
 export interface CreateStockReceiptDto {

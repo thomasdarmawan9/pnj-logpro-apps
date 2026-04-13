@@ -60,6 +60,7 @@ export const MOCK_INVOICES: Invoice[] = [
     notes: null,
     sent_at: '2026-03-11T10:00:00Z',
     void_reason: null,
+    lampiran_paths: null,
     attached_sj: [
       {
         uuid: 'sj-001',
@@ -130,6 +131,7 @@ export const MOCK_INVOICES: Invoice[] = [
     notes: null,
     sent_at: '2026-02-01T09:00:00Z',
     void_reason: null,
+    lampiran_paths: null,
     attached_sj: [],
     payments: [
       {
@@ -190,6 +192,7 @@ export const MOCK_INVOICES: Invoice[] = [
     notes: 'Sudah lunas bulan Februari.',
     sent_at: '2026-01-15T10:00:00Z',
     void_reason: null,
+    lampiran_paths: null,
     attached_sj: [],
     payments: [
       {
@@ -250,6 +253,7 @@ export const MOCK_INVOICES: Invoice[] = [
     notes: 'Sesuai trip sheet bulan Februari 2026.',
     sent_at: '2026-02-20T11:00:00Z',
     void_reason: null,
+    lampiran_paths: null,
     attached_sj: [],
     payments: [],
     created_by: 1,
@@ -299,6 +303,7 @@ export const MOCK_INVOICES: Invoice[] = [
     notes: null,
     sent_at: null,
     void_reason: 'Kontrak dibatalkan oleh customer karena perubahan kebutuhan operasional.',
+    lampiran_paths: null,
     attached_sj: [],
     payments: [],
     created_by: 1,
@@ -348,6 +353,7 @@ export const MOCK_INVOICES: Invoice[] = [
     notes: null,
     sent_at: null,
     void_reason: null,
+    lampiran_paths: null,
     attached_sj: [],
     payments: [],
     created_by: 1,
@@ -405,6 +411,7 @@ export const MOCK_INVOICES: Invoice[] = [
     notes: 'Mohon konfirmasi sebelum dikirim.',
     sent_at: null,
     void_reason: null,
+    lampiran_paths: null,
     attached_sj: [],
     payments: [],
     created_by: 1,
@@ -454,6 +461,7 @@ export const MOCK_INVOICES: Invoice[] = [
     notes: null,
     sent_at: '2025-12-15T10:00:00Z',
     void_reason: null,
+    lampiran_paths: null,
     attached_sj: [],
     payments: [
       {

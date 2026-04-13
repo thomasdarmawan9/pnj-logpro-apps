@@ -22,8 +22,7 @@ export default function StockItemListPage() {
 
   const filtered = items.filter(item =>
     item.code.toLowerCase().includes(search.toLowerCase()) ||
-    item.name.toLowerCase().includes(search.toLowerCase()) ||
-    (item.category ?? '').toLowerCase().includes(search.toLowerCase())
+    item.name.toLowerCase().includes(search.toLowerCase())
   )
 
   const handleToggleActive = async (uuid: string, currentActive: boolean) => {
@@ -62,7 +61,7 @@ export default function StockItemListPage() {
         <input
           type="text"
           className="form-input w-full pl-8"
-          placeholder="Cari kode, nama, atau kategori..."
+          placeholder="Cari kode atau nama barang..."
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
@@ -73,9 +72,9 @@ export default function StockItemListPage() {
         <table className="min-w-full text-sm">
           <thead className="bg-gray-50 text-xs text-gray-500">
             <tr>
+              <th className="px-4 py-3 text-left w-8" />
               <th className="px-4 py-3 text-left">Kode</th>
               <th className="px-4 py-3 text-left">Nama Barang</th>
-              <th className="px-4 py-3 text-left">Kategori</th>
               <th className="px-4 py-3 text-left">Satuan</th>
               <th className="px-4 py-3 text-right">Stok Saat Ini</th>
               <th className="px-4 py-3 text-center">Status</th>
@@ -92,6 +91,7 @@ export default function StockItemListPage() {
                 ))}
               </tr>
             ))}
+
             {!isLoading && filtered.length === 0 && (
               <tr>
                 <td colSpan={7} className="px-4 py-16 text-center">
@@ -107,12 +107,14 @@ export default function StockItemListPage() {
                 </td>
               </tr>
             )}
-            {!isLoading && filtered.map((item) => (
+
+            {!isLoading && filtered.map(item => (
               <tr
                 key={item.uuid}
                 className={`border-t transition-colors hover:bg-gray-50 ${!item.is_active ? 'opacity-50' : ''}`}
                 style={{ borderColor: 'var(--border-card)' }}
               >
+                <td className="px-4 py-3" />
                 <td className="px-4 py-3">
                   <StockItemBadge code={item.code} />
                 </td>
@@ -120,7 +122,6 @@ export default function StockItemListPage() {
                   <div className="font-medium text-gray-900">{item.name}</div>
                   {item.description && <div className="text-[11px] text-gray-400 mt-0.5">{item.description}</div>}
                 </td>
-                <td className="px-4 py-3 text-gray-600">{item.category ?? '—'}</td>
                 <td className="px-4 py-3 text-gray-600">{item.unit}</td>
                 <td className="px-4 py-3 text-right">
                   <span

@@ -54,6 +54,7 @@ export interface SuratJalan {
   } | null
   delivered_at: string | null
   pod_photo_path: string | null
+  lampiran_paths: string[] | null
   void_reason: string | null
   internal_notes: string | null
   created_by: number

@@ -99,6 +99,7 @@ export class MockSuratJalanRepository implements ISuratJalanRepository {
       invoice: null,
       delivered_at: null,
       pod_photo_path: null,
+      lampiran_paths: null,
       void_reason: null,
       internal_notes: dto.internal_notes,
       created_by: 1,

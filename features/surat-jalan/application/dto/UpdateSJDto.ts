@@ -7,4 +7,5 @@ export interface UpdateSJDto {
   cargo_description?: string | null
   operational_cost?: number
   internal_notes?: string | null
+  lampiran_paths?: string[] | null
 }

@@ -45,6 +45,7 @@ export default function RunningBalanceTable({ rows, unit }: RunningBalanceTableP
             <th className="px-3 py-3 text-center w-8">No</th>
             <th className="px-3 py-3 text-left">Tanggal</th>
             <th className="px-3 py-3 text-left">Pengirim / Sopir</th>
+            <th className="px-3 py-3 text-left">Kategori</th>
             <th className="px-3 py-3 text-left">No. Pol</th>
             <th className="px-3 py-3 text-left">Tujuan / Sumber</th>
             <th className="px-3 py-3 text-left">No. SJ / SPAL</th>
@@ -67,10 +68,16 @@ export default function RunningBalanceTable({ rows, unit }: RunningBalanceTableP
               <td className="px-3 py-2.5 text-center text-gray-400">{idx + 1}</td>
               <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{formatDate(row.date)}</td>
               <td className="px-3 py-2.5 font-medium text-gray-800">{row.supplier_or_driver}</td>
+              <td className="px-3 py-2.5">
+                {row.kategori_name
+                  ? <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">{row.kategori_name}</span>
+                  : <span className="text-xs text-gray-300">—</span>
+                }
+              </td>
               <td className="px-3 py-2.5 text-gray-500 font-mono text-xs" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
                 {row.vehicle_plate ?? '—'}
               </td>
-              <td className="px-3 py-2.5 text-gray-600 max-w-[160px] truncate">{row.destination ?? (row.type === 'receipt' ? 'Penerimaan' : '—')}</td>
+              <td className="px-3 py-2.5 text-gray-600 max-w-40 truncate">{row.destination ?? (row.type === 'receipt' ? 'Penerimaan' : '—')}</td>
               <td className="px-3 py-2.5">
                 <span className="font-mono text-xs bg-gray-100 px-1.5 py-0.5 rounded" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
                   {row.sj_or_spal}
@@ -96,7 +103,7 @@ export default function RunningBalanceTable({ rows, unit }: RunningBalanceTableP
         </tbody>
         <tfoot className="bg-gray-50 border-t-2" style={{ borderColor: 'var(--border-card)' }}>
           <tr>
-            <td colSpan={6} className="px-3 py-3 text-xs font-semibold text-gray-600">Total</td>
+            <td colSpan={7} className="px-3 py-3 text-xs font-semibold text-gray-600">Total</td>
             <td className="px-3 py-3 text-right font-bold text-green-700">
               +{totalIn.toLocaleString('id-ID')} {unit}
             </td>

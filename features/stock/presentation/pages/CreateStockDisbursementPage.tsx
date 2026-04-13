@@ -3,13 +3,19 @@
 import { useState, useEffect } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, AlertCircle } from 'lucide-react'
+import { ArrowLeft, AlertCircle, Plus, Trash2 } from 'lucide-react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { RootState, AppDispatch } from '@/store'
 import { fetchStockItems, createStockDisbursement } from '@/store/slices/stockSlice'
 import { useToast } from '@/components/toast/useToast'
 import { validateDisbursement } from '@/features/stock/application/validators/StockDisbursementValidator'
 import { MOCK_CUSTOMERS } from '@/lib/mockData/stock'
+
+interface DisbursementItemRow {
+  id: string
+  stock_item_id: string
+  qty: string
+}
 
 export default function CreateStockDisbursementPage() {
   const router = useRouter()
@@ -21,8 +27,6 @@ export default function CreateStockDisbursementPage() {
 
   const [form, setForm] = useState({
     disbursement_date: new Date().toISOString().split('T')[0],
-    stock_item_id: '',
-    qty: '',
     driver_name: '',
     vehicle_plate: '',
     destination: '',
@@ -32,15 +36,31 @@ export default function CreateStockDisbursementPage() {
     notes: '',
   })
 
+  const [itemRows, setItemRows] = useState<DisbursementItemRow[]>([
+    { id: '1', stock_item_id: '', qty: '' },
+  ])
+
   useEffect(() => {
     dispatch(fetchStockItems())
   }, [dispatch])
 
   const activeItems = items.filter(i => i.is_active)
-  const selectedItem = activeItems.find(i => i.id === Number(form.stock_item_id))
-  const qty = Number(form.qty)
-  const validation = selectedItem && qty > 0 ? validateDisbursement(selectedItem, qty) : null
-  const remainingAfter = selectedItem && qty > 0 && validation?.valid ? selectedItem.current_stock - qty : null
+
+
+  const selectedItemIds = itemRows.map(r => r.stock_item_id).filter(id => id !== '')
+
+  const addRow = () => {
+    setItemRows(prev => [...prev, { id: Date.now().toString(), stock_item_id: '', qty: '' }])
+  }
+
+  const removeRow = (id: string) => {
+    if (itemRows.length === 1) return
+    setItemRows(prev => prev.filter(r => r.id !== id))
+  }
+
+  const updateRow = (id: string, field: keyof DisbursementItemRow, value: string) => {
+    setItemRows(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r))
+  }
 
   const handleChange = (field: string, value: string) => {
     setForm(prev => ({
@@ -49,39 +69,57 @@ export default function CreateStockDisbursementPage() {
     }))
   }
 
+  const getRowValidation = (row: DisbursementItemRow) => {
+    const item = activeItems.find(i => i.id === Number(row.stock_item_id))
+    const qty = Number(row.qty)
+    if (!item || !qty || qty <= 0) return null
+    return validateDisbursement(item, qty)
+  }
+
   const isValid = () => {
-    if (!form.disbursement_date || !form.stock_item_id || !form.qty) return false
-    if (!validation || !validation.valid) return false
+    if (!form.disbursement_date) return false
+    if (itemRows.some(r => !r.stock_item_id || !r.qty || Number(r.qty) <= 0)) return false
+    if (itemRows.some(r => {
+      const v = getRowValidation(r)
+      return v && !v.valid
+    })) return false
+    const ids = itemRows.map(r => r.stock_item_id)
+    if (new Set(ids).size !== ids.length) return false
     return true
   }
 
   const handleSubmit = async () => {
     if (!isValid()) {
-      pushToast({ title: 'Form Tidak Lengkap', description: validation?.message || 'Harap isi semua kolom yang wajib.', variant: 'error' })
+      pushToast({ title: 'Form Tidak Lengkap', description: 'Harap isi semua kolom dan pastikan stok mencukupi.', variant: 'error' })
       return
     }
 
-    const dto = {
-      disbursement_date: form.disbursement_date,
-      stock_item_id: Number(form.stock_item_id),
-      qty,
-      delivery_order_id: null,
-      sj_number_manual: form.sj_number_manual || null,
-      invoice_number_manual: form.invoice_number_manual || null,
-      driver_name: form.driver_name || null,
-      vehicle_plate: form.vehicle_plate || null,
-      destination: form.destination || null,
-      customer_id: form.customer_id ? Number(form.customer_id) : null,
-      notes: form.notes || null,
+    const { createStockDisbursement: createThunk } = await import('@/store/slices/stockSlice')
+    let allSuccess = true
+
+    for (const row of itemRows) {
+      const dto = {
+        disbursement_date: form.disbursement_date,
+        stock_item_id: Number(row.stock_item_id),
+        qty: Number(row.qty),
+        delivery_order_id: null,
+        sj_number_manual: form.sj_number_manual || null,
+        invoice_number_manual: form.invoice_number_manual || null,
+        driver_name: form.driver_name || null,
+        vehicle_plate: form.vehicle_plate || null,
+        destination: form.destination || null,
+        customer_id: form.customer_id ? Number(form.customer_id) : null,
+        notes: form.notes || null,
+      }
+      const res = await dispatch(createStockDisbursement(dto))
+      if (!createThunk.fulfilled.match(res)) allSuccess = false
     }
 
-    const res = await dispatch(createStockDisbursement(dto))
-    const { createStockDisbursement: createThunk } = await import('@/store/slices/stockSlice')
-    if (createThunk.fulfilled.match(res)) {
-      pushToast({ title: 'Stok Keluar Disimpan', description: 'Data pengeluaran stok berhasil disimpan.', variant: 'success' })
+    if (allSuccess) {
+      pushToast({ title: 'Stok Keluar Disimpan', description: `${itemRows.length} barang berhasil dicatat keluar.`, variant: 'success' })
       router.push('/stok/keluar')
     } else {
-      pushToast({ title: 'Gagal Menyimpan', description: 'Terjadi kesalahan. Silakan coba lagi.', variant: 'error' })
+      pushToast({ title: 'Sebagian Gagal', description: 'Ada data yang gagal disimpan. Silakan coba lagi.', variant: 'error' })
     }
   }
 
@@ -98,23 +136,19 @@ export default function CreateStockDisbursementPage() {
         </div>
       </div>
 
-      <div className="max-w-2xl space-y-5">
+      <div className="max-w-3xl space-y-5">
         {/* Mode toggle */}
         <div className="bg-white rounded-xl border shadow-sm p-4 flex gap-2" style={{ borderColor: 'var(--border-card)' }}>
           <button
             onClick={() => setMode('manual')}
-            className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors ${
-              mode === 'manual' ? 'text-white' : 'text-gray-500 hover:bg-gray-50'
-            }`}
+            className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors ${mode === 'manual' ? 'text-white' : 'text-gray-500 hover:bg-gray-50'}`}
             style={mode === 'manual' ? { backgroundColor: 'var(--green-primary)' } : {}}
           >
             Input Manual
           </button>
           <button
             onClick={() => setMode('from_sj')}
-            className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors ${
-              mode === 'from_sj' ? 'text-white' : 'text-gray-500 hover:bg-gray-50'
-            }`}
+            className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors ${mode === 'from_sj' ? 'text-white' : 'text-gray-500 hover:bg-gray-50'}`}
             style={mode === 'from_sj' ? { backgroundColor: 'var(--green-primary)' } : {}}
           >
             Dari SJ PNJ
@@ -131,70 +165,134 @@ export default function CreateStockDisbursementPage() {
           </div>
         ) : (
           <>
-            {/* Item selection */}
+            {/* Item rows */}
             <div className="bg-white rounded-xl border shadow-sm p-5" style={{ borderColor: 'var(--border-card)' }}>
-              <h2 className="font-bold text-base mb-4">Barang & Jumlah</h2>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Barang <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    className="form-input w-full"
-                    value={form.stock_item_id}
-                    onChange={e => handleChange('stock_item_id', e.target.value)}
-                  >
-                    <option value="">— Pilih Barang —</option>
-                    {activeItems.map(item => (
-                      <option key={item.id} value={item.id}>
-                        {item.code} — {item.name} (Stok: {item.current_stock} {item.unit})
-                      </option>
-                    ))}
-                  </select>
-                  {selectedItem && (
-                    <div className="mt-2 flex items-center gap-2 text-sm">
-                      <span className="text-gray-500">Stok tersedia:</span>
-                      <span className={`font-bold font-mono ${selectedItem.current_stock === 0 ? 'text-red-600' : 'text-green-700'}`}
-                        style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                        {selectedItem.current_stock.toLocaleString('id-ID')} {selectedItem.unit}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Jumlah (Qty) <span className="text-red-500">*</span>
-                  </label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="number"
-                      min={1}
-                      max={selectedItem?.current_stock}
-                      className={`form-input w-40 ${validation && !validation.valid ? 'error' : ''}`}
-                      value={form.qty}
-                      onChange={e => handleChange('qty', e.target.value)}
-                      placeholder="0"
-                    />
-                    <span className="text-gray-500 text-sm">{selectedItem?.unit ?? ''}</span>
-                  </div>
-                  {validation && !validation.valid && (
-                    <div className="flex items-start gap-1.5 mt-2 text-red-600 text-xs">
-                      <AlertCircle size={12} className="mt-0.5 shrink-0" />
-                      <span>{validation.message}</span>
-                    </div>
-                  )}
-                  {remainingAfter !== null && (
-                    <div className="mt-2 p-2.5 bg-green-50 rounded-lg border border-green-100 text-xs">
-                      <span className="text-gray-600">Sisa setelah keluar: </span>
-                      <span className={`font-bold font-mono ${remainingAfter < 0 ? 'text-red-600' : remainingAfter === 0 ? 'text-amber-700' : 'text-green-700'}`}
-                        style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                        {remainingAfter.toLocaleString('id-ID')} {selectedItem?.unit}
-                      </span>
-                    </div>
-                  )}
-                </div>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-bold text-base">Barang & Jumlah</h2>
+                <button
+                  onClick={addRow}
+                  className="flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-xl border transition-colors hover:bg-red-50"
+                  style={{ borderColor: '#EF4444', color: '#EF4444' }}
+                >
+                  <Plus size={14} />
+                  Tambah Baris
+                </button>
               </div>
+
+              <div className="space-y-3">
+                {itemRows.map((row, idx) => {
+                  const selectedItem = activeItems.find(i => i.id === Number(row.stock_item_id))
+                  const qty = Number(row.qty)
+                  const rowValidation = selectedItem && qty > 0 ? validateDisbursement(selectedItem, qty) : null
+                  const remainingAfter = selectedItem && qty > 0 && rowValidation?.valid
+                    ? selectedItem.current_stock - qty
+                    : null
+                  const isDuplicate = itemRows.filter(r => r.stock_item_id === row.stock_item_id && row.stock_item_id !== '').length > 1
+
+                  return (
+                    <div
+                      key={row.id}
+                      className={`p-4 rounded-xl border space-y-3 ${isDuplicate ? 'border-red-300 bg-red-50' : 'border-gray-100 bg-gray-50'}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-gray-500">Barang {idx + 1}</span>
+                        <button
+                          onClick={() => removeRow(row.id)}
+                          disabled={itemRows.length === 1}
+                          className="p-1 rounded hover:bg-red-100 text-red-400 disabled:opacity-30 transition-colors"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-12 gap-3 items-start">
+                        {/* Item select */}
+                        <div className="col-span-7">
+                          <label className="block text-xs text-gray-500 mb-1">Pilih Barang *</label>
+                          <select
+                            className={`form-input w-full text-sm ${isDuplicate ? 'error' : ''}`}
+                            value={row.stock_item_id}
+                            onChange={e => updateRow(row.id, 'stock_item_id', e.target.value)}
+                          >
+                            <option value="">— Pilih Barang —</option>
+                            {activeItems.map(item => (
+                              <option
+                                key={item.id}
+                                value={item.id}
+                                disabled={selectedItemIds.includes(String(item.id)) && String(item.id) !== row.stock_item_id}
+                              >
+                                {item.name} (Stok: {item.current_stock} {item.unit})
+                              </option>
+                            ))}
+                          </select>
+                          {isDuplicate && <p className="text-xs text-red-600 mt-1">Barang sudah dipilih di baris lain</p>}
+                          {selectedItem && (
+                            <div className="mt-1.5 text-xs text-gray-500">
+                              Stok tersedia:&nbsp;
+                              <span className={`font-bold font-mono ${selectedItem.current_stock === 0 ? 'text-red-600' : 'text-green-700'}`}
+                                style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                                {selectedItem.current_stock.toLocaleString('id-ID')} {selectedItem.unit}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Qty */}
+                        <div className="col-span-3">
+                          <label className="block text-xs text-gray-500 mb-1">Jumlah *</label>
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="number"
+                              min={1}
+                              max={selectedItem?.current_stock}
+                              className={`form-input w-full text-sm ${rowValidation && !rowValidation.valid ? 'error' : ''}`}
+                              value={row.qty}
+                              onChange={e => updateRow(row.id, 'qty', e.target.value)}
+                              placeholder="0"
+                            />
+                            <span className="text-xs text-gray-400 shrink-0">{selectedItem?.unit ?? ''}</span>
+                          </div>
+                          {rowValidation && !rowValidation.valid && (
+                            <div className="flex items-start gap-1 mt-1 text-red-600 text-xs">
+                              <AlertCircle size={11} className="mt-0.5 shrink-0" />
+                              <span>{rowValidation.message}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Remaining */}
+                        <div className="col-span-2">
+                          <label className="block text-xs text-gray-500 mb-1">Sisa</label>
+                          <div className={`form-input text-sm text-center font-mono ${
+                            remainingAfter === null ? 'text-gray-300' :
+                            remainingAfter === 0 ? 'text-amber-600' :
+                            'text-green-700'
+                          }`} style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                            {remainingAfter !== null ? remainingAfter.toLocaleString('id-ID') : '—'}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Ringkasan */}
+              {itemRows.some(r => r.stock_item_id && r.qty && Number(r.qty) > 0) && (
+                <div className="mt-4 p-3 bg-red-50 rounded-xl border border-red-100">
+                  <div className="text-xs font-semibold text-gray-600 mb-2">Ringkasan Keluar</div>
+                  {itemRows.filter(r => r.stock_item_id && r.qty && Number(r.qty) > 0).map(row => {
+                    const item = activeItems.find(i => i.id === Number(row.stock_item_id))
+                    if (!item) return null
+                    return (
+                      <div key={row.id} className="flex justify-between text-xs text-gray-700 mb-1">
+                        <span>{item.name}</span>
+                        <span className="font-bold text-red-600">−{row.qty} {item.unit}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Delivery info */}
@@ -288,28 +386,26 @@ export default function CreateStockDisbursementPage() {
                 </div>
               </div>
             </div>
-          </>
-        )}
 
-        {/* Buttons */}
-        {mode === 'manual' && (
-          <div className="flex items-center justify-end gap-3">
-            <button
-              onClick={() => router.back()}
-              disabled={isSubmitting}
-              className="px-5 py-2.5 text-sm font-medium text-gray-600 rounded-xl border hover:bg-gray-50 transition-colors"
-              style={{ borderColor: 'var(--border-card)' }}
-            >
-              Batal
-            </button>
-            <button
-              onClick={handleSubmit}
-              disabled={isSubmitting || !isValid()}
-              className="px-5 py-2.5 text-sm font-medium text-white rounded-xl disabled:opacity-60 transition-colors bg-red-600 hover:bg-red-700"
-            >
-              {isSubmitting ? 'Menyimpan...' : 'Simpan Stok Keluar'}
-            </button>
-          </div>
+            {/* Buttons */}
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={() => router.back()}
+                disabled={isSubmitting}
+                className="px-5 py-2.5 text-sm font-medium text-gray-600 rounded-xl border hover:bg-gray-50 transition-colors"
+                style={{ borderColor: 'var(--border-card)' }}
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={isSubmitting || !isValid()}
+                className="px-5 py-2.5 text-sm font-medium text-white rounded-xl disabled:opacity-60 transition-colors bg-red-600 hover:bg-red-700"
+              >
+                {isSubmitting ? 'Menyimpan...' : `Simpan Stok Keluar (${itemRows.length} barang)`}
+              </button>
+            </div>
+          </>
         )}
       </div>
     </DashboardLayout>
