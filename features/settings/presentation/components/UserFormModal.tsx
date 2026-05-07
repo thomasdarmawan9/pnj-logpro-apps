@@ -50,7 +50,7 @@ export default function UserFormModal({ open, data, onClose }: Props) {
         pushToast({ title: 'User diperbarui', variant: 'success' })
       }
     } else {
-      const action = await dispatch(createUser({ name, email, role, is_active: true }))
+      const action = await dispatch(createUser({ name, email, password, role, is_active: true }))
       if ((action as { meta?: { requestStatus?: string } }).meta?.requestStatus === 'rejected') {
         pushToast({ title: (action.payload as string) || 'Gagal menambahkan user', variant: 'error' })
       } else {

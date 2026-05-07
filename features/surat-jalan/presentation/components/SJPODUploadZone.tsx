@@ -1,36 +1,88 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { Camera, Upload } from 'lucide-react'
+import { Camera, AlertCircle, RefreshCw } from 'lucide-react'
 
 interface SJPODUploadZoneProps {
   onUpload: (path: string) => void
   currentPhoto?: string | null
+  uploadFile?: (file: File) => Promise<string>
 }
 
-export default function SJPODUploadZone({ onUpload, currentPhoto }: SJPODUploadZoneProps) {
-  const inputRef = useRef<HTMLInputElement>(null)
-  const [preview, setPreview] = useState<string | null>(currentPhoto || null)
-  const [progress, setProgress] = useState<number>(0)
-  const [isCompressing, setIsCompressing] = useState(false)
+const MAX_SIZE = 5 * 1024 * 1024  // 5MB
+const ACCEPTED = ['image/jpeg', 'image/png', 'image/webp']
 
-  const handleFile = (file: File) => {
+function readAsDataURL(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
     const reader = new FileReader()
-    reader.onload = () => {
-      setPreview(reader.result as string)
-      setIsCompressing(true)
-      setProgress(20)
-      const steps = [40, 60, 80, 100]
-      steps.forEach((value, idx) => {
-        setTimeout(() => setProgress(value), 300 * (idx + 1))
-      })
-      setTimeout(() => {
-        setIsCompressing(false)
-        onUpload(`/mock/${file.name.replace(/\s+/g, '-').toLowerCase()}`)
-      }, 1500)
-    }
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = () => reject(new Error('Gagal membaca file.'))
     reader.readAsDataURL(file)
+  })
+}
+
+export default function SJPODUploadZone({ onUpload, currentPhoto, uploadFile }: SJPODUploadZoneProps) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [preview, setPreview] = useState<string | null>(null)
+  const [isUploading, setIsUploading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [uploaded, setUploaded] = useState(false)
+  const [isDragOver, setIsDragOver] = useState(false)
+
+  const handleFile = async (file: File) => {
+    setError(null)
+    setUploaded(false)
+
+    // Validasi
+    if (!ACCEPTED.includes(file.type)) {
+      setError('Format tidak didukung. Gunakan JPG, PNG, atau WebP.')
+      return
+    }
+    if (file.size > MAX_SIZE) {
+      setError(`Ukuran file melebihi 5MB.`)
+      return
+    }
+
+    // Tampilkan preview dari lokal dulu
+    try {
+      const dataUrl = await readAsDataURL(file)
+      setPreview(dataUrl)
+    } catch {
+      setError('Gagal membaca file gambar.')
+      return
+    }
+
+    // Upload ke server
+    setIsUploading(true)
+    try {
+      const path = uploadFile
+        ? await uploadFile(file)
+        : `/mock/${file.name.replace(/\s+/g, '-').toLowerCase()}`
+
+      if (!path) {
+        throw new Error('Server tidak mengembalikan path foto. Coba lagi.')
+      }
+      onUpload(path)
+      setUploaded(true)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Gagal mengupload foto.'
+      setError(`Upload gagal: ${msg}`)
+      setPreview(null)
+      onUpload('')
+    } finally {
+      setIsUploading(false)
+      // Reset input supaya file yang sama bisa dipilih ulang
+      if (inputRef.current) inputRef.current.value = ''
+    }
   }
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) handleFile(file)
+  }
+
+  // Foto yang ditampilkan: preview upload baru > currentPhoto dari server
+  const displaySrc = preview || currentPhoto || null
 
   return (
     <div>
@@ -39,39 +91,87 @@ export default function SJPODUploadZone({ onUpload, currentPhoto }: SJPODUploadZ
         type="file"
         accept="image/*"
         className="hidden"
-        onChange={e => {
-          const file = e.target.files?.[0]
-          if (file) handleFile(file)
-        }}
+        onChange={handleChange}
       />
 
+      {/* Drop zone / preview area */}
       <div
-        onClick={() => inputRef.current?.click()}
-        className="border-2 border-dashed rounded-xl p-6 text-center cursor-pointer hover:border-green-400 transition"
-        style={{ borderColor: 'var(--border-card)' }}
+        onClick={() => !isUploading && inputRef.current?.click()}
+        onDragOver={e => { e.preventDefault(); setIsDragOver(true) }}
+        onDragLeave={() => setIsDragOver(false)}
+        onDrop={e => {
+          e.preventDefault()
+          setIsDragOver(false)
+          const file = e.dataTransfer.files?.[0]
+          if (file && !isUploading) handleFile(file)
+        }}
+        className="border-2 border-dashed rounded-xl overflow-hidden transition cursor-pointer"
+        style={{
+          borderColor: error ? '#FCA5A5' : uploaded || isDragOver ? 'var(--green-primary)' : 'var(--border-card)',
+          backgroundColor: isDragOver ? '#F0FDF4' : 'transparent',
+          cursor: isUploading ? 'not-allowed' : 'pointer',
+        }}
       >
-        <div className="mx-auto w-12 h-12 rounded-full flex items-center justify-center" style={{ backgroundColor: '#F3F4F6' }}>
-          {preview ? <Camera size={20} /> : <Upload size={20} />}
-        </div>
-        <div className="text-sm font-medium mt-3">Drag & drop foto di sini</div>
-        <div className="text-xs text-gray-500">atau klik untuk memilih</div>
-        <div className="text-[11px] text-gray-400 mt-2">JPG, PNG · Maks. 5MB</div>
+        {displaySrc ? (
+          <div className="relative">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={displaySrc}
+              alt="Preview Bukti Pengiriman"
+              className="w-full max-h-56 object-cover"
+            />
+            {/* Overlay ganti foto */}
+            {!isUploading && (
+              <div className="absolute inset-0 bg-black/0 hover:bg-black/30 transition-all flex items-center justify-center group">
+                <div className="opacity-0 group-hover:opacity-100 flex items-center gap-2 bg-white/90 rounded-lg px-3 py-2 text-sm font-medium text-gray-700">
+                  <RefreshCw size={14} />
+                  Ganti Foto
+                </div>
+              </div>
+            )}
+            {isUploading && (
+              <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                <div className="flex items-center gap-2 bg-white/90 rounded-lg px-4 py-2 text-sm font-medium text-gray-700">
+                  <div className="w-4 h-4 border-2 border-gray-500 border-t-transparent rounded-full animate-spin" />
+                  Mengunggah...
+                </div>
+              </div>
+            )}
+            {uploaded && (
+              <div className="absolute top-2 right-2 bg-green-600 text-white text-xs font-semibold px-2 py-1 rounded-full">
+                ✓ Terupload
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="p-6 text-center">
+            <div className="mx-auto w-12 h-12 rounded-full flex items-center justify-center" style={{ backgroundColor: '#F3F4F6' }}>
+              {isUploading
+                ? <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                : <Camera size={20} className="text-gray-500" />
+              }
+            </div>
+            <div className="text-sm font-medium mt-3 text-gray-700">
+              {isUploading ? 'Mengunggah foto...' : 'Klik atau drag foto di sini'}
+            </div>
+            <div className="text-xs text-gray-400 mt-1">JPG, PNG, WebP · Maks. 5MB</div>
+          </div>
+        )}
       </div>
 
-      {preview && (
-        <div className="mt-4">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={preview} alt="Preview Bukti Pengiriman" className="w-full max-h-56 object-cover rounded-xl" />
-          {isCompressing && (
-            <div className="mt-3">
-              <div className="text-xs text-gray-500 mb-2">Mengompresi gambar...</div>
-              <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                <div className="h-full bg-green-500" style={{ width: `${progress}%` }} />
-              </div>
-              <div className="text-[11px] text-gray-400 mt-1">Output: ~650KB WebP</div>
-            </div>
-          )}
+      {/* Pesan error */}
+      {error && (
+        <div className="mt-2 flex items-start gap-1.5 text-xs text-red-600">
+          <AlertCircle size={12} className="shrink-0 mt-0.5" />
+          <span>{error}</span>
         </div>
+      )}
+
+      {/* Hint ganti foto jika currentPhoto ada tapi belum upload baru */}
+      {currentPhoto && !preview && !error && (
+        <p className="mt-2 text-xs text-gray-400 text-center">
+          Foto saat ini ditampilkan. Klik untuk mengganti dengan foto baru.
+        </p>
       )}
     </div>
   )

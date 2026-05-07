@@ -7,8 +7,8 @@ import { Plus, Trash2, ArrowLeft, PackagePlus, ChevronUp, Layers } from 'lucide-
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { RootState, AppDispatch } from '@/store'
 import { fetchStockItems, createStockReceipt, createStockItem } from '@/store/slices/stockSlice'
+import { fetchCustomers } from '@/store/slices/masterSlice'
 import { useToast } from '@/components/toast/useToast'
-import { MOCK_CUSTOMERS } from '@/lib/mockData/stock'
 import AddStockItemModal from '../components/modals/AddStockItemModal'
 import { CreateStockItemDto } from '@/features/stock/application/dto/CreateStockItemDto'
 
@@ -37,6 +37,7 @@ export default function CreateStockReceiptPage() {
   const dispatch = useDispatch<AppDispatch>()
   const { push: pushToast } = useToast()
   const { items, isSubmitting } = useSelector((state: RootState) => state.stock)
+  const { customers } = useSelector((state: RootState) => state.master)
 
   const [form, setForm] = useState({
     receipt_date: new Date().toISOString().split('T')[0],
@@ -54,7 +55,8 @@ export default function CreateStockReceiptPage() {
 
   useEffect(() => {
     dispatch(fetchStockItems())
-  }, [dispatch])
+    if (!customers.length) dispatch(fetchCustomers())
+  }, [dispatch, customers.length])
 
   const activeItems = items.filter(i => i.is_active)
 
@@ -261,7 +263,7 @@ export default function CreateStockReceiptPage() {
                 onChange={e => setForm(prev => ({ ...prev, customer_id: e.target.value }))}
               >
                 <option value="">— Pilih Customer —</option>
-                {MOCK_CUSTOMERS.map(c => (
+                {customers.map(c => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>

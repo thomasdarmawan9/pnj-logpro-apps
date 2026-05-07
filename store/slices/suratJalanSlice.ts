@@ -98,8 +98,8 @@ export const createSuratJalan = createAsyncThunk(
   async (dto: CreateSJDto, { rejectWithValue }) => {
     try {
       return await suratJalanRepository.create(dto)
-    } catch {
-      return rejectWithValue('Gagal membuat surat jalan')
+    } catch (e) {
+      return rejectWithValue(e instanceof Error ? e.message : 'Gagal membuat surat jalan')
     }
   }
 )
@@ -167,12 +167,9 @@ export const attachSuratJalanToInvoice = createAsyncThunk(
     { sjUuid: string; invoiceId: number; invoiceUuid: string; invoiceNumber: string; sjEntry: import('../../features/invoice/domain/entities/Invoice').AttachedSJ },
     { rejectWithValue }
   ) => {
+    void sjEntry
     try {
-      const [updatedSJ] = await Promise.all([
-        suratJalanRepository.attachToInvoice(sjUuid, invoiceId, invoiceUuid, invoiceNumber),
-        invoiceRepository.attachSJDirect(invoiceUuid, sjEntry),
-      ])
-      return updatedSJ
+      return await suratJalanRepository.attachToInvoice(sjUuid, invoiceId, invoiceUuid, invoiceNumber)
     } catch {
       return rejectWithValue('Gagal melampirkan SJ ke invoice')
     }

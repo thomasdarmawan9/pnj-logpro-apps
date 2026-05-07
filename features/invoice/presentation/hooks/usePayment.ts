@@ -17,26 +17,33 @@ export default function usePayment(invoiceUuid: string, remainingAmount: number)
     notes: '',
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const update = (field: keyof RecordPaymentDto, value: unknown) => {
     setForm(prev => ({ ...prev, [field]: value }))
     setErrors(prev => ({ ...prev, [field]: '' }))
   }
 
-  const submit = async () => {
+  const submit = async (): Promise<{ ok: boolean; error?: string }> => {
     const result = validatePayment(form, remainingAmount)
     if (!result.valid) {
       setErrors(result.errors)
-      return false
+      return { ok: false }
     }
-    await dispatch(recordPayment({ uuid: invoiceUuid, dto: form }))
-    return true
+    setIsSubmitting(true)
+    const action = await dispatch(recordPayment({ uuid: invoiceUuid, dto: form }))
+    setIsSubmitting(false)
+    if (recordPayment.rejected.match(action)) {
+      return { ok: false, error: action.payload as string }
+    }
+    return { ok: true }
   }
 
   const reset = () => {
     setForm({ payment_date: today, amount: 0, method: 'transfer', proof_path: null, notes: '' })
     setErrors({})
+    setIsSubmitting(false)
   }
 
-  return { form, errors, update, submit, reset }
+  return { form, errors, isSubmitting, update, submit, reset }
 }

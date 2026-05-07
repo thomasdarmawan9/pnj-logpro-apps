@@ -14,7 +14,7 @@ module.exports = {
     },
     {
       name:                'pnj-pdf-worker',
-      script:              'src/workers/pdfWorker.js',
+      script:              'src/workers/pdf.worker.js',
       instances:           1,
       exec_mode:           'fork',
       max_memory_restart:  '800M',

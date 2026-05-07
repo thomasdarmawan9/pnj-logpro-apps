@@ -4,11 +4,12 @@ const express = require('express')
 const helmet  = require('helmet')
 const cors    = require('cors')
 const morgan  = require('morgan')
-const path    = require('path')
+const swaggerUi = require('swagger-ui-express')
 
 const env          = require('./config/env')
 const logger       = require('./utils/logger')
 const routes       = require('./routes')
+const openApiSpec  = require('./docs/openapi')
 const { errorHandler } = require('./middlewares/errorHandler.middleware')
 
 const app = express()
@@ -28,28 +29,48 @@ app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true }))
 
 // 4. Static files
-app.use('/uploads', express.static(path.resolve(env.upload.dir)))
-app.use('/pdfs',    express.static(path.resolve(env.pdf.outputDir)))
+//    NOTE: TIDAK ada static mount publik. Semua dokumen (PDF, lampiran SJ/Invoice,
+//    POD photo, fleet photo) bersifat sensitif → akses via endpoint authenticated:
+//      GET /api/v1/pdf-jobs/:uuid/download
+//      GET /api/v1/surat-jalan/:uuid/lampiran/:filename
+//      GET /api/v1/invoices/:uuid/lampiran/:filename
+//    Lihat masing-masing controller untuk implementasinya.
 
 // 5. HTTP logging via morgan → winston
 app.use(morgan('combined', {
   stream: { write: (msg) => logger.http(msg.trim()) },
 }))
 
-// 6. Health check
+// 6. API docs
+app.get('/api-docs/openapi.json', (req, res) => {
+  res.json(openApiSpec)
+})
+app.use('/api-docs', (req, res, next) => {
+  // Swagger UI uses inline assets/scripts. Keep docs usable while API routes
+  // still receive the global Helmet defaults above.
+  res.removeHeader('Content-Security-Policy')
+  next()
+}, swaggerUi.serve, swaggerUi.setup(openApiSpec, {
+  explorer: true,
+  swaggerOptions: {
+    persistAuthorization: true,
+  },
+}))
+
+// 7. Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date() })
 })
 
-// 7. API routes
+// 8. API routes
 app.use('/api/v1', routes)
 
-// 8. 404 handler
+// 9. 404 handler
 app.use((req, res) => {
   res.status(404).json({ success: false, message: `Endpoint tidak ditemukan: ${req.method} ${req.path}` })
 })
 
-// 9. Global error handler (harus paling bawah)
+// 10. Global error handler (harus paling bawah)
 app.use(errorHandler)
 
 module.exports = app

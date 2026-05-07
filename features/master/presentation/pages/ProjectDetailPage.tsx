@@ -1,14 +1,19 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { useDispatch } from 'react-redux'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Pencil, CheckCircle, TrendingUp, TrendingDown } from 'lucide-react'
+import { ArrowLeft, Pencil, CheckCircle, TrendingUp, TrendingDown, Save } from 'lucide-react'
+import { AppDispatch } from '@/store'
+import { updateSuratJalan } from '@/store/slices/suratJalanSlice'
 import { useProject } from '../hooks/useProject'
 import { useCustomer } from '../hooks/useCustomer'
 import ProjectFormModal from '../components/ProjectFormModal'
 import { useToast } from '@/components/toast/useToast'
 import { formatRupiah, formatDate } from '@/lib/formatters'
 import { Project, ProjectStatus } from '@/features/master/domain/entities/Project'
+import { StatusLampiran, StatusOperasional } from '@/features/surat-jalan/domain/entities/SuratJalan'
+import { apiRequest } from '@/lib/apiClient'
 
 const STATUS_CONFIG: Record<ProjectStatus, { label: string; bg: string; text: string }> = {
   active:    { label: 'Aktif',   bg: '#D1FAE5', text: '#065F46' },
@@ -18,14 +23,64 @@ const STATUS_CONFIG: Record<ProjectStatus, { label: string; bg: string; text: st
 
 interface Props { uuid: string }
 
+interface ProjectSJCostRow {
+  uuid: string
+  sj_number: string
+  sj_date: string
+  destination: string
+  status: StatusOperasional
+  operational_cost: number
+}
+
+type ApiProjectSJ = Omit<ProjectSJCostRow, 'operational_cost' | 'status'> & {
+  status: StatusOperasional
+  operational_cost: number | string | null
+  invoice_attachment_status?: StatusLampiran
+}
+
 export default function ProjectDetailPage({ uuid }: Props) {
+  const dispatch = useDispatch<AppDispatch>()
   const { selectedProject: project, isLoading, modal, openForm, closeForm, loadDetail, update } = useProject()
   const { customers } = useCustomer()
   const { push: pushToast } = useToast()
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<'ringkasan' | 'sj' | 'invoice'>('ringkasan')
+  const [projectSjs, setProjectSjs] = useState<ProjectSJCostRow[]>([])
+  const [costDrafts, setCostDrafts] = useState<Record<string, string>>({})
+  const [isLoadingSjs, setIsLoadingSjs] = useState(false)
+  const [savingCostUuid, setSavingCostUuid] = useState<string | null>(null)
 
   useEffect(() => { loadDetail(uuid) }, [uuid, loadDetail])
+
+  const loadProjectSjs = useCallback(async () => {
+    if (!project?.uuid) return
+    setIsLoadingSjs(true)
+    try {
+      const response = await apiRequest<ApiProjectSJ[]>(`/surat-jalan?status=all&invoice_status=all&period=all&project_uuid=${project.uuid}&page=1&limit=100`, {
+        method: 'GET',
+      })
+      const rows = response.data.map(sj => ({
+        uuid: sj.uuid,
+        sj_number: sj.sj_number,
+        sj_date: sj.sj_date,
+        destination: sj.destination,
+        status: sj.status,
+        operational_cost: Number(sj.operational_cost || 0),
+      }))
+      setProjectSjs(rows)
+      setCostDrafts(Object.fromEntries(rows.map(sj => [sj.uuid, String(sj.operational_cost)])))
+    } catch (err) {
+      pushToast({
+        title: 'Gagal memuat biaya operasional',
+        description: err instanceof Error ? err.message : 'Data SJ proyek tidak dapat dimuat.',
+        variant: 'error',
+      })
+    } finally {
+      setIsLoadingSjs(false)
+    }
+  }, [project?.uuid, pushToast])
+
+  useEffect(() => { loadProjectSjs() }, [loadProjectSjs])
 
   const handleMarkDone = async () => {
     if (!project || !confirm('Tandai proyek ini sebagai Selesai?')) return
@@ -41,6 +96,36 @@ export default function ProjectDetailPage({ uuid }: Props) {
     } else {
       pushToast({ title: 'Proyek diperbarui', variant: 'success' })
     }
+  }
+
+  const handleSaveOperationalCost = async (sj: ProjectSJCostRow) => {
+    const rawValue = costDrafts[sj.uuid] ?? '0'
+    const nextCost = Number(rawValue)
+
+    if (!Number.isFinite(nextCost) || nextCost < 0) {
+      pushToast({ title: 'Biaya tidak valid', description: 'Masukkan angka biaya operasional minimal 0.', variant: 'error' })
+      return
+    }
+
+    setSavingCostUuid(sj.uuid)
+    const result = await dispatch(updateSuratJalan({
+      uuid: sj.uuid,
+      dto: { operational_cost: nextCost },
+    }))
+    setSavingCostUuid(null)
+
+    if (updateSuratJalan.fulfilled.match(result)) {
+      pushToast({ title: 'Biaya operasional disimpan', description: `${sj.sj_number} berhasil diperbarui.`, variant: 'success' })
+      await loadProjectSjs()
+      loadDetail(uuid)
+      return
+    }
+
+    pushToast({
+      title: 'Gagal menyimpan biaya',
+      description: (result.payload as string) || 'Biaya operasional tidak tersimpan.',
+      variant: 'error',
+    })
   }
 
   if (isLoading) {
@@ -160,6 +245,53 @@ export default function ProjectDetailPage({ uuid }: Props) {
                     * Gross profit dihitung dari invoice PAID. Invoice outstanding sebesar {formatRupiah(project.invoice_outstanding_amount)} belum masuk.
                   </p>
                 )}
+                <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--border-card)' }}>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>Biaya Operasional per SJ</h3>
+                    <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>{projectSjs.length} SJ</span>
+                  </div>
+                  {isLoadingSjs ? (
+                    <div className="text-sm py-4" style={{ color: 'var(--text-secondary)' }}>Memuat biaya operasional...</div>
+                  ) : projectSjs.length === 0 ? (
+                    <div className="text-sm py-4" style={{ color: 'var(--text-secondary)' }}>Belum ada Surat Jalan untuk proyek ini.</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {projectSjs.map(sj => {
+                        const draftValue = costDrafts[sj.uuid] ?? '0'
+                        const isChanged = Number(draftValue || 0) !== sj.operational_cost
+                        const isSaving = savingCostUuid === sj.uuid
+
+                        return (
+                          <div key={sj.uuid} className="grid grid-cols-[1fr_180px_82px] gap-3 items-center rounded-xl border px-3 py-2" style={{ borderColor: 'var(--border-card)' }}>
+                            <div className="min-w-0">
+                              <div className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{sj.sj_number}</div>
+                              <div className="text-xs truncate" style={{ color: 'var(--text-secondary)' }}>
+                                {formatDate(sj.sj_date)} · {sj.destination} · {sj.status}
+                              </div>
+                            </div>
+                            <input
+                              type="number"
+                              min={0}
+                              className="form-input w-full"
+                              value={draftValue}
+                              onChange={e => setCostDrafts(prev => ({ ...prev, [sj.uuid]: e.target.value }))}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleSaveOperationalCost(sj)}
+                              disabled={!isChanged || isSaving}
+                              className="inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                              style={{ backgroundColor: 'var(--green-primary)' }}
+                            >
+                              <Save size={13} />
+                              {isSaving ? '...' : 'Simpan'}
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
                 {project.description && (
                   <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--border-card)' }}>
                     <div className="text-xs font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>KETERANGAN</div>

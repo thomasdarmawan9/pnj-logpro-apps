@@ -88,8 +88,8 @@ export const createInvoice = createAsyncThunk(
   async (dto: CreateInvoiceDto, { rejectWithValue }) => {
     try {
       return await invoiceRepository.create(dto)
-    } catch {
-      return rejectWithValue('Gagal membuat invoice')
+    } catch (e) {
+      return rejectWithValue(e instanceof Error ? e.message : 'Gagal membuat invoice')
     }
   }
 )
@@ -121,8 +121,8 @@ export const recordPayment = createAsyncThunk(
   async ({ uuid, dto }: { uuid: string; dto: RecordPaymentDto }, { rejectWithValue }) => {
     try {
       return await invoiceRepository.recordPayment(uuid, dto)
-    } catch {
-      return rejectWithValue('Gagal mencatat pembayaran')
+    } catch (e) {
+      return rejectWithValue(e instanceof Error ? e.message : 'Gagal mencatat pembayaran')
     }
   }
 )
@@ -143,8 +143,8 @@ export const attachSJ = createAsyncThunk(
   async ({ invoiceUuid, sjUuids }: { invoiceUuid: string; sjUuids: string[] }, { rejectWithValue }) => {
     try {
       return await invoiceRepository.attachSJ(invoiceUuid, sjUuids)
-    } catch {
-      return rejectWithValue('Gagal melampirkan SJ')
+    } catch (e) {
+      return rejectWithValue(e instanceof Error ? e.message : 'Gagal melampirkan SJ')
     }
   }
 )
@@ -162,11 +162,11 @@ export const detachSJ = createAsyncThunk(
 
 export const fetchAttachableSJ = createAsyncThunk(
   'invoice/fetchAttachableSJ',
-  async (projectCode: string, { rejectWithValue }) => {
+  async (invoiceUuid: string, { rejectWithValue }) => {
     try {
-      return await invoiceRepository.getAttachableSJ(projectCode)
-    } catch {
-      return rejectWithValue('Gagal memuat SJ tersedia')
+      return await invoiceRepository.getAttachableSJ(invoiceUuid)
+    } catch (e) {
+      return rejectWithValue(e instanceof Error ? e.message : 'Gagal memuat SJ tersedia')
     }
   }
 )
@@ -265,10 +265,16 @@ const invoiceSlice = createSlice({
         if (state.selectedInvoice?.uuid === action.payload.uuid) state.selectedInvoice = action.payload
         state.modals.sendInvoice = false
       })
+      .addCase(recordPayment.pending, state => { state.isSubmitting = true })
       .addCase(recordPayment.fulfilled, (state, action) => {
+        state.isSubmitting = false
         state.list = updateInvoiceInList(state.list, action.payload)
         if (state.selectedInvoice?.uuid === action.payload.uuid) state.selectedInvoice = action.payload
         state.modals.recordPayment = false
+      })
+      .addCase(recordPayment.rejected, (state, action) => {
+        state.isSubmitting = false
+        state.error = action.payload as string
       })
       .addCase(voidInvoice.fulfilled, (state, action) => {
         state.list = updateInvoiceInList(state.list, action.payload)
@@ -280,6 +286,9 @@ const invoiceSlice = createSlice({
         if (state.selectedInvoice?.uuid === action.payload.uuid) state.selectedInvoice = action.payload
         state.modals.attachSJ = false
       })
+      .addCase(attachSJ.rejected, (state, action) => {
+        state.error = action.payload as string
+      })
       .addCase(detachSJ.fulfilled, (state, action) => {
         state.list = updateInvoiceInList(state.list, action.payload)
         if (state.selectedInvoice?.uuid === action.payload.uuid) state.selectedInvoice = action.payload
@@ -287,6 +296,10 @@ const invoiceSlice = createSlice({
       })
       .addCase(fetchAttachableSJ.fulfilled, (state, action) => {
         state.attachableSJ = action.payload
+      })
+      .addCase(fetchAttachableSJ.rejected, (state, action) => {
+        state.attachableSJ = []
+        state.error = action.payload as string
       })
   },
 })

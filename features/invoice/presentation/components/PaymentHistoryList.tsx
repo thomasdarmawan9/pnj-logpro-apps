@@ -22,17 +22,19 @@ interface Props {
   payments: Payment[]
   totalAmount: number
   paidAmount: number
+  downPaymentAmount?: number
   invoiceStatus: InvoiceStatus | string
   role: string
   onAddPayment: () => void
   isOverdue?: boolean
 }
 
-export default function PaymentHistoryList({ payments, totalAmount, paidAmount, invoiceStatus, role, onAddPayment, isOverdue }: Props) {
+export default function PaymentHistoryList({ payments, totalAmount, paidAmount, downPaymentAmount = 0, invoiceStatus, role, onAddPayment, isOverdue }: Props) {
   const canRecord = (invoiceStatus === InvoiceStatus.SENT || invoiceStatus === InvoiceStatus.OUTSTANDING) &&
     (role === 'super_admin' || role === 'admin_finance')
 
   const remaining = totalAmount - paidAmount
+  const regularPaid = Math.max(0, paidAmount - downPaymentAmount)
 
   return (
     <div>
@@ -60,6 +62,11 @@ export default function PaymentHistoryList({ payments, totalAmount, paidAmount, 
           <div>
             <div className="text-gray-500 text-xs mb-1">Total Terbayar</div>
             <div className="font-mono font-semibold text-green-700" style={{ fontFamily: 'var(--font-mono)' }}>{formatRupiah(paidAmount)}</div>
+            {downPaymentAmount > 0 && (
+              <div className="text-[11px] text-gray-500 mt-1">
+                DP {formatRupiah(downPaymentAmount)} · Reguler {formatRupiah(regularPaid)}
+              </div>
+            )}
           </div>
           <div>
             <div className="text-gray-500 text-xs mb-1">Sisa Tagihan</div>
@@ -72,7 +79,9 @@ export default function PaymentHistoryList({ payments, totalAmount, paidAmount, 
       {payments.length === 0 ? (
         <div className="text-center py-10">
           <DollarSign size={36} className="mx-auto text-gray-300 mb-3" />
-          <p className="text-gray-500 font-medium">Belum ada pembayaran tercatat</p>
+          <p className="text-gray-500 font-medium">
+            {downPaymentAmount > 0 ? 'Belum ada pembayaran reguler tercatat' : 'Belum ada pembayaran tercatat'}
+          </p>
           {canRecord && (
             <button onClick={onAddPayment} className="mt-3 text-sm font-medium" style={{ color: 'var(--green-primary)' }}>
               + Catat Pembayaran Pertama

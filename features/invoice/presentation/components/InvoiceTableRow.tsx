@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Eye, Pencil, Send, Printer, AlertTriangle, DollarSign, Paperclip, MoreHorizontal } from 'lucide-react'
+import { Eye, Pencil, Send, Printer, AlertTriangle, DollarSign, Paperclip, MoreHorizontal, Wallet } from 'lucide-react'
 import { Invoice, InvoiceStatus } from '../../domain/entities/Invoice'
 import InvoiceStatusBadge from './InvoiceStatusBadge'
 
@@ -60,6 +60,12 @@ export default function InvoiceTableRow({ invoice, checked, onToggle, onAction, 
         >
           #{invoice.invoice_number}
         </button>
+        {invoice.has_down_payment && (
+          <div className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold px-1.5 py-0.5 rounded" style={{ backgroundColor: '#DCFCE7', color: '#166534' }}>
+            <Wallet size={10} />
+            DP
+          </div>
+        )}
       </td>
       <td className="px-4 py-3 text-sm text-gray-600">{formatDate(invoice.invoice_date)}</td>
       <td className="px-4 py-3">
@@ -98,6 +104,9 @@ export default function InvoiceTableRow({ invoice, checked, onToggle, onAction, 
                   <ActionMenuItem icon={<DollarSign size={14}/>} label="Catat Pembayaran" onClick={() => { setMenuOpen(false); onAction('payment', invoice.uuid) }} />
                   <ActionMenuItem icon={<Paperclip size={14}/>} label="Kelola SJ Terlampir" onClick={() => { setMenuOpen(false); onAction('attach-sj', invoice.uuid) }} />
                 </>
+              )}
+              {invoice.status !== InvoiceStatus.DRAFT && invoice.status !== InvoiceStatus.VOID && (role === 'super_admin' || role === 'admin_finance') && (
+                <ActionMenuItem icon={<Wallet size={14}/>} label="Edit DP / Uang Muka" onClick={() => { setMenuOpen(false); onAction('edit', invoice.uuid) }} />
               )}
               <ActionMenuItem icon={<Printer size={14}/>} label="Cetak PDF" onClick={() => { setMenuOpen(false); onAction('print', invoice.uuid) }} />
               {(invoice.status !== InvoiceStatus.PAID && invoice.status !== InvoiceStatus.VOID) && role === 'super_admin' && (

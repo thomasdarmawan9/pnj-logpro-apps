@@ -345,6 +345,7 @@ export const SCENARIO_INVOICE: Invoice = {
   total_amount: 220_398_000,
   paid_amount: 0,
   remaining_amount: 220_398_000,
+  payment_method: 'transfer' as const,
   status: InvoiceStatus.OUTSTANDING,
   notes: null,
   sent_at: '2026-03-15T10:00:00Z',

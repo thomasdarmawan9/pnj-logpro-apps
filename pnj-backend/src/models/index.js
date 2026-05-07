@@ -19,6 +19,7 @@ const StockItem          = require('./StockItem')(sequelize)
 const StockReceipt       = require('./StockReceipt')(sequelize)
 const StockReceiptItem   = require('./StockReceiptItem')(sequelize)
 const StockDisbursement  = require('./StockDisbursement')(sequelize)
+const BankAccount        = require('./BankAccount')(sequelize)
 
 // ── User associations ──────────────────────────────────────────────────────
 User.hasMany(RefreshToken,  { foreignKey: 'user_id',    as: 'refreshTokens' })
@@ -27,6 +28,7 @@ User.hasMany(DeliveryOrder, { foreignKey: 'created_by', as: 'createdSJs' })
 User.hasMany(Invoice,       { foreignKey: 'created_by', as: 'createdInvoices' })
 User.hasMany(Payment,       { foreignKey: 'created_by', as: 'recordedPayments' })
 RefreshToken.belongsTo(User, { foreignKey: 'user_id', as: 'user' })
+ActivityLog.belongsTo(User,  { foreignKey: 'user_id', as: 'user' })
 
 // ── Customer associations ──────────────────────────────────────────────────
 Customer.hasMany(Project,           { foreignKey: 'customer_id', as: 'projects' })
@@ -52,11 +54,15 @@ DeliveryOrder.belongsTo(Project,  { foreignKey: 'project_id',  as: 'project' })
 DeliveryOrder.belongsTo(Customer, { foreignKey: 'customer_id', as: 'customer' })
 DeliveryOrder.belongsTo(Fleet,    { foreignKey: 'fleet_id',    as: 'fleet' })
 DeliveryOrder.belongsTo(Driver,   { foreignKey: 'driver_id',   as: 'driver' })
-DeliveryOrder.belongsTo(Invoice,  { foreignKey: 'invoice_id',  as: 'attachedInvoice' })
+DeliveryOrder.belongsTo(Invoice,  { foreignKey: 'invoice_id',  as: 'invoice' })
+
+// ── BankAccount associations ───────────────────────────────────────────────
+BankAccount.hasMany(Invoice, { foreignKey: 'bank_account_id', as: 'invoices' })
 
 // ── Invoice associations ───────────────────────────────────────────────────
-Invoice.belongsTo(Project,  { foreignKey: 'project_id',  as: 'project' })
-Invoice.belongsTo(Customer, { foreignKey: 'customer_id', as: 'customer' })
+Invoice.belongsTo(Project,     { foreignKey: 'project_id',     as: 'project' })
+Invoice.belongsTo(Customer,    { foreignKey: 'customer_id',    as: 'customer' })
+Invoice.belongsTo(BankAccount, { foreignKey: 'bank_account_id', as: 'bank_account' })
 Invoice.hasMany(InvoiceItem,   { foreignKey: 'invoice_id', as: 'items',      onDelete: 'CASCADE' })
 Invoice.hasMany(Payment,       { foreignKey: 'invoice_id', as: 'payments' })
 Invoice.hasMany(DeliveryOrder, { foreignKey: 'invoice_id', as: 'attachedSJs' })
@@ -67,20 +73,24 @@ InvoiceItem.belongsTo(Fleet,   { foreignKey: 'fleet_id',   as: 'fleet' })
 
 // ── Payment associations ───────────────────────────────────────────────────
 Payment.belongsTo(Invoice, { foreignKey: 'invoice_id', as: 'invoice' })
+Payment.belongsTo(User,    { foreignKey: 'created_by', as: 'creator' })
 
 // ── Stock associations ─────────────────────────────────────────────────────
+// Aliases pakai snake_case supaya match FE entity (stock_item, delivery_order).
 StockItem.hasMany(StockReceiptItem,  { foreignKey: 'stock_item_id', as: 'receiptItems' })
 StockItem.hasMany(StockDisbursement, { foreignKey: 'stock_item_id', as: 'disbursements' })
 
 StockReceipt.belongsTo(Customer,       { foreignKey: 'customer_id', as: 'customer' })
+StockReceipt.belongsTo(User,           { foreignKey: 'created_by',  as: 'creator' })
 StockReceipt.hasMany(StockReceiptItem, { foreignKey: 'receipt_id',  as: 'items', onDelete: 'CASCADE' })
 
 StockReceiptItem.belongsTo(StockReceipt, { foreignKey: 'receipt_id',    as: 'receipt' })
-StockReceiptItem.belongsTo(StockItem,    { foreignKey: 'stock_item_id', as: 'stockItem' })
+StockReceiptItem.belongsTo(StockItem,    { foreignKey: 'stock_item_id', as: 'stock_item' })
 
-StockDisbursement.belongsTo(StockItem,     { foreignKey: 'stock_item_id',     as: 'stockItem' })
+StockDisbursement.belongsTo(StockItem,     { foreignKey: 'stock_item_id',     as: 'stock_item' })
 StockDisbursement.belongsTo(Customer,      { foreignKey: 'customer_id',       as: 'customer' })
-StockDisbursement.belongsTo(DeliveryOrder, { foreignKey: 'delivery_order_id', as: 'deliveryOrder' })
+StockDisbursement.belongsTo(DeliveryOrder, { foreignKey: 'delivery_order_id', as: 'delivery_order' })
+StockDisbursement.belongsTo(User,          { foreignKey: 'created_by',        as: 'creator' })
 
 module.exports = {
   sequelize,
@@ -101,4 +111,5 @@ module.exports = {
   StockReceipt,
   StockReceiptItem,
   StockDisbursement,
+  BankAccount,
 }

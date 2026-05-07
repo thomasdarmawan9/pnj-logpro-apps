@@ -1,30 +1,74 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { useDispatch } from 'react-redux'
+import { useEffect, useMemo, useState } from 'react'
+import { useDispatch, useSelector } from 'react-redux'
 import { useRouter } from 'next/navigation'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { ArrowLeft, ArrowRightLeft } from 'lucide-react'
-import { AppDispatch } from '@/store'
+import { AppDispatch, RootState } from '@/store'
 import { createSuratJalan } from '@/store/slices/suratJalanSlice'
+import { fetchDrivers, fetchFleets, fetchProjects } from '@/store/slices/masterSlice'
 import { useToast } from '@/components/toast/useToast'
 import SJFormProyekSection from '../components/SJFormProyekSection'
 import SJFormArmadaSection from '../components/SJFormArmadaSection'
 import SJFormSupirSection from '../components/SJFormSupirSection'
 import useSuratJalanForm from '../hooks/useSuratJalanForm'
 import { formatLongDate } from '../utils/format'
-import { armadaOptions, driverOptions, projectOptions } from '../utils/mockOptions'
+import type { ArmadaOption, DriverOption, ProjectOption } from '../utils/mockOptions'
 
 export default function CreateSuratJalanPage() {
   const router = useRouter()
   const dispatch = useDispatch<AppDispatch>()
   const { push: pushToast } = useToast()
+  const { projects, fleets, drivers, isLoading: isMasterLoading } = useSelector((state: RootState) => state.master)
 
   const { form, updateField, errors, validate, isDirty } = useSuratJalanForm({ mode: 'create' })
   const [driverMode, setDriverMode] = useState<'master' | 'tbd'>('master')
-  const [selectedProject, setSelectedProject] = useState(projectOptions.find(p => p.id === form.project_id) || null)
-  const [selectedArmada, setSelectedArmada] = useState(armadaOptions.find(a => a.id === form.fleet_id) || null)
-  const [selectedDriver, setSelectedDriver] = useState(driverOptions.find(d => d.id === form.driver_id) || null)
+  const [selectedProject, setSelectedProject] = useState<ProjectOption | null>(null)
+  const [selectedArmada, setSelectedArmada] = useState<ArmadaOption | null>(null)
+  const [selectedDriver, setSelectedDriver] = useState<DriverOption | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (!projects.length) dispatch(fetchProjects())
+    if (!fleets.length) dispatch(fetchFleets())
+    if (!drivers.length) dispatch(fetchDrivers())
+  }, [dispatch, projects.length, fleets.length, drivers.length])
+
+  const projectOptionsFromApi = useMemo<ProjectOption[]>(() => {
+    return projects
+      .filter(project => project.status === 'active')
+      .map(project => ({
+        id: project.id,
+        name: project.name,
+        code: project.code,
+        customer: project.customer.name,
+        contractNumber: project.contract_number,
+      }))
+  }, [projects])
+
+  const armadaOptionsFromApi = useMemo<ArmadaOption[]>(() => {
+    return fleets
+      .filter(fleet => fleet.status === 'active')
+      .map(fleet => ({
+        id: fleet.id,
+        name: fleet.name,
+        plate: fleet.plate_number,
+        isTBD: fleet.is_tbd,
+        status: fleet.status === 'active' ? 'active' : 'inactive',
+      }))
+  }, [fleets])
+
+  const driverOptionsFromApi = useMemo<DriverOption[]>(() => {
+    return drivers
+      .filter(driver => driver.status === 'active')
+      .map(driver => ({
+        id: driver.id,
+        name: driver.name,
+        simExpiredAt: driver.sim_expired_at,
+        status: driver.status,
+      }))
+  }, [drivers])
 
   const canPublish = !!selectedArmada && (
     driverMode === 'tbd' ||
@@ -41,10 +85,12 @@ export default function CreateSuratJalanPage() {
     tanggal: formatLongDate(form.sj_date),
   }), [form, selectedArmada, selectedDriver, selectedProject, driverMode])
 
-  const handleSubmit = (publish: boolean) => {
+  const handleSubmit = async (publish: boolean) => {
     const valid = validate(publish)
-    if (!valid) return
-    dispatch(createSuratJalan({
+    if (!valid || isSubmitting) return
+
+    setIsSubmitting(true)
+    const result = await dispatch(createSuratJalan({
       ...form,
       project_id: selectedProject?.id || 0,
       fleet_id: selectedArmada?.id || 0,
@@ -52,8 +98,19 @@ export default function CreateSuratJalanPage() {
       driver_name_manual: driverMode === 'tbd' ? 'Belum Ditentukan' : null,
       publish,
     }))
-    pushToast({ title: 'Surat jalan dibuat', description: publish ? 'SJ berhasil diterbitkan' : 'SJ disimpan sebagai draft', variant: 'success' })
-    router.push('/surat-jalan')
+    setIsSubmitting(false)
+
+    if (createSuratJalan.fulfilled.match(result)) {
+      pushToast({ title: 'Surat jalan dibuat', description: publish ? 'SJ berhasil diterbitkan' : 'SJ disimpan sebagai draft', variant: 'success' })
+      router.push('/surat-jalan')
+      return
+    }
+
+    pushToast({
+      title: 'Gagal membuat surat jalan',
+      description: (result.payload as string) || 'Data tidak tersimpan. Periksa pilihan proyek, armada, dan supir.',
+      variant: 'error',
+    })
   }
 
   const handleCancel = () => {
@@ -82,6 +139,7 @@ export default function CreateSuratJalanPage() {
         <div className="lg:col-span-3">
           <SJFormProyekSection
             value={selectedProject}
+            options={projectOptionsFromApi}
             onSelect={(project) => {
               setSelectedProject(project)
               updateField('project_id', project.id)
@@ -111,6 +169,7 @@ export default function CreateSuratJalanPage() {
 
           <SJFormArmadaSection
             value={selectedArmada}
+            options={armadaOptionsFromApi}
             onChange={(armada) => {
               setSelectedArmada(armada)
               updateField('fleet_id', armada.id)
@@ -122,6 +181,7 @@ export default function CreateSuratJalanPage() {
           <SJFormSupirSection
             mode={driverMode}
             driver={selectedDriver}
+            options={driverOptionsFromApi}
             onModeChange={(mode) => {
               setDriverMode(mode)
               if (mode === 'master') {
@@ -213,19 +273,20 @@ export default function CreateSuratJalanPage() {
             </button>
             <button
               onClick={() => handleSubmit(false)}
+              disabled={isSubmitting || isMasterLoading}
               className="px-4 py-2 rounded-lg border"
               style={{ borderColor: 'var(--border-card)' }}
             >
-              Simpan sebagai Draft
+              {isSubmitting ? 'Menyimpan...' : 'Simpan sebagai Draft'}
             </button>
             <button
               onClick={() => handleSubmit(true)}
               className="px-4 py-2 rounded-lg text-white"
               style={{ backgroundColor: canPublish ? 'var(--green-primary)' : '#A7D7B2' }}
-              disabled={!canPublish}
+              disabled={!canPublish || isSubmitting || isMasterLoading}
               title={!canPublish ? 'Pilih armada terlebih dahulu' : undefined}
             >
-              Buat & Terbitkan →
+              {isSubmitting ? 'Menyimpan...' : 'Buat & Terbitkan →'}
             </button>
           </div>
         </div>

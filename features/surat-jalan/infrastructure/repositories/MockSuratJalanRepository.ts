@@ -1,20 +1,69 @@
-import { SuratJalan, StatusOperasional, StatusLampiran, SJFilterState, PaginationState } from '../../domain/entities/SuratJalan'
+import { apiDownload, apiRequest } from '@/lib/apiClient'
+import { SuratJalan, StatusLampiran, SJFilterState, PaginationState } from '../../domain/entities/SuratJalan'
 import { ISuratJalanRepository, PaginatedResult } from './ISuratJalanRepository'
 import { CreateSJDto } from '../../application/dto/CreateSJDto'
 import { UpdateSJDto } from '../../application/dto/UpdateSJDto'
 import { AssignSJInput } from '../../application/use-cases/AssignSuratJalan'
 import { DeliverSJInput } from '../../application/use-cases/DeliverSuratJalan'
-import { MOCK_SURAT_JALAN } from '../../../../lib/mockData/suratJalan'
 
-let store: SuratJalan[] = [...MOCK_SURAT_JALAN]
-let nextId = store.length + 1
-let nextSJNum = 90
-
-function simulateDelay(ms = 400): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms))
+type ApiSJ = Omit<SuratJalan, 'id' | 'project_id' | 'customer_id' | 'fleet_id' | 'driver_id' | 'invoice_id' | 'created_by' | 'operational_cost' | 'project' | 'customer' | 'fleet'> & {
+  id: number | string
+  project_id: number | string
+  project?: SuratJalan['project'] | null
+  customer_id: number | string
+  customer?: SuratJalan['customer'] | null
+  fleet_id: number | string
+  fleet?: SuratJalan['fleet'] | null
+  driver_id: number | string | null
+  invoice_id: number | string | null
+  created_by: number | string
+  operational_cost: number | string
 }
 
-function applyFilters(list: SuratJalan[], filters: SJFilterState): SuratJalan[] {
+function toNumber(value: number | string | null | undefined) {
+  if (value === null || value === undefined || value === '') return null
+  return Number(value)
+}
+
+function normalizeSJ(sj: ApiSJ): SuratJalan {
+  const projectId = Number(sj.project_id || sj.project?.id || 0)
+  const customerId = Number(sj.customer_id || sj.customer?.id || 0)
+  const fleetId = Number(sj.fleet_id || sj.fleet?.id || 0)
+
+  return {
+    ...sj,
+    id: Number(sj.id),
+    project_id: projectId,
+    project: {
+      id: Number(sj.project?.id || projectId),
+      name: sj.project?.name || 'Data proyek tidak tersedia',
+      code: sj.project?.code || '-',
+      contract_number: sj.project?.contract_number || '',
+    },
+    customer_id: customerId,
+    customer: {
+      id: Number(sj.customer?.id || customerId),
+      name: sj.customer?.name || 'Data customer tidak tersedia',
+    },
+    fleet_id: fleetId,
+    fleet: {
+      id: Number(sj.fleet?.id || fleetId),
+      name: sj.fleet?.name || 'Data armada tidak tersedia',
+      plate_number: sj.fleet?.plate_number || '-',
+      is_tbd: Boolean(sj.fleet?.is_tbd),
+    },
+    driver_id: toNumber(sj.driver_id),
+    driver: sj.driver ? { ...sj.driver, id: Number(sj.driver.id) } : null,
+    operational_cost: Number(sj.operational_cost || 0),
+    invoice_id: toNumber(sj.invoice_id),
+    invoice_attachment_status: sj.invoice_attachment_status || StatusLampiran.NO_INVOICE,
+    invoice: sj.invoice ? { ...sj.invoice, id: Number(sj.invoice.id) } : null,
+    lampiran_paths: sj.lampiran_paths ?? null,
+    created_by: Number(sj.created_by || 0),
+  }
+}
+
+function applyFrontendFilters(list: SuratJalan[], filters: SJFilterState) {
   return list.filter(sj => {
     if (filters.search) {
       const q = filters.search.toLowerCase()
@@ -29,163 +78,168 @@ function applyFilters(list: SuratJalan[], filters: SJFilterState): SuratJalan[] 
     if (filters.statusLampiran !== 'all' && sj.invoice_attachment_status !== filters.statusLampiran) return false
     if (filters.proyek && filters.proyek !== 'all' && sj.project.code !== filters.proyek) return false
     if (filters.customer && filters.customer !== 'all' && sj.customer.name !== filters.customer) return false
-    if (filters.periode && filters.periode !== 'all') {
-      const sjDate = new Date(sj.sj_date)
-      const now = new Date()
-      const startOfWeek = new Date(now)
-      startOfWeek.setDate(now.getDate() - now.getDay())
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-      const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-      const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0)
-
-      if (filters.periode === 'today') {
-        const sameDay = sjDate.toDateString() === now.toDateString()
-        if (!sameDay) return false
-      }
-      if (filters.periode === 'week') {
-        if (sjDate < startOfWeek || sjDate > now) return false
-      }
-      if (filters.periode === 'month') {
-        if (sjDate < startOfMonth || sjDate > now) return false
-      }
-      if (filters.periode === 'last_month') {
-        if (sjDate < startOfLastMonth || sjDate > endOfLastMonth) return false
-      }
-    }
     return true
   })
 }
 
+function toCreatePayload(dto: CreateSJDto) {
+  return {
+    project_id: dto.project_id,
+    fleet_id: dto.fleet_id,
+    driver_id: dto.driver_id,
+    driver_name_manual: dto.driver_name_manual,
+    sj_date: dto.sj_date,
+    origin: dto.origin,
+    destination: dto.destination,
+    cargo_description: dto.cargo_description,
+    operational_cost: dto.operational_cost,
+    internal_notes: dto.internal_notes,
+    publish: dto.publish,
+  }
+}
+
+function toUpdatePayload(dto: UpdateSJDto) {
+  return {
+    fleet_id: dto.fleet_id,
+    driver_id: dto.driver_id,
+    driver_name_manual: dto.driver_name_manual,
+    origin: dto.origin,
+    destination: dto.destination,
+    cargo_description: dto.cargo_description,
+    operational_cost: dto.operational_cost,
+    internal_notes: dto.internal_notes,
+    lampiran_paths: dto.lampiran_paths,
+  }
+}
+
 export class MockSuratJalanRepository implements ISuratJalanRepository {
   async getList(filters: SJFilterState, pagination: PaginationState): Promise<PaginatedResult<SuratJalan>> {
-    await simulateDelay()
-    const filtered = applyFilters(store, filters)
-    const sorted = [...filtered].sort((a, b) => b.id - a.id)
+    const response = await apiRequest<ApiSJ[]>(`/surat-jalan?status=all&invoice_status=all&period=${filters.periode}&page=1&limit=100`, {
+      method: 'GET',
+    })
+    const filtered = applyFrontendFilters(response.data.map(normalizeSJ), filters)
     const start = (pagination.page - 1) * pagination.perPage
-    const data = sorted.slice(start, start + pagination.perPage)
-    return { data, total: filtered.length, page: pagination.page, perPage: pagination.perPage }
+    return {
+      data: filtered.slice(start, start + pagination.perPage),
+      total: filtered.length,
+      page: pagination.page,
+      perPage: pagination.perPage,
+    }
   }
 
   async getByUuid(uuid: string): Promise<SuratJalan | null> {
-    await simulateDelay(200)
-    return store.find(sj => sj.uuid === uuid) ?? null
+    const response = await apiRequest<ApiSJ>(`/surat-jalan/${uuid}`, { method: 'GET' })
+    return normalizeSJ(response.data)
   }
 
   async create(dto: CreateSJDto): Promise<SuratJalan> {
-    await simulateDelay()
-    const sjNum = `SJ-2026-0${nextSJNum++}`
-    const now = new Date().toISOString()
-    const newSJ: SuratJalan = {
-      id: nextId++,
-      uuid: `sj-${Date.now()}`,
-      sj_number: sjNum,
-      project_id: dto.project_id,
-      project: { id: dto.project_id, name: 'Proyek', contract_number: '', code: `PRJ-${dto.project_id}` },
-      customer_id: 1,
-      customer: { id: 1, name: 'Customer' },
-      fleet_id: dto.fleet_id,
-      fleet: { id: dto.fleet_id, name: 'Armada', plate_number: 'KB XXXX XX', is_tbd: dto.fleet_id === 0 },
-      driver_id: dto.driver_id,
-      driver: dto.driver_id ? { id: dto.driver_id, name: 'Supir', sim_expired_at: null } : null,
-      driver_name_manual: dto.driver_name_manual,
-      sj_date: dto.sj_date,
-      origin: dto.origin,
-      destination: dto.destination,
-      cargo_description: dto.cargo_description,
-      operational_cost: dto.operational_cost,
-      status: dto.publish && dto.fleet_id !== 0 ? StatusOperasional.ASSIGNED : StatusOperasional.DRAFT,
-      invoice_id: null,
-      invoice_attachment_status: StatusLampiran.NO_INVOICE,
-      invoice: null,
-      delivered_at: null,
-      pod_photo_path: null,
-      lampiran_paths: null,
-      void_reason: null,
-      internal_notes: dto.internal_notes,
-      created_by: 1,
-      created_at: now,
-      updated_at: now,
-    }
-    store = [newSJ, ...store]
-    return newSJ
+    const response = await apiRequest<ApiSJ>('/surat-jalan', {
+      method: 'POST',
+      body: toCreatePayload(dto),
+    })
+    return normalizeSJ(response.data)
   }
 
   async update(uuid: string, dto: UpdateSJDto): Promise<SuratJalan> {
-    await simulateDelay()
-    const idx = store.findIndex(sj => sj.uuid === uuid)
-    if (idx === -1) throw new Error('SJ tidak ditemukan')
-    const updated = { ...store[idx], ...dto, updated_at: new Date().toISOString() }
-    store = store.map(sj => sj.uuid === uuid ? updated : sj)
-    return updated
+    const response = await apiRequest<ApiSJ>(`/surat-jalan/${uuid}`, {
+      method: 'PUT',
+      body: toUpdatePayload(dto),
+    })
+    return normalizeSJ(response.data)
   }
 
   async assign(uuid: string, input: AssignSJInput): Promise<SuratJalan> {
-    await simulateDelay()
-    const idx = store.findIndex(sj => sj.uuid === uuid)
-    if (idx === -1) throw new Error('SJ tidak ditemukan')
-    const updated: SuratJalan = {
-      ...store[idx],
-      fleet_id: input.fleet_id,
-      driver_id: input.driver_id,
-      driver_name_manual: input.driver_name_manual,
-      status: StatusOperasional.ASSIGNED,
-      updated_at: new Date().toISOString(),
-    }
-    store = store.map(sj => sj.uuid === uuid ? updated : sj)
-    return updated
+    const response = await apiRequest<ApiSJ>(`/surat-jalan/${uuid}/assign`, {
+      method: 'PATCH',
+      body: {
+        fleet_id: input.fleet_id,
+        driver_id: input.driver_id,
+        driver_name_manual: input.driver_name_manual,
+      },
+    })
+    return normalizeSJ(response.data)
   }
 
   async deliver(uuid: string, input: DeliverSJInput): Promise<SuratJalan> {
-    await simulateDelay()
-    const idx = store.findIndex(sj => sj.uuid === uuid)
-    if (idx === -1) throw new Error('SJ tidak ditemukan')
-    const updated: SuratJalan = {
-      ...store[idx],
-      status: StatusOperasional.DELIVERED,
-      delivered_at: input.delivered_at,
-      pod_photo_path: input.pod_photo_path,
-      updated_at: new Date().toISOString(),
-    }
-    store = store.map(sj => sj.uuid === uuid ? updated : sj)
-    return updated
+    const response = await apiRequest<ApiSJ>(`/surat-jalan/${uuid}/deliver`, {
+      method: 'PATCH',
+      body: { delivered_at: input.delivered_at },
+    })
+    return normalizeSJ(response.data)
   }
 
   async void(uuid: string, reason: string): Promise<SuratJalan> {
-    await simulateDelay()
-    const idx = store.findIndex(sj => sj.uuid === uuid)
-    if (idx === -1) throw new Error('SJ tidak ditemukan')
-    const updated: SuratJalan = {
-      ...store[idx],
-      status: StatusOperasional.VOID,
-      void_reason: reason,
-      invoice_id: null,
-      invoice_attachment_status: StatusLampiran.NO_INVOICE,
-      invoice: null,
-      updated_at: new Date().toISOString(),
-    }
-    store = store.map(sj => sj.uuid === uuid ? updated : sj)
-    return updated
+    const response = await apiRequest<ApiSJ>(`/surat-jalan/${uuid}/void`, {
+      method: 'PATCH',
+      body: { void_reason: reason, confirmation: 'VOID', force_detach: true },
+    })
+    return normalizeSJ(response.data)
   }
 
   async delete(uuid: string): Promise<void> {
-    await simulateDelay()
-    store = store.filter(sj => sj.uuid !== uuid)
+    await apiRequest<null>(`/surat-jalan/${uuid}`, { method: 'DELETE' })
   }
 
-  async attachToInvoice(sjUuid: string, invoiceId: number, invoiceUuid: string, invoiceNumber: string): Promise<SuratJalan> {
-    await simulateDelay()
-    const idx = store.findIndex(sj => sj.uuid === sjUuid)
-    if (idx === -1) throw new Error('SJ tidak ditemukan')
-    const updated: SuratJalan = {
-      ...store[idx],
-      invoice_id: invoiceId,
-      invoice_attachment_status: StatusLampiran.ATTACHED,
-      invoice: { id: invoiceId, invoice_number: invoiceNumber },
-      updated_at: new Date().toISOString(),
-    }
-    store = store.map(sj => sj.uuid === sjUuid ? updated : sj)
-    return updated
+  async attachToInvoice(sjUuid: string, _invoiceId: number, invoiceUuid: string, _invoiceNumber: string): Promise<SuratJalan> {
+    await apiRequest(`/invoices/${invoiceUuid}/attach-sj`, {
+      method: 'POST',
+      body: { sj_uuids: [sjUuid] },
+    })
+    const response = await apiRequest<ApiSJ>(`/surat-jalan/${sjUuid}`, { method: 'GET' })
+    return normalizeSJ(response.data)
   }
+}
+
+export async function uploadSuratJalanPOD(uuid: string, file: File): Promise<SuratJalan> {
+  const formData = new FormData()
+  formData.append('photo', file)
+  const response = await apiRequest<ApiSJ>(`/surat-jalan/${uuid}/pod`, {
+    method: 'POST',
+    body: formData,
+  })
+  return normalizeSJ(response.data)
+}
+
+export async function downloadSuratJalanPOD(uuid: string): Promise<Blob> {
+  return apiDownload(`/surat-jalan/${uuid}/pod`)
+}
+
+export async function uploadSuratJalanLampiran(uuid: string, file: File): Promise<SuratJalan> {
+  const formData = new FormData()
+  formData.append('file', file)
+  const response = await apiRequest<ApiSJ>(`/surat-jalan/${uuid}/lampiran`, {
+    method: 'POST',
+    body: formData,
+  })
+  return normalizeSJ(response.data)
+}
+
+export async function deleteSuratJalanLampiran(uuid: string, filePath: string): Promise<SuratJalan> {
+  // filePath: "sj-lampiran/uuid.webp" → extract filename-only bagian terakhir
+  const filename = filePath.split('/').pop()!
+  const response = await apiRequest<ApiSJ>(`/surat-jalan/${uuid}/lampiran/${filename}`, {
+    method: 'DELETE',
+  })
+  return normalizeSJ(response.data)
+}
+
+export async function generateSuratJalanPdf(uuid: string, options: { includeHeader: boolean; includeSign: boolean; includeNotes: boolean }) {
+  const response = await apiRequest<{ uuid: string; status: string; download_url: string | null }>(`/surat-jalan/${uuid}/generate-pdf`, {
+    method: 'POST',
+    body: { options },
+  })
+  return response.data
+}
+
+export async function getPdfJob(uuid: string) {
+  const response = await apiRequest<{ uuid: string; status: string; download_url: string | null }>(`/pdf-jobs/${uuid}`, {
+    method: 'GET',
+  })
+  return response.data
+}
+
+export async function downloadPdfJob(uuid: string) {
+  return apiDownload(`/pdf-jobs/${uuid}/download`)
 }
 
 export const suratJalanRepository = new MockSuratJalanRepository()

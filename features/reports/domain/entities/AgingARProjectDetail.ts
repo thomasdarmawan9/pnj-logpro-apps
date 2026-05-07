@@ -18,6 +18,7 @@ export interface ProjectDetailPayment {
   amount: number
   method: 'transfer' | 'cash' | 'check'
   notes: string | null
+  is_down_payment?: boolean
   created_by_name: string
   created_at: string
 }
@@ -33,6 +34,8 @@ export interface ProjectDetailInvoice {
   tax_amount: number
   total_amount: number
   paid_amount: number
+  down_payment_amount?: number
+  has_down_payment?: boolean
   remaining_amount: number
   days_overdue: number
   aging_bucket: AgingBucket | null
@@ -73,7 +76,7 @@ export interface AgingARProjectDetail {
   is_pkp: boolean
   start_date: string
   end_date: string | null
-  status: 'active' | 'completed' | 'cancelled'
+  status: 'active' | 'completed' | 'cancelled' | 'on_hold'
 
   // Financial summary
   total_invoiced: number

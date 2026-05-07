@@ -37,7 +37,6 @@ import DetailDrawer from '../components/modals/DetailDrawer'
 import AttachToInvoiceModal from '../components/modals/AttachToInvoiceModal'
 import { StatusLampiran, StatusOperasional } from '../../domain/entities/SuratJalan'
 import { AvailableInvoice } from '@/features/invoice/domain/entities/Invoice'
-import { MOCK_SURAT_JALAN } from '@/lib/mockData/suratJalan'
 import { useToast } from '@/components/toast/useToast'
 
 export default function SuratJalanListPage() {
@@ -68,12 +67,12 @@ export default function SuratJalanListPage() {
   }, [dispatch, isDetailDrawerOpen, selectedUuid])
 
   const stats = useMemo(() => {
-    const totalBulanIni = MOCK_SURAT_JALAN.length
-    const sedangBerjalan = MOCK_SURAT_JALAN.filter(sj => sj.status === StatusOperasional.ASSIGNED).length
-    const belumDitagih = MOCK_SURAT_JALAN.filter(sj => sj.status === StatusOperasional.DELIVERED && sj.invoice_attachment_status === StatusLampiran.NO_INVOICE).length
-    const draftMenunggu = MOCK_SURAT_JALAN.filter(sj => sj.status === StatusOperasional.DRAFT).length
+    const totalBulanIni = pagination.total
+    const sedangBerjalan = list.filter(sj => sj.status === StatusOperasional.ASSIGNED).length
+    const belumDitagih = list.filter(sj => sj.status === StatusOperasional.DELIVERED && sj.invoice_attachment_status === StatusLampiran.NO_INVOICE).length
+    const draftMenunggu = list.filter(sj => sj.status === StatusOperasional.DRAFT).length
     return { totalBulanIni, sedangBerjalan, belumDitagih, draftMenunggu }
-  }, [])
+  }, [list, pagination.total])
 
   const currentSJ = selectedSJ || list.find(sj => sj.uuid === selectedUuid) || null
 

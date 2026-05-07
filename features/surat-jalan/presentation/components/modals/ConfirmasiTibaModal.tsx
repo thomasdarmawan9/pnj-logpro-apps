@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import ModalShell from './ModalShell'
-import { SuratJalan } from '../../../domain/entities/SuratJalan'
+import { StatusOperasional, SuratJalan } from '../../../domain/entities/SuratJalan'
 import SJPODUploadZone from '../SJPODUploadZone'
+import { downloadSuratJalanPOD, uploadSuratJalanPOD } from '../../../infrastructure/repositories/MockSuratJalanRepository'
 
 interface ConfirmasiTibaModalProps {
   open: boolean
@@ -16,20 +17,45 @@ export default function ConfirmasiTibaModal({ open, sj, onClose, onConfirm }: Co
   const [step, setStep] = useState<1 | 2>(1)
   const [deliveredAt, setDeliveredAt] = useState('')
   const [podPath, setPodPath] = useState('')
+  const [currentPhotoSrc, setCurrentPhotoSrc] = useState<string | null>(null)
+  const isReplacePhoto = sj?.status === StatusOperasional.DELIVERED
 
   useEffect(() => {
     if (open) {
-      setStep(1)
+      setStep(isReplacePhoto ? 2 : 1)
       setDeliveredAt(new Date().toISOString().slice(0, 16))
-      setPodPath('')
+      setPodPath(sj?.pod_photo_path || '')
     }
-  }, [open])
+  }, [open, isReplacePhoto, sj?.pod_photo_path])
+
+  useEffect(() => {
+    if (!open || !sj?.uuid || !sj.pod_photo_path) {
+      setCurrentPhotoSrc(null)
+      return
+    }
+
+    let objectUrl: string | null = null
+    let cancelled = false
+
+    downloadSuratJalanPOD(sj.uuid)
+      .then(blob => {
+        if (cancelled) return
+        objectUrl = URL.createObjectURL(blob)
+        setCurrentPhotoSrc(objectUrl)
+      })
+      .catch(() => setCurrentPhotoSrc(null))
+
+    return () => {
+      cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [open, sj?.uuid, sj?.pod_photo_path])
 
   return (
     <ModalShell
       open={open}
       onClose={onClose}
-      title={step === 1 ? 'Konfirmasi SJ Telah Tiba' : 'Upload Foto Bukti Pengiriman'}
+      title={isReplacePhoto ? 'Ganti Foto Bukti Pengiriman' : step === 1 ? 'Konfirmasi SJ Telah Tiba' : 'Upload Foto Bukti Pengiriman'}
       subtitle={sj ? sj.sj_number : undefined}
       widthClass="max-w-[600px]"
     >
@@ -67,19 +93,33 @@ export default function ConfirmasiTibaModal({ open, sj, onClose, onConfirm }: Co
       ) : (
         <div className="space-y-4">
           <div className="text-sm text-gray-600">Foto Bukti Pengiriman</div>
-          <SJPODUploadZone onUpload={setPodPath} currentPhoto={sj?.pod_photo_path || null} />
+          <SJPODUploadZone
+            onUpload={setPodPath}
+            currentPhoto={currentPhotoSrc}
+            uploadFile={async file => {
+              if (!sj) return ''
+              const updated = await uploadSuratJalanPOD(sj.uuid, file)
+              return updated.pod_photo_path || ''
+            }}
+          />
 
           <div className="flex justify-between pt-2">
-            <button onClick={() => setStep(1)} className="px-4 py-2 rounded-lg border" style={{ borderColor: 'var(--border-card)' }}>
-              ← Kembali
-            </button>
+            {isReplacePhoto ? (
+              <button onClick={onClose} className="px-4 py-2 rounded-lg border" style={{ borderColor: 'var(--border-card)' }}>
+                Batal
+              </button>
+            ) : (
+              <button onClick={() => setStep(1)} className="px-4 py-2 rounded-lg border" style={{ borderColor: 'var(--border-card)' }}>
+                ← Kembali
+              </button>
+            )}
             <button
               onClick={() => onConfirm({ delivered_at: new Date(deliveredAt).toISOString(), pod_photo_path: podPath })}
               className="px-4 py-2 rounded-lg text-white"
               style={{ backgroundColor: podPath ? 'var(--green-primary)' : '#A7D7B2' }}
               disabled={!podPath}
             >
-              Konfirmasi Tiba ✓
+              {isReplacePhoto ? 'Simpan Foto' : 'Konfirmasi Tiba ✓'}
             </button>
           </div>
         </div>

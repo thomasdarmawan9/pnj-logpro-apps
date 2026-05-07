@@ -17,6 +17,7 @@ import {
   openAttachInvoiceModal,
   closeAttachInvoiceModal,
   fetchAvailableInvoices,
+  fetchSuratJalanDetail,
   attachSuratJalanToInvoice,
   updateSuratJalan,
 } from '@/store/slices/suratJalanSlice'
@@ -31,6 +32,7 @@ import VoidModal from '../components/modals/VoidModal'
 import GeneratePDFModal from '../components/modals/GeneratePDFModal'
 import AttachToInvoiceModal from '../components/modals/AttachToInvoiceModal'
 import { StatusLampiran, StatusOperasional } from '../../domain/entities/SuratJalan'
+import { downloadSuratJalanPOD } from '../../infrastructure/repositories/MockSuratJalanRepository'
 import { formatLongDate, formatShortDate, formatTimeWIB } from '../utils/format'
 import { useToast } from '@/components/toast/useToast'
 import { AvailableInvoice } from '@/features/invoice/domain/entities/Invoice'
@@ -54,20 +56,54 @@ export default function DetailSuratJalanPage({ uuid }: DetailSuratJalanPageProps
   const [tab, setTab] = useState<'info' | 'lampiran' | 'history'>('info')
   const [lampiranPaths, setLampiranPaths] = useState<string[]>([])
   const [isSavingLampiran, setIsSavingLampiran] = useState(false)
+  const [podPhotoSrc, setPodPhotoSrc] = useState<string | null>(null)
 
   useEffect(() => {
     if (selectedSJ) setLampiranPaths(selectedSJ.lampiran_paths ?? [])
   }, [selectedSJ])
 
+  useEffect(() => {
+    if (!selectedSJ?.uuid || !selectedSJ.pod_photo_path) {
+      setPodPhotoSrc(null)
+      return
+    }
+
+    let objectUrl: string | null = null
+    let cancelled = false
+
+    downloadSuratJalanPOD(selectedSJ.uuid)
+      .then(blob => {
+        if (cancelled) return
+        objectUrl = URL.createObjectURL(blob)
+        setPodPhotoSrc(objectUrl)
+      })
+      .catch(() => setPodPhotoSrc(null))
+
+    return () => {
+      cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [selectedSJ?.uuid, selectedSJ?.pod_photo_path])
+
   const handleSaveLampiran = async () => {
     if (!selectedSJ) return
     setIsSavingLampiran(true)
-    await dispatch(updateSuratJalan({
-      uuid: selectedSJ.uuid,
-      dto: { lampiran_paths: lampiranPaths.length > 0 ? lampiranPaths : null },
-    }))
-    setIsSavingLampiran(false)
-    pushToast({ title: 'Lampiran disimpan', description: 'Dokumen terlampir berhasil diperbarui.', variant: 'success' })
+    try {
+      const result = await dispatch(updateSuratJalan({
+        uuid: selectedSJ.uuid,
+        dto: { lampiran_paths: lampiranPaths.length > 0 ? lampiranPaths : null },
+      }))
+      if (updateSuratJalan.fulfilled.match(result)) {
+        pushToast({ title: 'Lampiran disimpan', description: 'Dokumen terlampir berhasil diperbarui.', variant: 'success' })
+      } else {
+        const msg = (result.payload as string) || 'Gagal menyimpan lampiran.'
+        pushToast({ title: 'Gagal', description: msg, variant: 'error' })
+      }
+    } catch {
+      pushToast({ title: 'Gagal', description: 'Terjadi kesalahan saat menyimpan lampiran.', variant: 'error' })
+    } finally {
+      setIsSavingLampiran(false)
+    }
   }
 
   const handleAttachConfirm = (invoice: AvailableInvoice) => {
@@ -221,8 +257,14 @@ export default function DetailSuratJalanPage({ uuid }: DetailSuratJalanPageProps
                 {/* POD photo — ditampilkan sebagai salah satu dokumen (read-only) */}
                 {selectedSJ.pod_photo_path && (
                   <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border-card)' }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={selectedSJ.pod_photo_path} alt="Foto Pengiriman" className="w-full max-h-64 object-cover" />
+                    {podPhotoSrc ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={podPhotoSrc} alt="Foto Pengiriman" className="w-full max-h-64 object-cover" />
+                    ) : (
+                      <div className="h-40 bg-gray-50 flex items-center justify-center text-xs text-gray-400">
+                        Foto tidak dapat dimuat
+                      </div>
+                    )}
                     <div className="px-3 py-2 flex items-center justify-between bg-gray-50">
                       <div>
                         <div className="text-xs font-medium">Foto Pengiriman</div>
@@ -242,7 +284,7 @@ export default function DetailSuratJalanPage({ uuid }: DetailSuratJalanPageProps
                 {/* Upload zone — bisa dipakai untuk semua status */}
                 <div>
                   <div className="text-xs font-medium text-gray-600 mb-2">Dokumen Lampiran (maks. 3)</div>
-                  <SJLampiranUploadZone value={lampiranPaths} onChange={setLampiranPaths} />
+                  <SJLampiranUploadZone value={lampiranPaths} onChange={setLampiranPaths} sjUuid={selectedSJ.uuid} />
                 </div>
 
                 <div className="flex justify-end">
@@ -408,7 +450,15 @@ export default function DetailSuratJalanPage({ uuid }: DetailSuratJalanPageProps
         open={isUploadPODModalOpen}
         sj={selectedSJ}
         onClose={() => dispatch(closeUploadPODModal())}
-        onConfirm={input => deliver(selectedSJ.uuid, input)}
+        onConfirm={input => {
+          if (selectedSJ.status === StatusOperasional.DELIVERED) {
+            dispatch(closeUploadPODModal())
+            dispatch(fetchSuratJalanDetail(selectedSJ.uuid))
+            pushToast({ title: 'Foto disimpan', description: 'Foto bukti pengiriman berhasil diperbarui.', variant: 'success' })
+            return
+          }
+          deliver(selectedSJ.uuid, input)
+        }}
       />
 
       <VoidModal

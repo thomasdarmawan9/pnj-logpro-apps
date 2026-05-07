@@ -6,8 +6,9 @@ import MetricCard from '@/components/dashboard/MetricCard'
 import DonutChart from '@/components/dashboard/DonutChart'
 import RevenueChart from '@/components/dashboard/RevenueChart'
 import ActivityTable from '@/components/dashboard/ActivityTable'
-import { metricCards, activityData } from '@/lib/mockData'
-import { ChevronDown, Filter } from 'lucide-react'
+import { useDashboardSummary, useDashboardActivity } from '@/features/dashboard/hooks/useDashboard'
+import type { ActivityFilters } from '@/lib/dashboardApi'
+import { ChevronDown, Filter, RefreshCw } from 'lucide-react'
 
 type ModuleFilter = 'all' | 'sj' | 'invoice'
 type StatusFilter = 'all' | 'DELIVERED' | 'ASSIGNED' | 'DRAFT' | 'OUTSTANDING' | 'PAID' | 'VOID'
@@ -35,10 +36,7 @@ const PERIOD_OPTIONS: { value: PeriodFilter; label: string }[] = [
   { value: 'last_month', label: 'Bulan Lalu' },
 ]
 
-function getMonthYear(iso: string): { month: number; year: number } {
-  const d = new Date(iso)
-  return { month: d.getMonth() + 1, year: d.getFullYear() }
-}
+const EMPTY_META = { total: 0, page: 1, limit: 10, totalPages: 1 }
 
 export default function DashboardPage() {
   const [moduleFilter, setModuleFilter] = useState<ModuleFilter>('all')
@@ -49,37 +47,41 @@ export default function DashboardPage() {
   const [appliedModule, setAppliedModule] = useState<ModuleFilter>('all')
   const [appliedStatus, setAppliedStatus] = useState<StatusFilter>('all')
   const [appliedPeriod, setAppliedPeriod] = useState<PeriodFilter>('this_month')
+  const [activityPage, setActivityPage] = useState(1)
 
-  const filteredActivity = useMemo(() => {
-    const now = new Date('2026-04-13')
-    const thisMonth = { month: now.getMonth() + 1, year: now.getFullYear() }
-    const lastMonth = now.getMonth() === 0
-      ? { month: 12, year: now.getFullYear() - 1 }
-      : { month: now.getMonth(), year: now.getFullYear() }
+  const summaryFilters = useMemo(() => ({
+    period: appliedPeriod,
+    module: appliedModule,
+    status: appliedStatus,
+  }), [appliedPeriod, appliedModule, appliedStatus])
 
-    return activityData.filter(row => {
-      // Module filter
-      if (appliedModule === 'sj' && !row.noDokumen.startsWith('SJ-')) return false
-      if (appliedModule === 'invoice' && !row.noDokumen.startsWith('INV-')) return false
+  const { data: summary, isLoading: summaryLoading, error: summaryError } = useDashboardSummary(summaryFilters)
 
-      // Status filter
-      if (appliedStatus !== 'all' && row.statusOps !== appliedStatus) return false
+  const activityFilters = useMemo<ActivityFilters>(() => ({
+    module: appliedModule,
+    status: appliedStatus,
+    period: appliedPeriod,
+    page: activityPage,
+    limit: 10,
+  }), [appliedModule, appliedStatus, appliedPeriod, activityPage])
 
-      // Period filter
-      if (appliedPeriod !== 'all') {
-        const target = appliedPeriod === 'this_month' ? thisMonth : lastMonth
-        const { month, year } = getMonthYear(row.tanggalISO)
-        if (month !== target.month || year !== target.year) return false
-      }
-
-      return true
-    })
-  }, [appliedModule, appliedStatus, appliedPeriod])
+  const { data: activity, isLoading: activityLoading } = useDashboardActivity(activityFilters)
 
   const handleApply = () => {
     setAppliedModule(moduleFilter)
     setAppliedStatus(statusFilter)
     setAppliedPeriod(periodFilter)
+    setActivityPage(1)
+  }
+
+  const handleReset = () => {
+    setModuleFilter('all')
+    setStatusFilter('all')
+    setPeriodFilter('this_month')
+    setAppliedModule('all')
+    setAppliedStatus('all')
+    setAppliedPeriod('this_month')
+    setActivityPage(1)
   }
 
   const isFilterActive = appliedModule !== 'all' || appliedStatus !== 'all' || appliedPeriod !== 'all'
@@ -142,14 +144,7 @@ export default function DashboardPage() {
 
         {isFilterActive && (
           <button
-            onClick={() => {
-              setModuleFilter('all')
-              setStatusFilter('all')
-              setPeriodFilter('this_month')
-              setAppliedModule('all')
-              setAppliedStatus('all')
-              setAppliedPeriod('this_month')
-            }}
+            onClick={handleReset}
             className="text-xs text-gray-400 hover:text-gray-600 transition-colors underline"
           >
             Reset
@@ -157,30 +152,60 @@ export default function DashboardPage() {
         )}
       </div>
 
+      {/* Error state */}
+      {summaryError && (
+        <div className="mb-6 px-4 py-3 rounded-xl text-sm flex items-center gap-2" style={{ backgroundColor: '#FEF2F2', color: '#DC2626' }}>
+          <RefreshCw size={14} />
+          Gagal memuat data dashboard: {summaryError}
+        </div>
+      )}
+
       {/* Metric Cards */}
       <div data-tour="dashboard-metrics" className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
-        {metricCards.map(card => (
-          <MetricCard
-            key={card.id}
-            badge={card.badge}
-            badgeVariant={card.badgeVariant as 'gray' | 'red' | 'green' | 'amber'}
-            value={card.value}
-            label={card.label}
-            trend={card.trend}
-            trendColor={card.trendColor}
-          />
-        ))}
+        {summaryLoading || !summary
+          ? Array.from({ length: 4 }).map((_, i) => (
+              <div
+                key={i}
+                className="rounded-xl p-5 animate-pulse"
+                style={{ backgroundColor: '#2D5A42', minHeight: '120px' }}
+              />
+            ))
+          : summary.metrics.map(card => (
+              <MetricCard
+                key={card.id}
+                badge={card.badge}
+                badgeVariant={card.badge_variant}
+                value={card.value_label}
+                label={card.label}
+                trend={card.trend.label}
+                trendColor={card.trend.color}
+              />
+            ))}
       </div>
 
       {/* Two panels */}
       <div data-tour="dashboard-charts" className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <DonutChart />
-        <RevenueChart />
+        {summaryLoading || !summary ? (
+          <>
+            <div className="rounded-xl animate-pulse" style={{ backgroundColor: 'var(--bg-card)', minHeight: '380px' }} />
+            <div className="rounded-xl animate-pulse" style={{ backgroundColor: 'var(--bg-card)', minHeight: '380px' }} />
+          </>
+        ) : (
+          <>
+            <DonutChart donut={summary.donut} armada={summary.armada} />
+            <RevenueChart data={summary.revenue.data} summary={summary.revenue.summary} />
+          </>
+        )}
       </div>
 
       {/* Activity table */}
       <div data-tour="dashboard-activity">
-        <ActivityTable data={filteredActivity} />
+        <ActivityTable
+          data={activity?.data ?? []}
+          meta={activity?.meta ?? EMPTY_META}
+          isLoading={activityLoading}
+          onPageChange={setActivityPage}
+        />
       </div>
     </DashboardLayout>
   )

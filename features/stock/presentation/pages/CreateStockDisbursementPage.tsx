@@ -7,9 +7,9 @@ import { ArrowLeft, AlertCircle, Plus, Trash2 } from 'lucide-react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { RootState, AppDispatch } from '@/store'
 import { fetchStockItems, createStockDisbursement } from '@/store/slices/stockSlice'
+import { fetchCustomers } from '@/store/slices/masterSlice'
 import { useToast } from '@/components/toast/useToast'
 import { validateDisbursement } from '@/features/stock/application/validators/StockDisbursementValidator'
-import { MOCK_CUSTOMERS } from '@/lib/mockData/stock'
 
 interface DisbursementItemRow {
   id: string
@@ -22,8 +22,7 @@ export default function CreateStockDisbursementPage() {
   const dispatch = useDispatch<AppDispatch>()
   const { push: pushToast } = useToast()
   const { items, isSubmitting } = useSelector((state: RootState) => state.stock)
-
-  const [mode, setMode] = useState<'manual' | 'from_sj'>('manual')
+  const { customers } = useSelector((state: RootState) => state.master)
 
   const [form, setForm] = useState({
     disbursement_date: new Date().toISOString().split('T')[0],
@@ -42,7 +41,8 @@ export default function CreateStockDisbursementPage() {
 
   useEffect(() => {
     dispatch(fetchStockItems())
-  }, [dispatch])
+    if (!customers.length) dispatch(fetchCustomers())
+  }, [dispatch, customers.length])
 
   const activeItems = items.filter(i => i.is_active)
 
@@ -137,34 +137,7 @@ export default function CreateStockDisbursementPage() {
       </div>
 
       <div className="max-w-3xl space-y-5">
-        {/* Mode toggle */}
-        <div className="bg-white rounded-xl border shadow-sm p-4 flex gap-2" style={{ borderColor: 'var(--border-card)' }}>
-          <button
-            onClick={() => setMode('manual')}
-            className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors ${mode === 'manual' ? 'text-white' : 'text-gray-500 hover:bg-gray-50'}`}
-            style={mode === 'manual' ? { backgroundColor: 'var(--green-primary)' } : {}}
-          >
-            Input Manual
-          </button>
-          <button
-            onClick={() => setMode('from_sj')}
-            className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors ${mode === 'from_sj' ? 'text-white' : 'text-gray-500 hover:bg-gray-50'}`}
-            style={mode === 'from_sj' ? { backgroundColor: 'var(--green-primary)' } : {}}
-          >
-            Dari SJ PNJ
-          </button>
-        </div>
-
-        {mode === 'from_sj' ? (
-          <div className="bg-white rounded-xl border shadow-sm p-8 text-center" style={{ borderColor: 'var(--border-card)' }}>
-            <div className="text-4xl mb-3">🚧</div>
-            <div className="font-semibold text-gray-700">Fitur Segera Hadir</div>
-            <div className="text-sm text-gray-500 mt-1">
-              Integrasi dengan Surat Jalan PNJ akan tersedia pada pembaruan berikutnya.
-            </div>
-          </div>
-        ) : (
-          <>
+        <>
             {/* Item rows */}
             <div className="bg-white rounded-xl border shadow-sm p-5" style={{ borderColor: 'var(--border-card)' }}>
               <div className="flex items-center justify-between mb-4">
@@ -318,7 +291,7 @@ export default function CreateStockDisbursementPage() {
                     onChange={e => handleChange('customer_id', e.target.value)}
                   >
                     <option value="">— Pilih Customer —</option>
-                    {MOCK_CUSTOMERS.map(c => (
+                    {customers.map(c => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
                   </select>
@@ -405,8 +378,7 @@ export default function CreateStockDisbursementPage() {
                 {isSubmitting ? 'Menyimpan...' : `Simpan Stok Keluar (${itemRows.length} barang)`}
               </button>
             </div>
-          </>
-        )}
+        </>
       </div>
     </DashboardLayout>
   )

@@ -6,7 +6,8 @@ import { useDispatch } from 'react-redux'
 import { Mail, Lock, Eye, EyeOff } from 'lucide-react'
 import { loginSuccess, loginFailed } from '@/store/slices/authSlice'
 import { startTour } from '@/store/slices/tourSlice'
-import { MOCK_CREDENTIALS, MOCK_USER } from '@/lib/mockData'
+import { login } from '@/lib/authApi'
+import { storeAuthSession } from '@/lib/apiClient'
 import { useSelector } from 'react-redux'
 import { RootState } from '@/store'
 
@@ -53,24 +54,30 @@ export default function LoginPage() {
     setIsLoading(true)
     setLoginError('')
 
-    await new Promise(r => setTimeout(r, 1200))
-
-    if (email === MOCK_CREDENTIALS.email && password === MOCK_CREDENTIALS.password) {
-      dispatch(loginSuccess(MOCK_USER))
-      dispatch(startTour())
+    try {
+      const result = await login(email, password)
+      storeAuthSession(result.access_token, result.refresh_token, result.user)
+      dispatch(loginSuccess({
+        user: result.user,
+        accessToken: result.access_token,
+        refreshToken: result.refresh_token,
+      }))
+      const tourDone = window.localStorage.getItem('pnj_tour_done')
+      if (!tourDone) dispatch(startTour())
       document.cookie = 'pnj_auth=true; path=/'
       router.push('/dashboard')
-    } else {
+    } catch (err) {
       dispatch(loginFailed())
       const remaining = 3 - (loginAttempts + 1)
       if (remaining <= 0) {
         setLoginError('Akun terkunci sementara. Hubungi administrator.')
       } else {
-        setLoginError(`Email atau password salah. Sisa percobaan: ${remaining}`)
+        const message = err instanceof Error ? err.message : 'Email atau password salah.'
+        setLoginError(`${message} Sisa percobaan: ${remaining}`)
       }
+    } finally {
+      setIsLoading(false)
     }
-
-    setIsLoading(false)
   }
 
   return (

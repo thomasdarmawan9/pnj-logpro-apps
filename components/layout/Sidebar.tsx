@@ -11,6 +11,7 @@ import {
 import { useDispatch, useSelector } from 'react-redux'
 import { logout } from '@/store/slices/authSlice'
 import { RootState } from '@/store'
+import { clearAuthSession } from '@/lib/apiClient'
 import { StatusLampiran, StatusOperasional } from '@/features/surat-jalan/domain/entities/SuratJalan'
 import { MOCK_SURAT_JALAN } from '@/lib/mockData/suratJalan'
 import { MOCK_DRIVERS } from '@/features/master/domain/entities/Driver'
@@ -208,6 +209,7 @@ export default function Sidebar({ isCollapsed, onToggleCollapse, onClose }: Side
   const [settingsOpen, setSettingsOpen] = useState(isSettingsActive)
 
   const handleLogout = () => {
+    clearAuthSession()
     dispatch(logout())
     document.cookie = 'pnj_auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
     router.push('/login')

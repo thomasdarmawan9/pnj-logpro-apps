@@ -7,6 +7,7 @@ interface Props {
   filters: InvoiceFilterState
   onChange: (f: Partial<InvoiceFilterState>) => void
   onReset: () => void
+  onExport?: () => void
 }
 
 const STATUS_OPTIONS = [
@@ -41,7 +42,7 @@ const PERIODE_OPTIONS = [
   { value: 'last_month', label: 'Bulan Lalu' },
 ]
 
-export default function InvoiceFilterBar({ filters, onChange, onReset }: Props) {
+export default function InvoiceFilterBar({ filters, onChange, onReset, onExport }: Props) {
   return (
     <div className="bg-white rounded-xl border shadow-sm px-5 py-4" style={{ borderColor: 'var(--border-card)' }}>
       <div className="flex flex-wrap items-center gap-3">
@@ -57,7 +58,7 @@ export default function InvoiceFilterBar({ filters, onChange, onReset }: Props) 
           />
         </div>
         <div className="flex items-center gap-2 ml-auto">
-          <button className="flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg border text-gray-600 hover:bg-gray-50" style={{ borderColor: 'var(--border-card)' }}>
+          <button onClick={onExport} className="flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg border text-gray-600 hover:bg-gray-50" style={{ borderColor: 'var(--border-card)' }}>
             <Download size={14} />
             Export Excel
           </button>

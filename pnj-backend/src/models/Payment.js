@@ -40,6 +40,12 @@ module.exports = (sequelize) => {
       type:      DataTypes.TEXT,
       allowNull: true,
     },
+    is_down_payment: {
+      type:         DataTypes.BOOLEAN,
+      allowNull:    false,
+      defaultValue: false,
+      comment:      'TRUE = uang muka (DP). Maksimal 1 DP per invoice.',
+    },
     created_by: {
       type:      DataTypes.BIGINT,
       allowNull: true,

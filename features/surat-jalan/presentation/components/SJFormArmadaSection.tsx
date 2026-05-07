@@ -1,16 +1,17 @@
 'use client'
 
-import { ArmadaOption, armadaOptions } from '../utils/mockOptions'
+import type { ArmadaOption } from '../utils/mockOptions'
 
 interface SJFormArmadaSectionProps {
   value: ArmadaOption | null
   onChange: (armada: ArmadaOption) => void
+  options?: ArmadaOption[]
   showTBDWarning?: boolean
   errors?: Record<string, string>
 }
 
-export default function SJFormArmadaSection({ value, onChange, showTBDWarning, errors }: SJFormArmadaSectionProps) {
-  const options = armadaOptions.sort((a, b) => Number(a.isTBD) - Number(b.isTBD))
+export default function SJFormArmadaSection({ value, onChange, options = [], showTBDWarning, errors }: SJFormArmadaSectionProps) {
+  const sortedOptions = [...options].sort((a, b) => Number(a.isTBD) - Number(b.isTBD))
 
   return (
     <div className="rounded-xl bg-white p-6 border mt-4" style={{ borderColor: 'var(--border-card)' }}>
@@ -22,12 +23,12 @@ export default function SJFormArmadaSection({ value, onChange, showTBDWarning, e
           className={`form-input w-full mt-1 ${errors?.fleet_id ? 'error' : ''}`}
           value={value?.id || ''}
           onChange={e => {
-            const selected = options.find(opt => opt.id === Number(e.target.value))
+            const selected = sortedOptions.find(opt => opt.id === Number(e.target.value))
             if (selected) onChange(selected)
           }}
         >
           <option value="">Pilih armada</option>
-          {options.map(armada => (
+          {sortedOptions.map(armada => (
             <option key={armada.id} value={armada.id}>
               {armada.isTBD ? '🚧 ' : ''}{armada.name} ({armada.plate})
             </option>

@@ -1,9 +1,10 @@
 {
   "development": {
-    "username": "pnj_user",
-    "password": "PNJ@db2026",
-    "database": "pnj_db",
-    "host":     "127.0.0.1",
+    "username": "postgres",
+    "password": "123456",
+    "database": "universal",
+    "host":     "localhost",
+    "port":     5432,
     "dialect":  "postgres"
   },
   "production": {

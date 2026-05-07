@@ -10,7 +10,7 @@ import { useFleetUtilization } from '../hooks/useFleetUtilization'
 import { formatRupiah } from '@/lib/formatters'
 import FleetCategoryBadge from '@/components/ui/FleetCategoryBadge'
 import { FleetCategory } from '@/features/master/domain/entities/Fleet'
-import { exportFleetUtilizationExcel } from '@/lib/exportFleetUtilization'
+import { exportFleetUtilizationReport } from '../../infrastructure/repositories/MockReportsRepository'
 
 const barColor = (pct: number) =>
   pct >= 70 ? '#16A34A' :
@@ -44,7 +44,13 @@ export default function FleetUtilizationPage() {
   const handleExport = async () => {
     setIsExporting(true)
     try {
-      await exportFleetUtilizationExcel(data, filteredFleets, filters)
+      const blob = await exportFleetUtilizationReport(filters)
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `fleet-utilization-${new Date().toISOString().slice(0, 10)}.xlsx`
+      link.click()
+      URL.revokeObjectURL(url)
     } finally {
       setIsExporting(false)
     }

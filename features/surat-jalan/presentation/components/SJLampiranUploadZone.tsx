@@ -1,7 +1,8 @@
 'use client'
 
-import { useRef, useState } from 'react'
-import { FileText, ImageIcon, Paperclip, Trash2, Upload } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { FileText, ImageIcon, Paperclip, Trash2, Upload, AlertCircle } from 'lucide-react'
+import { uploadSuratJalanLampiran, deleteSuratJalanLampiran } from '../../infrastructure/repositories/MockSuratJalanRepository'
 
 interface LampiranFile {
   name: string
@@ -13,9 +14,10 @@ interface LampiranFile {
 interface SJLampiranUploadZoneProps {
   value: string[]
   onChange: (paths: string[]) => void
+  sjUuid?: string
 }
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
+const MAX_FILE_SIZE = 5 * 1024 * 1024
 const MAX_FILES = 3
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
 
@@ -23,28 +25,34 @@ function getFileType(file: File): 'image' | 'pdf' {
   return file.type === 'application/pdf' ? 'pdf' : 'image'
 }
 
-function generateMockPath(file: File): string {
-  return `/mock/lampiran/${file.name.replace(/\s+/g, '-').toLowerCase()}`
+function generateLocalPath(file: File): string {
+  return `/pending/${file.name.replace(/\s+/g, '-').toLowerCase()}`
 }
 
-export default function SJLampiranUploadZone({ value, onChange }: SJLampiranUploadZoneProps) {
+function toEntry(path: string): LampiranFile {
+  return {
+    name: path.split('/').pop() ?? path,
+    type: path.endsWith('.pdf') ? 'pdf' : 'image',
+    preview: null,
+    path,
+  }
+}
+
+export default function SJLampiranUploadZone({ value, onChange, sjUuid }: SJLampiranUploadZoneProps) {
   const inputRef = useRef<HTMLInputElement>(null)
-  const [files, setFiles] = useState<LampiranFile[]>(() =>
-    value.map(path => ({
-      name: path.split('/').pop() ?? path,
-      type: path.endsWith('.pdf') ? 'pdf' : 'image',
-      preview: null,
-      path,
-    }))
-  )
+  const [files, setFiles] = useState<LampiranFile[]>(() => value.map(toEntry))
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isDragOver, setIsDragOver] = useState(false)
 
   const isFull = files.length >= MAX_FILES
 
-  const handleFiles = (incoming: FileList | null) => {
-    if (!incoming) return
+  useEffect(() => {
+    setFiles(value.map(toEntry))
+  }, [value])
+
+  const handleFiles = async (incoming: FileList | null) => {
+    if (!incoming || uploading) return
     setError(null)
 
     const remaining = MAX_FILES - files.length
@@ -68,46 +76,69 @@ export default function SJLampiranUploadZone({ value, onChange }: SJLampiranUplo
     if (!valid.length) return
 
     setUploading(true)
-    const newEntries: LampiranFile[] = []
-    let processed = 0
 
-    valid.forEach(file => {
-      const fileType = getFileType(file)
-      if (fileType === 'image') {
-        const reader = new FileReader()
-        reader.onload = () => {
-          newEntries.push({ name: file.name, type: 'image', preview: reader.result as string, path: generateMockPath(file) })
-          processed++
-          if (processed === valid.length) finalize(newEntries)
+    if (sjUuid) {
+      try {
+        let latestPaths = files.map(file => file.path)
+        for (const file of valid) {
+          const updatedSJ = await uploadSuratJalanLampiran(sjUuid, file)
+          latestPaths = updatedSJ.lampiran_paths ?? []
         }
-        reader.readAsDataURL(file)
-      } else {
-        newEntries.push({ name: file.name, type: 'pdf', preview: null, path: generateMockPath(file) })
-        processed++
-        if (processed === valid.length) finalize(newEntries)
+        onChange(latestPaths)
+        setFiles(latestPaths.map(toEntry))
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Gagal mengunggah file.'
+        setError(`Upload gagal: ${msg}`)
+      } finally {
+        setUploading(false)
+        if (inputRef.current) inputRef.current.value = ''
       }
+      return
+    }
+
+    const newEntries: LampiranFile[] = []
+    for (const file of valid) {
+      const fileType = getFileType(file)
+      const preview = fileType === 'image'
+        ? await new Promise<string>(resolve => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(reader.result as string)
+          reader.readAsDataURL(file)
+        })
+        : null
+      newEntries.push({ name: file.name, type: fileType, preview, path: generateLocalPath(file) })
+    }
+    setFiles(prev => {
+      const updated = [...prev, ...newEntries]
+      onChange(updated.map(f => f.path))
+      return updated
     })
+    setUploading(false)
+    if (inputRef.current) inputRef.current.value = ''
   }
 
-  const finalize = (newEntries: LampiranFile[]) => {
-    setTimeout(() => {
-      setFiles(prev => {
-        const updated = [...prev, ...newEntries]
-        onChange(updated.map(f => f.path))
-        return updated
-      })
-      setUploading(false)
-      if (inputRef.current) inputRef.current.value = ''
-    }, 800)
-  }
+  const removeFile = async (index: number) => {
+    const target = files[index]
+    setError(null)
 
-  const removeFile = (index: number) => {
+    if (sjUuid && target) {
+      try {
+        const updatedSJ = await deleteSuratJalanLampiran(sjUuid, target.path)
+        const paths = updatedSJ.lampiran_paths ?? []
+        setFiles(paths.map(toEntry))
+        onChange(paths)
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Gagal menghapus lampiran.'
+        setError(`Hapus gagal: ${msg}`)
+      }
+      return
+    }
+
     setFiles(prev => {
       const updated = prev.filter((_, i) => i !== index)
       onChange(updated.map(f => f.path))
       return updated
     })
-    setError(null)
   }
 
   return (
@@ -131,6 +162,7 @@ export default function SJLampiranUploadZone({ value, onChange }: SJLampiranUplo
           style={{
             borderColor: isDragOver ? 'var(--green-primary)' : 'var(--border-card)',
             backgroundColor: isDragOver ? '#F0FDF4' : 'transparent',
+            cursor: uploading ? 'not-allowed' : 'pointer',
           }}
         >
           <div className="mx-auto w-10 h-10 rounded-full flex items-center justify-center" style={{ backgroundColor: '#F3F4F6' }}>
@@ -156,7 +188,12 @@ export default function SJLampiranUploadZone({ value, onChange }: SJLampiranUplo
         </div>
       )}
 
-      {error && <div className="mt-2 text-xs text-red-600">{error}</div>}
+      {error && (
+        <div className="mt-2 flex items-center gap-1.5 text-xs text-red-600">
+          <AlertCircle size={12} />
+          {error}
+        </div>
+      )}
 
       {files.length > 0 && (
         <div className="mt-3 space-y-2">
@@ -190,7 +227,8 @@ export default function SJLampiranUploadZone({ value, onChange }: SJLampiranUplo
               <button
                 type="button"
                 onClick={() => removeFile(idx)}
-                className="shrink-0 p-1 rounded hover:bg-red-50 transition-colors"
+                disabled={uploading}
+                className="shrink-0 p-1 rounded hover:bg-red-50 transition-colors disabled:opacity-40"
                 title="Hapus lampiran"
               >
                 <Trash2 size={14} style={{ color: '#EF4444' }} />

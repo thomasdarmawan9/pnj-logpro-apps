@@ -87,6 +87,11 @@ module.exports = (sequelize) => {
       type:      DataTypes.TEXT,
       allowNull: true,
     },
+    lampiran_paths: {
+      type:      DataTypes.ARRAY(DataTypes.STRING(255)),
+      allowNull: true,
+      comment:   'Path lampiran tambahan SJ (BAP, tanda terima, dll)',
+    },
     internal_notes: {
       type:      DataTypes.TEXT,
       allowNull: true,

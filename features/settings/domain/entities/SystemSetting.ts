@@ -9,6 +9,16 @@ export interface NumberingSettings {
   stock_disburse_format: string
 }
 
+export interface BankAccount {
+  id: number
+  uuid: string
+  bank_name: string
+  account_number: string
+  account_holder: string
+  is_active: boolean
+  sort_order: number
+}
+
 export interface CompanyProfile {
   company_name: string
   company_address: string

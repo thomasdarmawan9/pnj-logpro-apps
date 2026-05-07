@@ -17,7 +17,6 @@ import {
   sendInvoice, voidInvoice, attachSJ, detachSJ,
 } from '@/store/slices/invoiceSlice'
 import { InvoiceStatus } from '../../domain/entities/Invoice'
-import { MOCK_INVOICES } from '@/lib/mockData/invoice'
 import useInvoiceList from '../hooks/useInvoiceList'
 import { useToast } from '@/components/toast/useToast'
 import InvoiceSummaryCards from '../components/InvoiceSummaryCards'
@@ -29,6 +28,7 @@ import RecordPaymentModal from '../components/modals/RecordPaymentModal'
 import AttachSJModal from '../components/modals/AttachSJModal'
 import DetachSJConfirmModal from '../components/modals/DetachSJConfirmModal'
 import GeneratePDFModal from '../components/modals/GeneratePDFModal'
+import { exportInvoices } from '../../infrastructure/repositories/MockInvoiceRepository'
 
 export default function InvoiceListPage() {
   const router = useRouter()
@@ -49,10 +49,10 @@ export default function InvoiceListPage() {
   const stats = useMemo(() => {
     const now = new Date()
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-    const outstanding = MOCK_INVOICES.filter(i => i.status === InvoiceStatus.OUTSTANDING)
+    const outstanding = list.filter(i => i.status === InvoiceStatus.OUTSTANDING)
     const overdue = outstanding.filter(i => new Date(i.due_date) < now)
-    const paidThisMonth = MOCK_INVOICES.filter(i => i.status === InvoiceStatus.PAID && new Date(i.updated_at ?? '') >= startOfMonth)
-    const drafts = MOCK_INVOICES.filter(i => i.status === InvoiceStatus.DRAFT)
+    const paidThisMonth = list.filter(i => i.status === InvoiceStatus.PAID && new Date(i.updated_at ?? '') >= startOfMonth)
+    const drafts = list.filter(i => i.status === InvoiceStatus.DRAFT)
     return {
       totalPiutang: outstanding.reduce((s, i) => s + i.remaining_amount, 0),
       jatuhTempo: overdue.length,
@@ -61,7 +61,7 @@ export default function InvoiceListPage() {
       countOutstanding: outstanding.length,
       countPaidThisMonth: paidThisMonth.length,
     }
-  }, [])
+  }, [list])
 
   const totalPages = Math.ceil(pagination.total / pagination.perPage) || 1
 
@@ -91,10 +91,27 @@ export default function InvoiceListPage() {
     if (action === 'attach-sj') {
       setActiveUuid(uuid)
       await dispatch(fetchInvoiceDetail(uuid))
-      const inv = list.find(i => i.uuid === uuid)
-      if (inv) await dispatch(fetchAttachableSJ(inv.project.code))
+      const result = await dispatch(fetchAttachableSJ(uuid))
+      if (fetchAttachableSJ.rejected.match(result)) {
+        pushToast({
+          title: 'Gagal memuat SJ tersedia',
+          description: (result.payload as string) || 'Daftar Surat Jalan tidak dapat dimuat.',
+          variant: 'error',
+        })
+        return
+      }
       dispatch(openAttachSJModal())
     }
+  }
+
+  const handleExport = async () => {
+    const blob = await exportInvoices()
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `invoice-export-${new Date().toISOString().slice(0, 10)}.xlsx`
+    link.click()
+    URL.revokeObjectURL(url)
   }
 
   return (
@@ -119,7 +136,7 @@ export default function InvoiceListPage() {
       <InvoiceSummaryCards stats={stats} />
 
       <div className="mt-6">
-        <InvoiceFilterBar filters={filters} onChange={setFilters} onReset={resetFilters} />
+        <InvoiceFilterBar filters={filters} onChange={setFilters} onReset={resetFilters} onExport={handleExport} />
       </div>
 
       <div className="mt-4 rounded-xl overflow-hidden shadow-sm border bg-white" style={{ borderColor: 'var(--border-card)' }}>
@@ -224,9 +241,18 @@ export default function InvoiceListPage() {
         invoice={currentInvoice}
         attachableSJ={attachableSJ}
         onClose={() => dispatch(closeAttachSJModal())}
-        onConfirm={sjUuids => {
+        onConfirm={async sjUuids => {
           if (!currentInvoice) return
-          dispatch(attachSJ({ invoiceUuid: currentInvoice.uuid, sjUuids })).then(() => pushToast({ title: 'SJ Dilampirkan', description: `${sjUuids.length} SJ berhasil dilampirkan.`, variant: 'success' }))
+          const result = await dispatch(attachSJ({ invoiceUuid: currentInvoice.uuid, sjUuids }))
+          if (attachSJ.fulfilled.match(result)) {
+            pushToast({ title: 'SJ Dilampirkan', description: `${sjUuids.length} SJ berhasil dilampirkan.`, variant: 'success' })
+            return
+          }
+          pushToast({
+            title: 'Gagal melampirkan SJ',
+            description: (result.payload as string) || 'Surat Jalan tidak dapat dilampirkan.',
+            variant: 'error',
+          })
         }}
       />
       <DetachSJConfirmModal

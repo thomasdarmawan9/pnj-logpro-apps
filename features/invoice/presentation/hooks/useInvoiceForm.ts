@@ -1,5 +1,36 @@
-import { useState } from 'react'
-import { MOCK_PROJECTS } from '@/lib/mockData/invoice'
+import { useEffect, useState } from 'react'
+import { apiRequest } from '@/lib/apiClient'
+
+interface InvoiceProjectOption {
+  id: number
+  code: string
+  name: string
+  contract_number: string
+  customer: {
+    id: number
+    name: string
+    address?: string | null
+    npwp?: string | null
+    is_pkp: boolean
+  }
+}
+
+interface ApiProjectOption extends Omit<InvoiceProjectOption, 'id' | 'customer'> {
+  id: number | string
+  customer: Omit<InvoiceProjectOption['customer'], 'id'> & { id: number | string }
+}
+
+function normalizeProject(project: ApiProjectOption): InvoiceProjectOption {
+  return {
+    ...project,
+    id: Number(project.id),
+    customer: {
+      ...project.customer,
+      id: Number(project.customer.id),
+      is_pkp: Boolean(project.customer.is_pkp),
+    },
+  }
+}
 
 export interface InvoiceFormHeader {
   project_id: number | null
@@ -24,15 +55,28 @@ export default function useInvoiceForm(initial?: Partial<InvoiceFormHeader>) {
 
   const [pphPercent, setPphPercent] = useState(2)
   const [pphEnabled, setPphEnabled] = useState(false)
+  const [projects, setProjects] = useState<InvoiceProjectOption[]>([])
 
-  const selectedProject = MOCK_PROJECTS.find(p => p.id === header.project_id) ?? null
+  useEffect(() => {
+    let alive = true
+    apiRequest<ApiProjectOption[]>('/projects?status=active&page=1&limit=100', { method: 'GET' })
+      .then(response => {
+        if (alive) setProjects(response.data.map(normalizeProject))
+      })
+      .catch(() => {
+        if (alive) setProjects([])
+      })
+    return () => { alive = false }
+  }, [])
+
+  const selectedProject = projects.find(p => p.id === header.project_id) ?? null
 
   const updateHeader = (field: keyof InvoiceFormHeader, value: string | number | null) => {
     setHeader(prev => ({ ...prev, [field]: value }))
   }
 
   const selectProject = (projectId: number) => {
-    const project = MOCK_PROJECTS.find(p => p.id === projectId)
+    const project = projects.find(p => p.id === projectId)
     if (!project) return
     setHeader(prev => ({ ...prev, project_id: projectId }))
     if (project.customer.is_pkp) {
@@ -70,6 +114,6 @@ export default function useInvoiceForm(initial?: Partial<InvoiceFormHeader>) {
     togglePph,
     setPphPercent,
     isDueDatePast,
-    projects: MOCK_PROJECTS,
+    projects,
   }
 }

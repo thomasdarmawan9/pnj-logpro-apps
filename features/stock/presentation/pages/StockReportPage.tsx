@@ -7,9 +7,9 @@ import { FileBarChart2 } from 'lucide-react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { RootState, AppDispatch } from '@/store'
 import { fetchStockItems, fetchStockReceipts, fetchStockDisbursements } from '@/store/slices/stockSlice'
+import { fetchCustomers } from '@/store/slices/masterSlice'
 import { calculateRunningBalance } from '@/features/stock/application/use-cases/GetStockRecap'
 import RunningBalanceTable from '../components/RunningBalanceTable'
-import { MOCK_CUSTOMERS } from '@/lib/mockData/stock'
 
 type Period = 'all' | 'this_month' | 'last_month' | 'custom'
 
@@ -36,6 +36,7 @@ export default function StockReportPage() {
   const searchParams = useSearchParams()
   const dispatch = useDispatch<AppDispatch>()
   const { items, receipts, disbursements, isLoading } = useSelector((state: RootState) => state.stock)
+  const { customers } = useSelector((state: RootState) => state.master)
 
   const initialItemId = searchParams.get('itemId') ? Number(searchParams.get('itemId')) : null
 
@@ -49,7 +50,8 @@ export default function StockReportPage() {
     dispatch(fetchStockItems())
     dispatch(fetchStockReceipts())
     dispatch(fetchStockDisbursements())
-  }, [dispatch])
+    if (!customers.length) dispatch(fetchCustomers())
+  }, [dispatch, customers.length])
 
   const selectedItem = items.find(i => i.id === selectedItemId)
   const periodDates = period === 'custom' ? { from: customFrom, to: customTo } : getPeriodDates(period)
@@ -503,7 +505,7 @@ export default function StockReportPage() {
                   onChange={e => setSelectedCustomerId(e.target.value ? Number(e.target.value) : null)}
                 >
                   <option value="">Semua Customer</option>
-                  {MOCK_CUSTOMERS.map(c => (
+                  {customers.map(c => (
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
                 </select>

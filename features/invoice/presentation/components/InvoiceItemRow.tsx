@@ -1,8 +1,9 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { GripVertical, Trash2 } from 'lucide-react'
 import { InvoiceItem } from '../../domain/entities/Invoice'
-import { MOCK_FLEETS_INVOICE } from '@/lib/mockData/invoice'
+import { apiRequest } from '@/lib/apiClient'
 
 type PartialItem = Omit<InvoiceItem, 'id' | 'invoice_id'>
 
@@ -32,6 +33,17 @@ const UNIT_OPTIONS = [
   'Meter',
 ]
 
+interface FleetOption {
+  id: number
+  label: string
+}
+
+interface ApiFleetOption {
+  id: number | string
+  name: string
+  plate_number: string
+}
+
 function parseRupiah(val: string): number {
   return Number(val.replace(/\D/g, '')) || 0
 }
@@ -54,9 +66,28 @@ function calcDuration(start: string | null, end: string | null): string | null {
 }
 
 export default function InvoiceItemRow({ item, index, onChange, onRemove, onDragStart, onDragOver, onDrop, errors = {} }: Props) {
+  const [fleetOptions, setFleetOptions] = useState<FleetOption[]>([])
   const duration = calcDuration(item.period_start, item.period_end)
   const subtotalFormatted = item.subtotal > 0 ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(item.subtotal) : '—'
   const errPrefix = `items.${index}`
+
+  useEffect(() => {
+    let alive = true
+    apiRequest<ApiFleetOption[]>('/fleets?status=active&page=1&limit=100', { method: 'GET' })
+      .then(response => {
+        if (!alive) return
+        setFleetOptions(response.data
+          .filter(fleet => fleet.plate_number !== 'TBD')
+          .map(fleet => ({
+            id: Number(fleet.id),
+            label: `${fleet.name} ${fleet.plate_number}`,
+          })))
+      })
+      .catch(() => {
+        if (alive) setFleetOptions([])
+      })
+    return () => { alive = false }
+  }, [])
 
   return (
     <div
@@ -84,10 +115,11 @@ export default function InvoiceItemRow({ item, index, onChange, onRemove, onDrag
         <label className="text-xs font-medium text-gray-600 mb-1 block">Armada</label>
         <select
           className="form-input w-full text-sm mb-2"
+          value={item.fleet_id ?? 0}
           onChange={e => {
             const fleetId = Number(e.target.value)
             if (fleetId === 0) return
-            const fleet = MOCK_FLEETS_INVOICE.find(f => f.id === fleetId)
+            const fleet = fleetOptions.find(f => f.id === fleetId)
             if (fleet) {
               onChange(item.uuid, 'fleet_id', fleet.id)
               onChange(item.uuid, 'fleet_label', fleet.label)
@@ -95,7 +127,7 @@ export default function InvoiceItemRow({ item, index, onChange, onRemove, onDrag
           }}
         >
           <option value={0}>Pilih armada atau input manual...</option>
-          {MOCK_FLEETS_INVOICE.map(f => (
+          {fleetOptions.map(f => (
             <option key={f.id} value={f.id}>{f.label}</option>
           ))}
         </select>

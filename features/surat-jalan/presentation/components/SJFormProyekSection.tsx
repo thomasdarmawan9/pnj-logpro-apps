@@ -1,14 +1,15 @@
 'use client'
 
-import { ProjectOption, projectOptions } from '../utils/mockOptions'
+import type { ProjectOption } from '../utils/mockOptions'
 
 interface SJFormProyekSectionProps {
   value: ProjectOption | null
   onSelect: (project: ProjectOption) => void
+  options?: ProjectOption[]
   errors?: Record<string, string>
 }
 
-export default function SJFormProyekSection({ value, onSelect, errors }: SJFormProyekSectionProps) {
+export default function SJFormProyekSection({ value, onSelect, options = [], errors }: SJFormProyekSectionProps) {
   return (
     <div className="rounded-xl bg-white p-6 border" style={{ borderColor: 'var(--border-card)' }}>
       <div className="text-sm font-semibold mb-4">Informasi Dasar</div>
@@ -19,12 +20,12 @@ export default function SJFormProyekSection({ value, onSelect, errors }: SJFormP
           className={`form-input w-full mt-1 ${errors?.project_id ? 'error' : ''}`}
           value={value?.id || ''}
           onChange={e => {
-            const selected = projectOptions.find(p => p.id === Number(e.target.value))
+            const selected = options.find(p => p.id === Number(e.target.value))
             if (selected) onSelect(selected)
           }}
         >
           <option value="">Pilih proyek</option>
-          {projectOptions.map(project => (
+          {options.map(project => (
             <option key={project.id} value={project.id}>
               {project.code} — {project.name} / {project.customer}
             </option>

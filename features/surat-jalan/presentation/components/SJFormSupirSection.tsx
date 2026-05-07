@@ -1,12 +1,13 @@
 'use client'
 
-import { DriverOption, driverOptions } from '../utils/mockOptions'
+import type { DriverOption } from '../utils/mockOptions'
 
 interface SJFormSupirSectionProps {
   mode: 'master' | 'tbd'
   driver: DriverOption | null
   onModeChange: (mode: 'master' | 'tbd') => void
   onDriverChange: (driver: DriverOption | null) => void
+  options?: DriverOption[]
   errors?: Record<string, string>
 }
 
@@ -15,6 +16,7 @@ export default function SJFormSupirSection({
   driver,
   onModeChange,
   onDriverChange,
+  options = [],
   errors,
 }: SJFormSupirSectionProps) {
   return (
@@ -44,12 +46,12 @@ export default function SJFormSupirSection({
             className={`form-input w-full mt-1 ${errors?.driver ? 'error' : ''}`}
             value={driver?.id || ''}
             onChange={e => {
-              const selected = driverOptions.find(opt => opt.id === Number(e.target.value)) || null
+              const selected = options.find(opt => opt.id === Number(e.target.value)) || null
               onDriverChange(selected)
             }}
           >
             <option value="">Pilih supir</option>
-            {driverOptions.map(driverOption => (
+            {options.map(driverOption => (
               <option key={driverOption.id} value={driverOption.id}>
                 {driverOption.name} {driverOption.simExpiredAt ? `(SIM s.d ${driverOption.simExpiredAt})` : ''}
               </option>

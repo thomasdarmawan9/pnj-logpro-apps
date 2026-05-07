@@ -45,6 +45,12 @@ module.exports = (sequelize) => {
       defaultValue: 0,
       comment:      'Running balance — diupdate setiap transaksi',
     },
+    peak_stock: {
+      type:         DataTypes.DECIMAL(12, 2),
+      defaultValue: 0,
+      allowNull:    false,
+      comment:      'Saldo tertinggi yang pernah dicapai — dipakai untuk indikator level stok',
+    },
     created_by: {
       type:      DataTypes.BIGINT,
       allowNull: true,

@@ -32,10 +32,13 @@ function errorHandler(err, req, res, next) {
   }
 
   if (err.statusCode) {
-    return res.status(err.statusCode).json({
+    const body = {
       success: false,
       message: err.message,
-    })
+    }
+    if (err.errors) body.errors = err.errors
+    if (err.code)   body.code   = err.code
+    return res.status(err.statusCode).json(body)
   }
 
   return res.status(500).json({

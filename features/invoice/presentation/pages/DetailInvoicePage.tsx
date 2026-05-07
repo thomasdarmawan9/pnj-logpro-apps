@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useDispatch, useSelector } from 'react-redux'
-import { ArrowLeft, Printer, DollarSign, Paperclip, Pencil, Send, AlertTriangle, FileText } from 'lucide-react'
+import { ArrowLeft, Printer, DollarSign, Paperclip, Pencil, Send, AlertTriangle, FileText, Wallet } from 'lucide-react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { AppDispatch, RootState } from '@/store'
 import {
@@ -43,6 +43,12 @@ function formatShortDate(d: string): string {
   return new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
+const METHOD_LABELS: Record<string, string> = {
+  transfer: 'Transfer Bank',
+  cash: 'Tunai',
+  check: 'Cek/Giro',
+}
+
 interface Props { uuid: string }
 
 export default function DetailInvoicePage({ uuid }: Props) {
@@ -75,6 +81,8 @@ export default function DetailInvoicePage({ uuid }: Props) {
   }
 
   const canManage = invoice.status !== InvoiceStatus.PAID && invoice.status !== InvoiceStatus.VOID
+  const canEditDownPayment = invoice.status !== InvoiceStatus.VOID &&
+    (role === 'super_admin' || role === 'admin_finance')
 
   const handleSaveLampiran = async () => {
     setIsSavingLampiran(true)
@@ -149,6 +157,33 @@ export default function DetailInvoicePage({ uuid }: Props) {
             </div>
           </div>
 
+          {invoice.has_down_payment && invoice.down_payment && (
+            <div className="bg-white rounded-xl border p-5 mb-6" style={{ borderColor: '#BBF7D0', backgroundColor: '#F0FDF4' }}>
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <Wallet size={18} className="mt-0.5 text-green-700 shrink-0" />
+                  <div>
+                    <h3 className="text-sm font-semibold text-green-900">DP / Uang Muka Diterima</h3>
+                    <div className="text-xs text-green-800 mt-1">
+                      {formatDate(invoice.down_payment.payment_date)} · {METHOD_LABELS[invoice.down_payment.method] ?? invoice.down_payment.method}
+                    </div>
+                    {invoice.down_payment.notes && (
+                      <div className="text-xs text-green-800 mt-1">Catatan: {invoice.down_payment.notes}</div>
+                    )}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="font-mono text-lg font-bold text-green-800" style={{ fontFamily: 'var(--font-mono)' }}>
+                    {formatRupiah(invoice.down_payment_amount ?? 0)}
+                  </div>
+                  <div className="text-xs text-green-800">
+                    Sisa tagihan {formatRupiah(invoice.remaining_amount)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Tabs */}
           <div className="flex border-b mb-6" style={{ borderColor: 'var(--border-card)' }}>
             {[
@@ -194,7 +229,15 @@ export default function DetailInvoicePage({ uuid }: Props) {
               invoiceStatus={invoice.status}
               role={role}
               onAttach={async () => {
-                await dispatch(fetchAttachableSJ(invoice.project.code))
+                const result = await dispatch(fetchAttachableSJ(invoice.uuid))
+                if (fetchAttachableSJ.rejected.match(result)) {
+                  pushToast({
+                    title: 'Gagal memuat SJ tersedia',
+                    description: (result.payload as string) || 'Daftar Surat Jalan tidak dapat dimuat.',
+                    variant: 'error',
+                  })
+                  return
+                }
                 dispatch(openAttachSJModal())
               }}
               onDetach={sjUuid => dispatch(openDetachSJModal(sjUuid))}
@@ -206,6 +249,7 @@ export default function DetailInvoicePage({ uuid }: Props) {
               payments={invoice.payments}
               totalAmount={invoice.total_amount}
               paidAmount={invoice.paid_amount}
+              downPaymentAmount={invoice.down_payment_amount}
               invoiceStatus={invoice.status}
               role={role}
               onAddPayment={() => dispatch(openRecordPaymentModal())}
@@ -215,7 +259,7 @@ export default function DetailInvoicePage({ uuid }: Props) {
 
           {activeTab === 'lampiran' && (
             <div className="space-y-4">
-              <InvoiceLampiranUploadZone value={lampiranPaths} onChange={setLampiranPaths} />
+              <InvoiceLampiranUploadZone value={lampiranPaths} onChange={setLampiranPaths} invoiceUuid={uuid} />
               <div className="flex justify-end">
                 <button
                   onClick={handleSaveLampiran}
@@ -246,12 +290,29 @@ export default function DetailInvoicePage({ uuid }: Props) {
                   </button>
                 </>
               )}
+              {canEditDownPayment && invoice.status !== InvoiceStatus.DRAFT && (
+                <button onClick={() => router.push(`/invoice/${uuid}/edit`)} className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm border" style={{ borderColor: 'var(--border-card)' }}>
+                  <Wallet size={14} />Edit DP / Uang Muka
+                </button>
+              )}
               {(invoice.status === InvoiceStatus.SENT || invoice.status === InvoiceStatus.OUTSTANDING) && (
                 <>
                   <button onClick={() => dispatch(openRecordPaymentModal())} className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: 'var(--green-primary)' }}>
                     <DollarSign size={14} />Catat Pembayaran
                   </button>
-                  <button onClick={async () => { await dispatch(fetchAttachableSJ(invoice.project.code)); dispatch(openAttachSJModal()); setActiveTab('sj') }} className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm border" style={{ borderColor: 'var(--border-card)' }}>
+                  <button onClick={async () => {
+                    const result = await dispatch(fetchAttachableSJ(invoice.uuid))
+                    if (fetchAttachableSJ.rejected.match(result)) {
+                      pushToast({
+                        title: 'Gagal memuat SJ tersedia',
+                        description: (result.payload as string) || 'Daftar Surat Jalan tidak dapat dimuat.',
+                        variant: 'error',
+                      })
+                      return
+                    }
+                    dispatch(openAttachSJModal())
+                    setActiveTab('sj')
+                  }} className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm border" style={{ borderColor: 'var(--border-card)' }}>
                     <Paperclip size={14} />Kelola SJ Terlampir
                   </button>
                   <button onClick={() => dispatch(openGeneratePDFModal())} className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm border" style={{ borderColor: 'var(--border-card)' }}>
@@ -336,7 +397,18 @@ export default function DetailInvoicePage({ uuid }: Props) {
         invoice={invoice}
         attachableSJ={attachableSJ}
         onClose={() => dispatch(closeAttachSJModal())}
-        onConfirm={sjUuids => dispatch(attachSJ({ invoiceUuid: uuid, sjUuids })).then(() => pushToast({ title: 'SJ Dilampirkan', description: `${sjUuids.length} SJ berhasil dilampirkan.`, variant: 'success' }))}
+        onConfirm={async sjUuids => {
+          const result = await dispatch(attachSJ({ invoiceUuid: uuid, sjUuids }))
+          if (attachSJ.fulfilled.match(result)) {
+            pushToast({ title: 'SJ Dilampirkan', description: `${sjUuids.length} SJ berhasil dilampirkan.`, variant: 'success' })
+            return
+          }
+          pushToast({
+            title: 'Gagal melampirkan SJ',
+            description: (result.payload as string) || 'Surat Jalan tidak dapat dilampirkan.',
+            variant: 'error',
+          })
+        }}
       />
       <DetachSJConfirmModal
         open={modals.detachSJ.open}

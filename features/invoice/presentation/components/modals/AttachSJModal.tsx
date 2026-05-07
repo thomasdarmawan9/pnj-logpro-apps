@@ -36,11 +36,16 @@ export default function AttachSJModal({ open, invoice, attachableSJ, onClose, on
   const filtered = available.filter(sj => {
     if (!search) return true
     const q = search.toLowerCase()
-    return sj.sj_number.toLowerCase().includes(q) || sj.fleet_label.toLowerCase().includes(q) || sj.driver_name.toLowerCase().includes(q)
+    return sj.sj_number.toLowerCase().includes(q) || sj.fleet_label.toLowerCase().includes(q) || (sj.driver_name ?? '').toLowerCase().includes(q)
   })
 
   const toggle = (uuid: string) => {
     setSelected(prev => prev.includes(uuid) ? prev.filter(u => u !== uuid) : [...prev, uuid])
+  }
+
+  const handleConfirm = () => {
+    if (selected.length === 0) return
+    onConfirm(selected)
   }
 
   return (
@@ -78,7 +83,14 @@ export default function AttachSJModal({ open, invoice, attachableSJ, onClose, on
                 return (
                   <tr key={sj.uuid} className="border-t hover:bg-gray-50 cursor-pointer" style={{ borderColor: 'var(--border-card)' }} onClick={() => toggle(sj.uuid)}>
                     <td className="px-3 py-2.5">
-                      <input type="checkbox" checked={selected.includes(sj.uuid)} onChange={() => toggle(sj.uuid)} className="rounded" />
+                      <input
+                        type="checkbox"
+                        checked={selected.includes(sj.uuid)}
+                        onClick={e => e.stopPropagation()}
+                        onChange={() => toggle(sj.uuid)}
+                        className="rounded cursor-pointer"
+                        aria-label={`Pilih ${sj.sj_number}`}
+                      />
                     </td>
                     <td className="px-3 py-2.5 font-mono text-xs font-semibold" style={{ fontFamily: 'var(--font-mono)', color: 'var(--green-primary)' }}>{sj.sj_number}</td>
                     <td className="px-3 py-2.5 text-xs text-gray-500">{formatDate(sj.sj_date)}</td>
@@ -96,9 +108,9 @@ export default function AttachSJModal({ open, invoice, attachableSJ, onClose, on
         <div className="flex justify-end gap-3 pt-2">
           <button onClick={onClose} className="px-4 py-2 rounded-xl border text-sm" style={{ borderColor: 'var(--border-card)' }}>Batal</button>
           <button
-            onClick={() => onConfirm(selected)}
+            onClick={handleConfirm}
             disabled={selected.length === 0}
-            className="px-4 py-2 rounded-xl text-sm font-medium text-white"
+            className="px-4 py-2 rounded-xl text-sm font-medium text-white disabled:cursor-not-allowed"
             style={{ backgroundColor: selected.length > 0 ? 'var(--green-primary)' : '#A7F3D0' }}
           >
             Lampirkan SJ yang Dipilih ({selected.length})

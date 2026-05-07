@@ -25,6 +25,11 @@ module.exports = (sequelize) => {
       type:      DataTypes.UUID,
       allowNull: true,
     },
+    record_label: {
+      type:      DataTypes.STRING(200),
+      allowNull: true,
+      comment:   'Label ringkas record yang dimodifikasi (sj_number / invoice_number / name)',
+    },
     old_data: {
       type:      DataTypes.JSONB,
       allowNull: true,

@@ -45,8 +45,13 @@ export default function AppTour() {
   const handleEvent = (data: EventData, _controls: Controls) => {
     const { action, index, type, status } = data
 
+    const markDone = () => {
+      window.localStorage.setItem('pnj_tour_done', '1')
+    }
+
     // Guard: status-level finish/skip (fires in non-controlled or after STEP_AFTER in some versions)
     if (status === STATUS.FINISHED || status === STATUS.SKIPPED) {
+      markDone()
       forceKillOverlay()
       dispatch(stopTour())
       return
@@ -55,6 +60,7 @@ export default function AppTour() {
     if (type === EVENTS.STEP_AFTER || type === EVENTS.TARGET_NOT_FOUND) {
       // Skip button pressed — controlled mode may not emit STATUS.SKIPPED separately
       if (action === ACTIONS.SKIP) {
+        markDone()
         forceKillOverlay()
         dispatch(stopTour())
         return
@@ -64,6 +70,7 @@ export default function AppTour() {
 
       // Last step completed — controlled mode may not emit STATUS.FINISHED
       if (nextIndex >= TOUR_STEPS.length) {
+        markDone()
         forceKillOverlay()
         dispatch(stopTour())
         return

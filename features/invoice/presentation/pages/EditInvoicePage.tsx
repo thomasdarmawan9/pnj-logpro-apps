@@ -7,6 +7,7 @@ import { Plus, ArrowLeft, Pencil } from 'lucide-react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { AppDispatch, RootState } from '@/store'
 import { updateInvoice } from '@/store/slices/invoiceSlice'
+import { fetchBankAccounts } from '@/store/slices/settingsSlice'
 import { useToast } from '@/components/toast/useToast'
 import { InvoiceStatus } from '../../domain/entities/Invoice'
 import { validateUpdateInvoice } from '../../application/validators/InvoiceValidator'
@@ -16,6 +17,8 @@ import InvoiceItemRow from '../components/InvoiceItemRow'
 import InvoiceTaxCalculator from '../components/InvoiceTaxCalculator'
 import InvoiceStatusBadge from '../components/InvoiceStatusBadge'
 import InvoiceLampiranUploadZone from '../components/InvoiceLampiranUploadZone'
+import DownPaymentForm from '../components/DownPaymentForm'
+import type { CreateDownPaymentDto } from '../../application/dto/CreateInvoiceDto'
 
 function formatRupiah(amount: number): string {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(amount)
@@ -39,23 +42,47 @@ export default function EditInvoicePage({ uuid }: Props) {
   const [dragFrom, setDragFrom] = useState<number | null>(null)
   const [dragOver, setDragOver] = useState<number | null>(null)
   const [lampiranPaths, setLampiranPaths] = useState<string[]>([])
+  const [paymentMethod, setPaymentMethod] = useState<'transfer' | 'cash' | 'check'>('transfer')
+  const [bankAccountId, setBankAccountId] = useState<number | null>(null)
+  const [downPayment, setDownPayment] = useState<CreateDownPaymentDto | null>(null)
+  const bankAccounts = useSelector((state: RootState) => state.settings.bankAccounts).filter(b => b.is_active)
+  // Invoice yang status-nya DRAFT bisa di-edit penuh.
+  // Invoice non-DRAFT (sent/outstanding/paid) hanya boleh edit DP.
+  // Invoice VOID tidak bisa di-edit sama sekali.
+  const isDraft = invoice?.status === InvoiceStatus.DRAFT
+  const fullEditable = isDraft
 
   const { items, subtotalAmount, addItem, updateItem, removeItem, reorderItems, resetItems, calculateTax, totalAmount } = useInvoiceItems()
 
   useEffect(() => {
     if (invoice) {
-      if (invoice.status !== InvoiceStatus.DRAFT) {
-        pushToast({ title: 'Tidak dapat diedit', description: `Invoice ini tidak dapat diedit karena status sudah ${invoice.status.toUpperCase()}.`, variant: 'error' })
+      if (invoice.status === InvoiceStatus.VOID) {
+        pushToast({ title: 'Tidak dapat diedit', description: 'Invoice void tidak dapat di-edit.', variant: 'error' })
         router.replace(`/invoice/${uuid}`)
         return
       }
       setDueDate(invoice.due_date)
       setNotes(invoice.notes ?? '')
+      setPaymentMethod(invoice.payment_method ?? 'transfer')
+      setBankAccountId(invoice.bank_account_id ?? null)
       setLampiranPaths(invoice.lampiran_paths ?? [])
       setTaxPercent(invoice.tax_percent)
       setTaxEnabled(invoice.tax_percent > 0)
       setPphPercent(invoice.pph_percent > 0 ? invoice.pph_percent : 2)
       setPphEnabled(invoice.pph_percent > 0)
+
+      // Pre-fill DP form dengan DP existing kalau ada.
+      if (invoice.down_payment) {
+        setDownPayment({
+          payment_date: invoice.down_payment.payment_date,
+          amount:       invoice.down_payment.amount,
+          method:       invoice.down_payment.method,
+          notes:        invoice.down_payment.notes,
+        })
+      } else {
+        setDownPayment(null)
+      }
+
       resetItems(invoice.items.map(item => ({
         uuid: item.uuid,
         fleet_id: item.fleet_id ?? null,
@@ -74,6 +101,8 @@ export default function EditInvoicePage({ uuid }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [invoice])
 
+  useEffect(() => { dispatch(fetchBankAccounts()) }, [dispatch])
+
   if (role === 'admin_ops') {
     router.replace('/dashboard')
     return null
@@ -86,29 +115,58 @@ export default function EditInvoicePage({ uuid }: Props) {
   const isDueDatePast = dueDate < today
 
   const handleSave = async () => {
-    const dto = {
-      due_date: dueDate,
-      notes: notes || null,
-      tax_percent: taxEnabled ? taxPercent : 0,
-      pph_percent: pphEnabled ? pphPercent : 0,
-      lampiran_paths: lampiranPaths.length > 0 ? lampiranPaths : null,
-      items: items.map((item, idx) => ({
-        fleet_id: item.fleet_id ?? null,
-        fleet_label: item.fleet_label,
-        description: item.description,
-        period_start: item.period_start,
-        period_end: item.period_end,
-        qty: item.qty,
-        unit: item.unit,
-        unit_price: item.unit_price,
-        sort_order: idx,
-      })),
-    }
-    const result = validateUpdateInvoice(dto)
-    setErrors(result.errors)
-    if (!result.valid) return
+    // DP payload — selalu disertakan (kalau berubah dari current).
+    // null = clear DP, object = upsert.
+    const dpPayload = downPayment === null ? null : { ...downPayment }
+    const dpMaxAmount = fullEditable ? nettoAmount : (invoice?.total_amount ?? 0)
 
-    const action = await dispatch(updateInvoice({ uuid, dto }))
+    if (dpPayload) {
+      const nextErrors: Record<string, string> = {}
+      if (!dpPayload.payment_date) nextErrors.down_payment = 'Tanggal DP wajib diisi'
+      if (dpPayload.amount <= 0) nextErrors.down_payment = 'Nominal DP harus lebih dari 0'
+      if (dpMaxAmount > 0 && dpPayload.amount > dpMaxAmount) {
+        nextErrors.down_payment = `Nominal DP tidak boleh melebihi total invoice (${formatRupiah(dpMaxAmount)})`
+      }
+      if (Object.keys(nextErrors).length > 0) {
+        setErrors(nextErrors)
+        pushToast({ title: 'DP belum valid', description: nextErrors.down_payment, variant: 'error' })
+        return
+      }
+    }
+
+    let dto: Record<string, unknown>
+    if (fullEditable) {
+      dto = {
+        due_date: dueDate,
+        notes: notes || null,
+        payment_method: paymentMethod,
+        bank_account_id: paymentMethod === 'transfer' ? bankAccountId : null,
+        tax_percent: taxEnabled ? taxPercent : 0,
+        pph_percent: pphEnabled ? pphPercent : 0,
+        lampiran_paths: lampiranPaths.length > 0 ? lampiranPaths : null,
+        items: items.map((item, idx) => ({
+          fleet_id: item.fleet_id ?? null,
+          fleet_label: item.fleet_label,
+          description: item.description,
+          period_start: item.period_start,
+          period_end: item.period_end,
+          qty: item.qty,
+          unit: item.unit,
+          unit_price: item.unit_price,
+          sort_order: idx,
+        })),
+        down_payment: dpPayload,
+      }
+      const result = validateUpdateInvoice(dto as Parameters<typeof validateUpdateInvoice>[0])
+      setErrors(result.errors)
+      if (!result.valid) return
+    } else {
+      // Non-draft: hanya kirim down_payment field. BE bypass FINAL_STATUSES check
+      // kalau payload hanya berisi down_payment.
+      dto = { down_payment: dpPayload }
+    }
+
+    const action = await dispatch(updateInvoice({ uuid, dto: dto as Parameters<typeof validateUpdateInvoice>[0] }))
     if (updateInvoice.fulfilled.match(action)) {
       pushToast({ title: 'Invoice Disimpan', description: `Invoice #${invoice?.invoice_number} berhasil diperbarui.`, variant: 'success' })
       router.push(`/invoice/${uuid}`)
@@ -137,11 +195,21 @@ export default function EditInvoicePage({ uuid }: Props) {
       </div>
 
       {/* Edit banner */}
-      <div className="mb-4 rounded-xl p-4 border flex items-center gap-3" style={{ borderColor: '#FDE68A', backgroundColor: '#FFFBEB' }}>
-        <Pencil size={16} style={{ color: '#D97706' }} />
+      <div className="mb-4 rounded-xl p-4 border flex items-center gap-3" style={{ borderColor: fullEditable ? '#FDE68A' : '#BAE6FD', backgroundColor: fullEditable ? '#FFFBEB' : '#F0F9FF' }}>
+        <Pencil size={16} style={{ color: fullEditable ? '#D97706' : '#0369A1' }} />
         <div>
-          <div className="text-sm font-semibold text-amber-800">Mode Edit — Invoice #{invoice?.invoice_number}</div>
-          <div className="text-xs text-amber-700">Anda sedang mengedit invoice draft. Perubahan belum disimpan.</div>
+          <div className="text-sm font-semibold" style={{ color: fullEditable ? '#92400E' : '#0C4A6E' }}>
+            {fullEditable
+              ? `Mode Edit Penuh — Invoice #${invoice?.invoice_number}`
+              : `Mode Edit DP — Invoice #${invoice?.invoice_number}`
+            }
+          </div>
+          <div className="text-xs" style={{ color: fullEditable ? '#B45309' : '#075985' }}>
+            {fullEditable
+              ? 'Anda sedang mengedit invoice draft. Perubahan belum disimpan.'
+              : 'Invoice sudah dirilis. Hanya DP/Uang Muka yang bisa diedit. Item & pajak terkunci.'
+            }
+          </div>
         </div>
         <InvoiceStatusBadge status={invoice?.status ?? 'draft'} size="sm" />
       </div>
@@ -167,18 +235,18 @@ export default function EditInvoicePage({ uuid }: Props) {
               </div>
               <div>
                 <label className="text-xs font-medium text-gray-600 block mb-1">Tanggal Jatuh Tempo *</label>
-                <input type="date" className="form-input w-full" value={dueDate} onChange={e => setDueDate(e.target.value)} />
+                <input type="date" className="form-input w-full disabled:bg-gray-50 disabled:text-gray-500" value={dueDate} onChange={e => setDueDate(e.target.value)} disabled={!fullEditable} />
                 {isDueDatePast && <p className="text-xs text-amber-600 mt-1">⚠ Tanggal jatuh tempo sudah terlewat</p>}
               </div>
               <div>
                 <label className="text-xs font-medium text-gray-600 block mb-1">Catatan ke Customer</label>
-                <textarea className="form-input w-full text-sm" rows={2} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Catatan tambahan..." />
+                <textarea className="form-input w-full text-sm disabled:bg-gray-50 disabled:text-gray-500" rows={2} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Catatan tambahan..." disabled={!fullEditable} />
               </div>
             </div>
           </div>
 
           {/* Items */}
-          <div className="bg-white rounded-xl border p-6" style={{ borderColor: 'var(--border-card)' }}>
+          {fullEditable && <div className="bg-white rounded-xl border p-6" style={{ borderColor: 'var(--border-card)' }}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-semibold">Rincian Item</h2>
               <button onClick={addItem} className="flex items-center gap-1.5 text-sm px-3 py-2 rounded-xl border font-medium" style={{ borderColor: 'var(--green-primary)', color: 'var(--green-primary)' }}>
@@ -208,10 +276,10 @@ export default function EditInvoicePage({ uuid }: Props) {
             <button onClick={addItem} className="mt-4 w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed text-sm font-medium" style={{ borderColor: 'var(--green-primary)', color: 'var(--green-primary)' }}>
               <Plus size={16} />Tambah Item
             </button>
-          </div>
+          </div>}
 
           {/* Tax */}
-          <div className="bg-white rounded-xl border p-6" style={{ borderColor: 'var(--border-card)' }}>
+          {fullEditable && <div className="bg-white rounded-xl border p-6" style={{ borderColor: 'var(--border-card)' }}>
             <h2 className="text-base font-semibold mb-4">Kalkulasi Pajak</h2>
             <InvoiceTaxCalculator
               subtotal={subtotalAmount}
@@ -225,17 +293,95 @@ export default function EditInvoicePage({ uuid }: Props) {
               onTogglePph={e => { setPphEnabled(e); if (e && pphPercent === 0) setPphPercent(2) }}
               onChangePphPercent={setPphPercent}
             />
+          </div>}
+
+          {/* Metode Pembayaran — hanya bisa diedit saat draft */}
+          <div className="bg-white rounded-xl border p-6" style={{ borderColor: 'var(--border-card)' }}>
+            <h2 className="text-base font-semibold mb-4">Metode Pembayaran *</h2>
+            <div className="flex gap-2">
+              {([
+                { value: 'transfer', label: 'Transfer Bank' },
+                { value: 'cash',     label: 'Tunai' },
+                { value: 'check',    label: 'Cek/Giro' },
+              ] as const).map(opt => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => fullEditable && setPaymentMethod(opt.value)}
+                  disabled={!fullEditable}
+                  className={`flex-1 px-3 py-2.5 rounded-lg border text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                    paymentMethod === opt.value ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
+            {paymentMethod === 'transfer' && (
+              <div className="mt-4">
+                <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-primary)' }}>
+                  Rekening Tujuan {fullEditable && <span className="text-red-500">*</span>}
+                </label>
+                {bankAccounts.length === 0 ? (
+                  <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    Belum ada rekening bank. Tambahkan di <strong>Pengaturan → Profil Perusahaan</strong>.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {bankAccounts.map(bank => (
+                      <label
+                        key={bank.id}
+                        className={`flex items-center gap-3 px-4 py-3 rounded-lg border transition-colors ${
+                          fullEditable ? 'cursor-pointer' : 'cursor-default opacity-75'
+                        } ${
+                          bankAccountId === bank.id
+                            ? 'border-green-500 bg-green-50'
+                            : 'border-gray-200 hover:bg-gray-50'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="bank_account_edit"
+                          checked={bankAccountId === bank.id}
+                          onChange={() => fullEditable && setBankAccountId(bank.id)}
+                          disabled={!fullEditable}
+                          className="accent-green-600"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{bank.bank_name}</div>
+                          <div className="text-xs font-mono mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                            {bank.account_number} · a.n. {bank.account_holder}
+                          </div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
+          {/* Down Payment (Uang Muka) — bisa diedit di semua status non-void */}
+          <DownPaymentForm
+            totalAmount={fullEditable ? nettoAmount : (invoice?.total_amount ?? 0)}
+            initialValue={downPayment}
+            onChange={setDownPayment}
+            defaultDate={invoice?.invoice_date}
+            paymentMethod={paymentMethod}
+          />
+          {errors.down_payment && <p className="text-xs text-red-500 -mt-2">{errors.down_payment}</p>}
+
           {/* Lampiran */}
-          <div className="bg-white rounded-xl border p-6" style={{ borderColor: 'var(--border-card)' }}>
+          {fullEditable && <div className="bg-white rounded-xl border p-6" style={{ borderColor: 'var(--border-card)' }}>
             <h2 className="text-base font-semibold mb-1">Lampiran Dokumen</h2>
             <p className="text-xs text-gray-500 mb-4">Upload foto atau file PDF sebagai dokumen pendukung invoice ini.</p>
             <InvoiceLampiranUploadZone
               value={lampiranPaths}
               onChange={setLampiranPaths}
+              invoiceUuid={uuid}
             />
-          </div>
+          </div>}
         </div>
 
         {/* Sidebar */}
@@ -250,6 +396,18 @@ export default function EditInvoicePage({ uuid }: Props) {
                 <span>NETTO</span>
                 <span className="font-mono" style={{ fontFamily: 'var(--font-mono)', color: '#166534' }}>{formatRupiah(nettoAmount)}</span>
               </div>
+              {downPayment && downPayment.amount > 0 && (
+                <>
+                  <div className="flex justify-between text-green-700 border-t pt-2" style={{ borderColor: 'var(--border-card)' }}>
+                    <span>DP Diterima</span>
+                    <span className="font-mono" style={{ fontFamily: 'var(--font-mono)' }}>− {formatRupiah(downPayment.amount)}</span>
+                  </div>
+                  <div className="flex justify-between font-semibold">
+                    <span>Sisa Tagihan</span>
+                    <span className="font-mono" style={{ fontFamily: 'var(--font-mono)' }}>{formatRupiah(Math.max(0, (fullEditable ? nettoAmount : (invoice?.total_amount ?? 0)) - downPayment.amount))}</span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>

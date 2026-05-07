@@ -40,8 +40,9 @@ async function authenticate(req, res, next) {
       return res.status(401).json({ success: false, message: 'Pengguna tidak ditemukan atau tidak aktif.' })
     }
 
-    req.user  = user
-    req.token = token
+    req.user     = user
+    req.token    = token
+    req.tokenExp = payload.exp
     next()
   } catch (err) {
     logger.error('Error di middleware autentikasi:', err)

@@ -39,6 +39,7 @@ const PROJECT_STATUS_CONFIG: Record<string, { label: string; bg: string; color: 
   active: { label: 'Aktif', bg: '#DCFCE7', color: '#15803D' },
   completed: { label: 'Selesai', bg: '#F3F4F6', color: '#374151' },
   cancelled: { label: 'Dibatalkan', bg: '#FEE2E2', color: '#B91C1C' },
+  on_hold: { label: 'Ditunda', bg: '#FEF3C7', color: '#B45309' },
 }
 
 function StatusBadge({ status, config }: { status: string; config: Record<string, { label: string; bg: string; color: string; icon?: React.ReactNode }> }) {
@@ -119,6 +120,11 @@ function InvoiceTable({
                 <td className="px-3 py-2.5 text-right font-mono" style={{ color: 'var(--text-primary)' }}>{formatRupiah(inv.total_amount)}</td>
                 <td className="px-3 py-2.5 text-right font-mono" style={{ color: '#15803D' }}>
                   {inv.paid_amount > 0 ? formatRupiah(inv.paid_amount) : <span style={{ color: '#D1D5DB' }}>—</span>}
+                  {inv.has_down_payment && (inv.down_payment_amount ?? 0) > 0 && (
+                    <div className="text-[11px] font-sans font-semibold mt-0.5" style={{ color: '#166534' }}>
+                      DP {formatRupiah(inv.down_payment_amount ?? 0)}
+                    </div>
+                  )}
                 </td>
                 <td className="px-3 py-2.5 text-right font-mono font-semibold" style={{ color: inv.remaining_amount > 0 ? '#B45309' : '#15803D' }}>
                   {inv.remaining_amount > 0 ? formatRupiah(inv.remaining_amount) : 'Lunas'}
@@ -356,7 +362,7 @@ function ProjectSection({
     project_name: string
     project_code: string
     contract_number: string
-    status: 'active' | 'completed' | 'cancelled'
+    status: 'active' | 'completed' | 'cancelled' | 'on_hold'
     total_invoiced: number
     total_paid: number
     total_outstanding: number

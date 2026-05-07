@@ -1,9 +1,11 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useDispatch, useSelector } from 'react-redux'
 import ModalShell from './ModalShell'
 import { SuratJalan } from '../../../domain/entities/SuratJalan'
-import { armadaOptions, driverOptions } from '../../utils/mockOptions'
+import { AppDispatch, RootState } from '@/store'
+import { fetchDrivers, fetchFleets } from '@/store/slices/masterSlice'
 
 interface AssignModalProps {
   open: boolean
@@ -13,12 +15,33 @@ interface AssignModalProps {
 }
 
 export default function AssignModal({ open, sj, onClose, onConfirm }: AssignModalProps) {
+  const dispatch = useDispatch<AppDispatch>()
+  const { fleets, drivers } = useSelector((state: RootState) => state.master)
   const [fleetId, setFleetId] = useState<number>(sj?.fleet_id || 0)
   const [mode, setMode] = useState<'master' | 'manual'>('master')
   const [driverId, setDriverId] = useState<number | null>(sj?.driver_id || null)
   const [manualName, setManualName] = useState(sj?.driver_name_manual || '')
 
-  const options = useMemo(() => armadaOptions.filter(opt => !opt.isTBD), [])
+  useEffect(() => {
+    if (!open) return
+    if (!fleets.length) dispatch(fetchFleets())
+    if (!drivers.length) dispatch(fetchDrivers())
+  }, [dispatch, open, fleets.length, drivers.length])
+
+  const options = useMemo(() => fleets
+    .filter(fleet => !fleet.is_tbd && fleet.status === 'active')
+    .map(fleet => ({
+      id: fleet.id,
+      name: fleet.name,
+      plate: fleet.plate_number,
+    })), [fleets])
+
+  const driverOptions = useMemo(() => drivers
+    .filter(driver => driver.status === 'active')
+    .map(driver => ({
+      id: driver.id,
+      name: driver.name,
+    })), [drivers])
 
   useEffect(() => {
     if (sj && open) {

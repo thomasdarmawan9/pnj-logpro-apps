@@ -1,6 +1,6 @@
 'use strict'
 
-const { SystemSetting, Project } = require('../models')
+const { SystemSetting } = require('../models')
 
 function applyFormat(format, seq) {
   const now   = new Date()
@@ -8,21 +8,26 @@ function applyFormat(format, seq) {
   const mm    = String(now.getMonth() + 1).padStart(2, '0')
   const dd    = String(now.getDate()).padStart(2, '0')
 
+  // Pakai global regex supaya semua occurrence di-replace, bukan cuma yang
+  // pertama (kasus user pakai format dengan token duplikat).
   return format
-    .replace('{YYYY}', yyyy)
-    .replace('{MM}',   mm)
-    .replace('{DD}',   dd)
-    .replace('{SEQ4}', String(seq).padStart(4, '0'))
-    .replace('{SEQ3}', String(seq).padStart(3, '0'))
-    .replace('{SEQ2}', String(seq).padStart(2, '0'))
-    .replace('{SEQ}',  String(seq))
+    .replace(/\{YYYY\}/g, yyyy)
+    .replace(/\{MM\}/g,   mm)
+    .replace(/\{DD\}/g,   dd)
+    .replace(/\{SEQ4\}/g, String(seq).padStart(4, '0'))
+    .replace(/\{SEQ3\}/g, String(seq).padStart(3, '0'))
+    .replace(/\{SEQ2\}/g, String(seq).padStart(2, '0'))
+    .replace(/\{SEQ\}/g,  String(seq))
 }
 
 async function generateNumber(formatKey, seqKey, transaction) {
-  const [formatSetting, seqSetting] = await Promise.all([
-    SystemSetting.findByPk(formatKey,  { transaction }),
-    SystemSetting.findByPk(seqKey,     { transaction }),
-  ])
+  // Lock seqSetting row sebelum baca supaya concurrent transactions tidak
+  // membaca nilai yang sama dan menghasilkan nomor dokumen duplikat.
+  const formatSetting = await SystemSetting.findByPk(formatKey, { transaction })
+  const seqSetting    = await SystemSetting.findByPk(seqKey, {
+    transaction,
+    lock: transaction.LOCK.UPDATE,
+  })
 
   if (!formatSetting || !seqSetting) {
     throw new Error(`Konfigurasi nomor dokumen tidak ditemukan: ${formatKey} / ${seqKey}`)
@@ -54,11 +59,23 @@ async function generateStockDisbursementNumber(t) {
   return generateNumber('stock_disburse_format', 'stock_disburse_seq_current', t)
 }
 
+/**
+ * Project code pakai sequence counter dari system_settings
+ * (`project_code_seq_current`) — seq-aware & aman concurrent di dalam transaksi.
+ * Format fix: PRJ-YYYY-NNN.
+ */
 async function generateProjectCode(t) {
-  const year  = new Date().getFullYear()
-  const count = await Project.count({ paranoid: false, transaction: t })
-  const seq   = String(count + 1).padStart(3, '0')
-  return `PRJ-${year}-${seq}`
+  const seqSetting = await SystemSetting.findByPk('project_code_seq_current', { transaction: t })
+  if (!seqSetting) {
+    throw new Error('Konfigurasi project_code_seq_current belum di-seed.')
+  }
+  const nextSeq = parseInt(seqSetting.value, 10) + 1
+  await SystemSetting.update(
+    { value: String(nextSeq) },
+    { where: { key: 'project_code_seq_current' }, transaction: t }
+  )
+  const year = new Date().getFullYear()
+  return `PRJ-${year}-${String(nextSeq).padStart(3, '0')}`
 }
 
 module.exports = {

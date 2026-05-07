@@ -1,7 +1,7 @@
 'use client'
 
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
-import { donutData, armadaList } from '@/lib/mockData'
+import type { DonutEntry, ArmadaEntry } from '@/lib/dashboardApi'
 
 const statusDotColor: Record<string, string> = {
   Assigned: '#3E8055',
@@ -15,8 +15,13 @@ const statusDotShape: Record<string, string> = {
   Draft: '○',
 }
 
-export default function DonutChart() {
-  const total = donutData.reduce((sum, d) => sum + d.value, 0)
+interface DonutChartProps {
+  donut: DonutEntry[]
+  armada: ArmadaEntry[]
+}
+
+export default function DonutChart({ donut, armada }: DonutChartProps) {
+  const total = donut.reduce((sum, d) => sum + d.value, 0)
 
   return (
     <div
@@ -37,7 +42,7 @@ export default function DonutChart() {
         <ResponsiveContainer width="100%" height={200}>
           <PieChart>
             <Pie
-              data={donutData}
+              data={donut}
               cx="50%"
               cy="50%"
               innerRadius={60}
@@ -47,7 +52,7 @@ export default function DonutChart() {
               endAngle={-270}
               strokeWidth={0}
             >
-              {donutData.map((entry, index) => (
+              {donut.map((entry, index) => (
                 <Cell key={index} fill={entry.color} />
               ))}
             </Pie>
@@ -70,7 +75,7 @@ export default function DonutChart() {
 
       {/* Legend */}
       <div className="flex justify-center gap-6 mt-4">
-        {donutData.map(d => (
+        {donut.map(d => (
           <div key={d.name} className="flex items-center gap-1.5">
             <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: d.color }} />
             <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>{d.name}</span>
@@ -81,28 +86,32 @@ export default function DonutChart() {
 
       {/* Armada list */}
       <div className="mt-4 space-y-2">
-        {armadaList.map((a, i) => (
-          <div key={i} className="flex items-center gap-2 text-xs py-1.5">
-            <span style={{ color: statusDotColor[a.status] }}>
-              {statusDotShape[a.status]}
-            </span>
-            <span className="font-medium" style={{ color: 'var(--text-primary)' }}>{a.plat}</span>
-            <span style={{ color: 'var(--text-secondary)' }}>— {a.nama}</span>
-            <span
-              className="ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-semibold"
-              style={{
-                backgroundColor: a.status === 'Assigned' ? '#DBEAFE' : a.status === 'Delivered' ? '#DCFCE7' : '#F3F4F6',
-                color: a.status === 'Assigned' ? '#1E40AF' : a.status === 'Delivered' ? '#166534' : '#4B5563',
-              }}
-            >
-              {a.status}
-            </span>
-            <span style={{ color: 'var(--text-secondary)' }}>{a.hari}</span>
-            <span style={{ color: statusDotColor[a.status] }}>
-              {a.aktif ? '●' : '○'}
-            </span>
-          </div>
-        ))}
+        {armada.length === 0 ? (
+          <p className="text-xs text-center py-2" style={{ color: 'var(--text-secondary)' }}>Tidak ada armada aktif bulan ini</p>
+        ) : (
+          armada.map((a) => (
+            <div key={a.fleet_uuid} className="flex items-center gap-2 text-xs py-1.5">
+              <span style={{ color: statusDotColor[a.status] ?? '#9CA3AF' }}>
+                {statusDotShape[a.status] ?? '●'}
+              </span>
+              <span className="font-medium" style={{ color: 'var(--text-primary)' }}>{a.plat}</span>
+              <span style={{ color: 'var(--text-secondary)' }}>— {a.nama}</span>
+              <span
+                className="ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-semibold"
+                style={{
+                  backgroundColor: a.status === 'Assigned' ? '#DBEAFE' : a.status === 'Delivered' ? '#DCFCE7' : '#F3F4F6',
+                  color: a.status === 'Assigned' ? '#1E40AF' : a.status === 'Delivered' ? '#166534' : '#4B5563',
+                }}
+              >
+                {a.status}
+              </span>
+              <span style={{ color: 'var(--text-secondary)' }}>{a.hari}</span>
+              <span style={{ color: statusDotColor[a.status] ?? '#9CA3AF' }}>
+                {a.aktif ? '●' : '○'}
+              </span>
+            </div>
+          ))
+        )}
       </div>
     </div>
   )

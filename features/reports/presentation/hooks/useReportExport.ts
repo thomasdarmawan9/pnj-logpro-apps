@@ -1,42 +1,54 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { useDispatch } from 'react-redux'
-import { AppDispatch } from '@/store'
+import { useDispatch, useSelector } from 'react-redux'
+import { AppDispatch, RootState } from '@/store'
 import { setExporting } from '@/store/slices/reportsSlice'
 import { AgingARSummary } from '@/features/reports/domain/entities/AgingARReport'
 import { ProfitLossSummary } from '@/features/reports/domain/entities/ProfitLossReport'
+import { exportAgingARReport, exportProfitLossReport } from '../../infrastructure/repositories/MockReportsRepository'
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  link.style.display = 'none'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
 
 export function useReportExport() {
   const dispatch = useDispatch<AppDispatch>()
+  const agingFilters = useSelector((state: RootState) => state.reports.agingAR.filters)
+  const profitLossFilters = useSelector((state: RootState) => state.reports.profitLoss.filters)
   const [isExporting, setIsExportingLocal] = useState(false)
 
-  const exportAgingAR = useCallback(async (data: AgingARSummary) => {
+  const exportAgingAR = useCallback(async (_data: AgingARSummary) => {
     setIsExportingLocal(true)
     dispatch(setExporting(true))
     try {
-      const { exportAgingARExcel } = await import('../../application/use-cases/ExportAgingARExcel')
-      await exportAgingARExcel(data)
+      const blob = await exportAgingARReport(agingFilters)
+      downloadBlob(blob, `aging-ar-${new Date().toISOString().slice(0, 10)}.xlsx`)
     } finally {
-      // Simulate minimum export time for UX feedback
-      await new Promise(r => setTimeout(r, 1500))
       setIsExportingLocal(false)
       dispatch(setExporting(false))
     }
-  }, [dispatch])
+  }, [agingFilters, dispatch])
 
-  const exportProfitLoss = useCallback(async (data: ProfitLossSummary) => {
+  const exportProfitLoss = useCallback(async (_data: ProfitLossSummary) => {
     setIsExportingLocal(true)
     dispatch(setExporting(true))
     try {
-      const { exportProfitLossExcel } = await import('../../application/use-cases/ExportProfitLossExcel')
-      await exportProfitLossExcel(data)
+      const blob = await exportProfitLossReport(profitLossFilters)
+      downloadBlob(blob, `profit-loss-${new Date().toISOString().slice(0, 10)}.xlsx`)
     } finally {
-      await new Promise(r => setTimeout(r, 1500))
       setIsExportingLocal(false)
       dispatch(setExporting(false))
     }
-  }, [dispatch])
+  }, [dispatch, profitLossFilters])
 
   return { isExporting, exportAgingAR, exportProfitLoss }
 }

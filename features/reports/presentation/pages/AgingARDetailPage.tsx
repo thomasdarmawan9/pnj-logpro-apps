@@ -52,6 +52,7 @@ const PROJECT_STATUS_CONFIG: Record<string, { label: string; bg: string; color: 
   active:    { label: 'Aktif',     bg: '#DCFCE7', color: '#15803D' },
   completed: { label: 'Selesai',   bg: '#F3F4F6', color: '#374151' },
   cancelled: { label: 'Dibatalkan',bg: '#FEE2E2', color: '#B91C1C' },
+  on_hold:   { label: 'Ditunda',   bg: '#FEF3C7', color: '#B45309' },
 }
 
 const METHOD_LABEL: Record<string, string> = {

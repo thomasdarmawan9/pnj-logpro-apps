@@ -1,7 +1,8 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { FileText, ImageIcon, Paperclip, Trash2, Upload } from 'lucide-react'
+import { deleteInvoiceLampiran, uploadInvoiceLampiran } from '../../infrastructure/repositories/MockInvoiceRepository'
 
 interface LampiranFile {
   name: string
@@ -13,6 +14,7 @@ interface LampiranFile {
 interface InvoiceLampiranUploadZoneProps {
   value: string[]
   onChange: (paths: string[]) => void
+  invoiceUuid?: string
 }
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
@@ -23,27 +25,33 @@ function getFileType(file: File): 'image' | 'pdf' {
   return file.type === 'application/pdf' ? 'pdf' : 'image'
 }
 
-function generateMockPath(file: File): string {
+function generateLocalPath(file: File): string {
   return `/mock/lampiran/${file.name.replace(/\s+/g, '-').toLowerCase()}`
 }
 
-export default function InvoiceLampiranUploadZone({ value, onChange }: InvoiceLampiranUploadZoneProps) {
+function toEntry(path: string): LampiranFile {
+  return {
+    name: path.split('/').pop() ?? path,
+    type: path.endsWith('.pdf') ? 'pdf' : 'image',
+    preview: null,
+    path,
+  }
+}
+
+export default function InvoiceLampiranUploadZone({ value, onChange, invoiceUuid }: InvoiceLampiranUploadZoneProps) {
   const inputRef = useRef<HTMLInputElement>(null)
-  const [files, setFiles] = useState<LampiranFile[]>(() =>
-    value.map(path => ({
-      name: path.split('/').pop() ?? path,
-      type: path.endsWith('.pdf') ? 'pdf' : 'image',
-      preview: null,
-      path,
-    }))
-  )
+  const [files, setFiles] = useState<LampiranFile[]>(() => value.map(toEntry))
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isDragOver, setIsDragOver] = useState(false)
 
   const isFull = files.length >= MAX_FILES
 
-  const handleFiles = (incoming: FileList | null) => {
+  useEffect(() => {
+    setFiles(value.map(toEntry))
+  }, [value])
+
+  const handleFiles = async (incoming: FileList | null) => {
     if (!incoming) return
     setError(null)
 
@@ -68,6 +76,25 @@ export default function InvoiceLampiranUploadZone({ value, onChange }: InvoiceLa
     if (!valid.length) return
 
     setUploading(true)
+
+    if (invoiceUuid) {
+      try {
+        let latestPaths = files.map(file => file.path)
+        for (const file of valid) {
+          const invoice = await uploadInvoiceLampiran(invoiceUuid, file)
+          latestPaths = invoice.lampiran_paths ?? []
+        }
+        onChange(latestPaths)
+        setFiles(latestPaths.map(toEntry))
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Gagal mengunggah lampiran.')
+      } finally {
+        setUploading(false)
+        if (inputRef.current) inputRef.current.value = ''
+      }
+      return
+    }
+
     const newEntries: LampiranFile[] = []
     let processed = 0
 
@@ -76,13 +103,13 @@ export default function InvoiceLampiranUploadZone({ value, onChange }: InvoiceLa
       if (fileType === 'image') {
         const reader = new FileReader()
         reader.onload = () => {
-          newEntries.push({ name: file.name, type: 'image', preview: reader.result as string, path: generateMockPath(file) })
+          newEntries.push({ name: file.name, type: 'image', preview: reader.result as string, path: generateLocalPath(file) })
           processed++
           if (processed === valid.length) finalize(newEntries)
         }
         reader.readAsDataURL(file)
       } else {
-        newEntries.push({ name: file.name, type: 'pdf', preview: null, path: generateMockPath(file) })
+        newEntries.push({ name: file.name, type: 'pdf', preview: null, path: generateLocalPath(file) })
         processed++
         if (processed === valid.length) finalize(newEntries)
       }
@@ -101,7 +128,20 @@ export default function InvoiceLampiranUploadZone({ value, onChange }: InvoiceLa
     }, 800)
   }
 
-  const removeFile = (index: number) => {
+  const removeFile = async (index: number) => {
+    const target = files[index]
+    if (invoiceUuid && target) {
+      setError(null)
+      try {
+        const invoice = await deleteInvoiceLampiran(invoiceUuid, target.path)
+        const paths = invoice.lampiran_paths ?? []
+        setFiles(paths.map(toEntry))
+        onChange(paths)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Gagal menghapus lampiran.')
+      }
+      return
+    }
     setFiles(prev => {
       const updated = prev.filter((_, i) => i !== index)
       onChange(updated.map(f => f.path))

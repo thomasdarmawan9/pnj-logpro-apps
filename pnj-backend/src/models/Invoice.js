@@ -48,10 +48,22 @@ module.exports = (sequelize) => {
       type:         DataTypes.DECIMAL(15, 2),
       defaultValue: 0,
     },
+    pph_percent: {
+      type:         DataTypes.DECIMAL(5, 2),
+      defaultValue: 0,
+      allowNull:    false,
+      comment:      'Persentase PPh — dikurangi dari total invoice',
+    },
+    pph_amount: {
+      type:         DataTypes.DECIMAL(15, 2),
+      defaultValue: 0,
+      allowNull:    false,
+      comment:      'subtotal × pph_percent / 100',
+    },
     total_amount: {
       type:      DataTypes.DECIMAL(15, 2),
       allowNull: false,
-      comment:   'Netto = subtotal + tax_amount',
+      comment:   'Netto = subtotal + tax_amount - pph_amount',
     },
     paid_amount: {
       type:         DataTypes.DECIMAL(15, 2),
@@ -72,6 +84,20 @@ module.exports = (sequelize) => {
     },
     void_reason: {
       type:      DataTypes.TEXT,
+      allowNull: true,
+    },
+    lampiran_paths: {
+      type:      DataTypes.ARRAY(DataTypes.STRING(255)),
+      allowNull: true,
+      comment:   'Path lampiran tambahan relatif terhadap UPLOAD_DIR',
+    },
+    payment_method: {
+      type:         DataTypes.STRING(20),
+      defaultValue: 'transfer',
+      allowNull:    false,
+    },
+    bank_account_id: {
+      type:      DataTypes.BIGINT,
       allowNull: true,
     },
     created_by: {

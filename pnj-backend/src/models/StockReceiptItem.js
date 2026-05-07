@@ -27,6 +27,11 @@ module.exports = (sequelize) => {
       type:      DataTypes.DECIMAL(12, 2),
       allowNull: false,
     },
+    kategori_name: {
+      type:      DataTypes.STRING(50),
+      allowNull: true,
+      comment:   'Kategori per baris (mis. "Batu Mangan", "Batu Chrome"). Opsional.',
+    },
     notes: {
       type:      DataTypes.TEXT,
       allowNull: true,

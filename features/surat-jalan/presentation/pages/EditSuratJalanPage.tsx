@@ -1,19 +1,20 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useDispatch } from 'react-redux'
+import { useEffect, useMemo, useState } from 'react'
+import { useDispatch, useSelector } from 'react-redux'
 import { useRouter } from 'next/navigation'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { ArrowLeft, ArrowRightLeft } from 'lucide-react'
-import { AppDispatch } from '@/store'
+import { AppDispatch, RootState } from '@/store'
 import { updateSuratJalan } from '@/store/slices/suratJalanSlice'
+import { fetchDrivers, fetchFleets } from '@/store/slices/masterSlice'
 import { useToast } from '@/components/toast/useToast'
 import useSuratJalanDetail from '../hooks/useSuratJalanDetail'
 import useSuratJalanForm from '../hooks/useSuratJalanForm'
 import SJFormArmadaSection from '../components/SJFormArmadaSection'
 import SJFormSupirSection from '../components/SJFormSupirSection'
 import SJLampiranUploadZone from '../components/SJLampiranUploadZone'
-import { armadaOptions, driverOptions } from '../utils/mockOptions'
+import type { ArmadaOption, DriverOption } from '../utils/mockOptions'
 import { StatusOperasional } from '../../domain/entities/SuratJalan'
 
 interface EditSuratJalanPageProps {
@@ -24,13 +25,38 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
   const router = useRouter()
   const dispatch = useDispatch<AppDispatch>()
   const { push: pushToast } = useToast()
+  const { fleets, drivers } = useSelector((state: RootState) => state.master)
   const { selectedSJ, isDetailLoading } = useSuratJalanDetail(uuid)
   const { form, setForm, updateField, errors, validate } = useSuratJalanForm({ mode: 'edit' })
 
   const [driverMode, setDriverMode] = useState<'master' | 'tbd'>('master')
-  const [selectedArmada, setSelectedArmada] = useState(armadaOptions.find(a => a.id === form.fleet_id) || null)
-  const [selectedDriver, setSelectedDriver] = useState(driverOptions.find(d => d.id === form.driver_id) || null)
+  const [selectedArmada, setSelectedArmada] = useState<ArmadaOption | null>(null)
+  const [selectedDriver, setSelectedDriver] = useState<DriverOption | null>(null)
   const [lampiranPaths, setLampiranPaths] = useState<string[]>([])
+
+  useEffect(() => {
+    if (!fleets.length) dispatch(fetchFleets())
+    if (!drivers.length) dispatch(fetchDrivers())
+  }, [dispatch, fleets.length, drivers.length])
+
+  const armadaOptions = useMemo(() => fleets
+    .filter(fleet => fleet.status === 'active' || fleet.id === selectedSJ?.fleet_id)
+    .map(fleet => ({
+      id: fleet.id,
+      name: fleet.name,
+      plate: fleet.plate_number,
+      isTBD: fleet.is_tbd,
+      status: fleet.status === 'active' ? 'active' : 'inactive',
+    } satisfies ArmadaOption)), [fleets, selectedSJ?.fleet_id])
+
+  const driverOptions = useMemo(() => drivers
+    .filter(driver => driver.status === 'active' || driver.id === selectedSJ?.driver_id)
+    .map(driver => ({
+      id: driver.id,
+      name: driver.name,
+      simExpiredAt: driver.sim_expired_at,
+      status: driver.status,
+    } satisfies DriverOption)), [drivers, selectedSJ?.driver_id])
 
   useEffect(() => {
     if (selectedSJ) {
@@ -57,7 +83,7 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
       if (selectedSJ.driver_id) setDriverMode('master')
       else setDriverMode('tbd')
     }
-  }, [selectedSJ, router, setForm])
+  }, [selectedSJ, router, setForm, armadaOptions, driverOptions])
 
   const handleSubmit = () => {
     const valid = validate()
@@ -72,7 +98,6 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
         origin: form.origin,
         destination: form.destination,
         cargo_description: form.cargo_description || null,
-        operational_cost: form.operational_cost,
         internal_notes: form.internal_notes || null,
         lampiran_paths: lampiranPaths.length > 0 ? lampiranPaths : null,
       },
@@ -140,6 +165,7 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
 
           <SJFormArmadaSection
             value={selectedArmada}
+            options={armadaOptions}
             onChange={(armada) => {
               if (isAssigned) {
                 setSelectedArmada(armada)
@@ -156,6 +182,7 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
           <SJFormSupirSection
             mode={driverMode}
             driver={selectedDriver}
+            options={driverOptions}
             onModeChange={(mode) => {
               setDriverMode(mode)
               if (mode === 'master') {
@@ -225,17 +252,8 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
           </div>
 
           <div className="rounded-xl bg-white p-6 border" style={{ borderColor: 'var(--border-card)' }}>
-            <div className="text-sm font-semibold mb-4">Biaya Operasional</div>
-            <label className="text-xs font-medium" style={{ color: '#374151' }}>
-              Biaya Operasional
-              <input
-                className="form-input w-full mt-1"
-                value={form.operational_cost}
-                onChange={e => updateField('operational_cost', Number(e.target.value))}
-              />
-            </label>
-
-            <label className="text-xs font-medium mt-4 block" style={{ color: '#374151' }}>
+            <div className="text-sm font-semibold mb-4">Catatan Internal</div>
+            <label className="text-xs font-medium block" style={{ color: '#374151' }}>
               Catatan Internal
               <textarea
                 className="form-input w-full mt-1"
@@ -252,6 +270,7 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
             <SJLampiranUploadZone
               value={lampiranPaths}
               onChange={setLampiranPaths}
+              sjUuid={selectedSJ.uuid}
             />
           </div>
 

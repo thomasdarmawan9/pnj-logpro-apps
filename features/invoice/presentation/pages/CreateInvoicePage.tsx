@@ -1,18 +1,21 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useDispatch, useSelector } from 'react-redux'
 import { Plus, ArrowLeft, Info } from 'lucide-react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { AppDispatch, RootState } from '@/store'
 import { createInvoice } from '@/store/slices/invoiceSlice'
+import { fetchBankAccounts } from '@/store/slices/settingsSlice'
 import { useToast } from '@/components/toast/useToast'
 import { validateCreateInvoice } from '../../application/validators/InvoiceValidator'
 import useInvoiceForm from '../hooks/useInvoiceForm'
 import { useInvoiceItems } from '../hooks/useInvoiceItems'
 import InvoiceItemRow from '../components/InvoiceItemRow'
 import InvoiceTaxCalculator from '../components/InvoiceTaxCalculator'
+import DownPaymentForm from '../components/DownPaymentForm'
+import type { CreateDownPaymentDto } from '../../application/dto/CreateInvoiceDto'
 
 function formatRupiah(amount: number): string {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(amount)
@@ -24,9 +27,14 @@ export default function CreateInvoicePage() {
   const { push: pushToast } = useToast()
   const role = useSelector((state: RootState) => state.auth.user?.role ?? 'super_admin')
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [dragFrom, setDragFrom] = useState<number | null>(null)
   const [dragOver, setDragOver] = useState<number | null>(null)
+  const [paymentMethod, setPaymentMethod] = useState<'transfer' | 'cash' | 'check'>('transfer')
+  const [bankAccountId, setBankAccountId] = useState<number | null>(null)
+  const [downPayment, setDownPayment] = useState<CreateDownPaymentDto | null>(null)
   const formRef = useRef<HTMLDivElement>(null)
+  const bankAccounts = useSelector((state: RootState) => state.settings.bankAccounts).filter(b => b.is_active)
 
   const {
     header, taxPercent, taxEnabled, pphPercent, pphEnabled,
@@ -39,11 +47,22 @@ export default function CreateInvoicePage() {
     items, subtotalAmount, addItem, updateItem, removeItem, reorderItems, calculateTax, totalAmount,
   } = useInvoiceItems()
 
-  if (role === 'admin_ops') {
-    pushToast({ title: 'Akses Ditolak', description: 'Anda tidak memiliki akses ke halaman ini.', variant: 'error' })
-    router.replace('/dashboard')
-    return null
-  }
+  useEffect(() => {
+    if (role === 'admin_ops') {
+      pushToast({ title: 'Akses Ditolak', description: 'Anda tidak memiliki akses ke halaman ini.', variant: 'error' })
+      router.replace('/dashboard')
+    }
+  }, [role, router, pushToast])
+
+  useEffect(() => { dispatch(fetchBankAccounts()) }, [dispatch])
+
+  useEffect(() => {
+    if (bankAccounts.length > 0 && bankAccountId === null) {
+      setBankAccountId(bankAccounts[0].id)
+    }
+  }, [bankAccounts, bankAccountId])
+
+  if (role === 'admin_ops') return null
 
   const taxAmount = taxEnabled ? calculateTax(subtotalAmount, taxPercent) : 0
   const pphAmount = pphEnabled ? Math.round(subtotalAmount * pphPercent / 100) : 0
@@ -53,6 +72,8 @@ export default function CreateInvoicePage() {
     project_id: header.project_id!,
     invoice_date: header.invoice_date,
     due_date: header.due_date,
+    payment_method: paymentMethod,
+    bank_account_id: paymentMethod === 'transfer' ? bankAccountId : null,
     tax_percent: taxEnabled ? taxPercent : 0,
     pph_percent: pphEnabled ? pphPercent : 0,
     notes: header.notes || null,
@@ -68,33 +89,55 @@ export default function CreateInvoicePage() {
       sort_order: idx,
     })),
     send_immediately: sendImmediately,
+    // Saat create, kirim DP kalau ada (toggle ON dengan amount > 0).
+    // Kalau `null` kita skip key — BE tidak butuh field ini saat create kosong.
+    ...(downPayment ? { down_payment: downPayment } : {}),
   })
 
   const validate = () => {
     const result = validateCreateInvoice(getDto())
+    if (downPayment) {
+      if (!downPayment.payment_date) result.errors.down_payment = 'Tanggal DP wajib diisi'
+      if (downPayment.amount <= 0) result.errors.down_payment = 'Nominal DP harus lebih dari 0'
+      if (downPayment.amount > nettoAmount) result.errors.down_payment = `Nominal DP tidak boleh melebihi total invoice (${formatRupiah(nettoAmount)})`
+      result.valid = Object.keys(result.errors).length === 0
+    }
     setErrors(result.errors)
+    if (!result.valid) {
+      pushToast({
+        title: 'Invoice belum lengkap',
+        description: Object.values(result.errors)[0] || 'Lengkapi data invoice terlebih dahulu.',
+        variant: 'error',
+      })
+    }
     return result.valid
   }
 
   const handleSaveDraft = async () => {
-    if (!validate()) return
+    if (isSubmitting || !validate()) return
+    setIsSubmitting(true)
     const result = await dispatch(createInvoice(getDto(false)))
+    setIsSubmitting(false)
     if (createInvoice.fulfilled.match(result)) {
       pushToast({ title: 'Invoice Disimpan', description: `Invoice #${result.payload.invoice_number} berhasil dibuat sebagai draft.`, variant: 'success' })
       router.push('/invoice')
+      return
     }
+    pushToast({ title: 'Gagal membuat invoice', description: (result.payload as string) || 'Invoice tidak tersimpan.', variant: 'error' })
   }
 
   const handleSaveAndSend = async () => {
-    if (!validate()) return
+    if (isSubmitting || !validate()) return
+    setIsSubmitting(true)
     const result = await dispatch(createInvoice(getDto(true)))
+    setIsSubmitting(false)
     if (createInvoice.fulfilled.match(result)) {
       pushToast({ title: 'Invoice Dikirim', description: `Invoice #${result.payload.invoice_number} berhasil dibuat dan dikirim.`, variant: 'success' })
       router.push('/invoice')
+      return
     }
+    pushToast({ title: 'Gagal membuat invoice', description: (result.payload as string) || 'Invoice tidak tersimpan.', variant: 'error' })
   }
-
-  const formValid = header.project_id && items.length > 0 && Object.keys(errors).length === 0
 
   return (
     <DashboardLayout>
@@ -251,6 +294,84 @@ export default function CreateInvoicePage() {
               onChangePphPercent={setPphPercent}
             />
           </div>
+
+          {/* Section D: Metode Pembayaran */}
+          <div className="bg-white rounded-xl border p-6" style={{ borderColor: 'var(--border-card)' }}>
+            <h2 className="text-base font-semibold mb-4">Metode Pembayaran *</h2>
+            <div className="flex gap-2">
+              {([
+                { value: 'transfer', label: 'Transfer Bank' },
+                { value: 'cash',     label: 'Tunai' },
+                { value: 'check',    label: 'Cek/Giro' },
+              ] as const).map(opt => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => {
+                    setPaymentMethod(opt.value)
+                    setErrors(prev => ({ ...prev, payment_method: '', bank_account_id: '' }))
+                  }}
+                  className={`flex-1 px-3 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                    paymentMethod === opt.value ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            {errors.payment_method && <p className="text-xs text-red-500 mt-2">{errors.payment_method}</p>}
+
+            {paymentMethod === 'transfer' && (
+              <div className="mt-4">
+                <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-primary)' }}>
+                  Rekening Tujuan <span className="text-red-500">*</span>
+                </label>
+                {bankAccounts.length === 0 ? (
+                  <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    Belum ada rekening bank. Tambahkan di <strong>Pengaturan → Profil Perusahaan</strong>.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {bankAccounts.map(bank => (
+                      <label
+                        key={bank.id}
+                        className={`flex items-center gap-3 px-4 py-3 rounded-lg border cursor-pointer transition-colors ${
+                          bankAccountId === bank.id
+                            ? 'border-green-500 bg-green-50'
+                            : 'border-gray-200 hover:bg-gray-50'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="bank_account"
+                          checked={bankAccountId === bank.id}
+                          onChange={() => { setBankAccountId(bank.id); setErrors(prev => ({ ...prev, bank_account_id: '' })) }}
+                          className="accent-green-600"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{bank.bank_name}</div>
+                          <div className="text-xs font-mono mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                            {bank.account_number} · a.n. {bank.account_holder}
+                          </div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                )}
+                {errors.bank_account_id && <p className="text-xs text-red-500 mt-2">{errors.bank_account_id}</p>}
+              </div>
+            )}
+          </div>
+
+          {/* Section E: Down Payment (Uang Muka) */}
+          <DownPaymentForm
+            totalAmount={nettoAmount}
+            initialValue={downPayment}
+            onChange={setDownPayment}
+            defaultDate={header.invoice_date}
+            paymentMethod={paymentMethod}
+          />
+          {errors.down_payment && <p className="text-xs text-red-500 -mt-2">{errors.down_payment}</p>}
         </div>
 
         {/* Right: Sidebar */}
@@ -272,6 +393,12 @@ export default function CreateInvoicePage() {
               {taxEnabled && <div><span className="text-gray-400">PPN {taxPercent}%  :</span> + {formatRupiah(taxAmount)}</div>}
               {pphEnabled && <div style={{ color: '#DC2626' }}><span className="text-gray-400">PPh {pphPercent}%  :</span> − {formatRupiah(pphAmount)}</div>}
               <div className="font-bold"><span className="text-gray-400">NETTO     :</span> {formatRupiah(nettoAmount)}</div>
+              {downPayment && downPayment.amount > 0 && (
+                <>
+                  <div style={{ color: '#15803D' }}><span className="text-gray-400">DP        :</span> − {formatRupiah(downPayment.amount)}</div>
+                  <div className="font-bold"><span className="text-gray-400">SISA      :</span> {formatRupiah(Math.max(0, nettoAmount - downPayment.amount))}</div>
+                </>
+              )}
             </div>
           </div>
 
@@ -308,19 +435,19 @@ export default function CreateInvoicePage() {
         <button onClick={() => router.back()} className="px-4 py-2 rounded-xl border text-sm" style={{ borderColor: 'var(--border-card)' }}>Batal</button>
         <button
           onClick={handleSaveDraft}
-          disabled={!formValid}
+          disabled={isSubmitting}
           className="px-4 py-2 rounded-xl border text-sm font-medium disabled:opacity-40"
           style={{ borderColor: 'var(--green-primary)', color: 'var(--green-primary)' }}
         >
-          Simpan sebagai Draft
+          {isSubmitting ? 'Menyimpan...' : 'Simpan sebagai Draft'}
         </button>
         <button
           onClick={handleSaveAndSend}
-          disabled={!formValid}
+          disabled={isSubmitting}
           className="px-4 py-2 rounded-xl text-sm font-medium text-white disabled:opacity-40"
           style={{ backgroundColor: 'var(--green-primary)' }}
         >
-          Simpan & Kirim ke Customer →
+          {isSubmitting ? 'Menyimpan...' : 'Simpan & Kirim ke Customer →'}
         </button>
       </div>
       <div className="h-20" /> {/* Spacer for sticky bar */}

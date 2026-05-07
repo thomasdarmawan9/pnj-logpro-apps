@@ -58,8 +58,27 @@ export interface Payment {
   method: 'transfer' | 'cash' | 'check'
   proof_path: string | null
   notes: string | null
+  is_down_payment?: boolean
   created_by_name: string
   created_at: string
+}
+
+/**
+ * Down Payment row — Payment dengan is_down_payment=true.
+ * BE response sudah pisahkan ke field `down_payment` (1 row max per invoice).
+ */
+export interface DownPayment {
+  id?: number
+  uuid: string
+  invoice_id?: number
+  payment_date: string
+  amount: number
+  method: 'transfer' | 'cash' | 'check'
+  proof_path: string | null
+  notes: string | null
+  is_down_payment: true
+  created_by_name?: string
+  created_at?: string
 }
 
 export interface Invoice {
@@ -90,15 +109,29 @@ export interface Invoice {
   pph_percent: number
   pph_amount: number
   total_amount: number
-  paid_amount: number
-  remaining_amount: number
+  paid_amount: number          // termasuk DP + pembayaran reguler
+  remaining_amount: number     // total_amount - paid_amount
+  // ── Down Payment (DP / Uang Muka) ─────────────────────────────────────
+  // BE pisahkan DP dari `payments[]` agar UI gampang render section terpisah.
+  down_payment?: DownPayment | null
+  down_payment_amount?: number  // 0 kalau tidak ada DP
+  has_down_payment?: boolean
+  // ───────────────────────────────────────────────────────────────────────
+  payment_method: 'transfer' | 'cash' | 'check'
+  bank_account_id?: number | null
+  bank_account?: {
+    id: number
+    bank_name: string
+    account_number: string
+    account_holder: string
+  } | null
   status: InvoiceStatus
   notes: string | null
   sent_at: string | null
   void_reason: string | null
   lampiran_paths: string[] | null
   attached_sj: AttachedSJ[]
-  payments: Payment[]
+  payments: Payment[]          // hanya pembayaran reguler (DP terpisah)
   created_by?: number
   created_at?: string
   updated_at?: string

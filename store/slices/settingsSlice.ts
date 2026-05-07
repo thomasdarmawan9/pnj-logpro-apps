@@ -1,18 +1,20 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit'
 import { SystemUser } from '@/features/settings/domain/entities/SystemUser'
-import { NumberingSettings, CompanyProfile } from '@/features/settings/domain/entities/SystemSetting'
+import { NumberingSettings, CompanyProfile, BankAccount } from '@/features/settings/domain/entities/SystemSetting'
 import { settingsRepository } from '@/features/settings/infrastructure/repositories/MockSettingsRepository'
 
 interface SettingsState {
   users: SystemUser[]
   numbering: NumberingSettings | null
   company: CompanyProfile | null
+  bankAccounts: BankAccount[]
   isLoading: boolean
   isSaving: boolean
   error: string | null
   modals: {
     userForm:      { open: boolean; data: SystemUser | null }
     resetPassword: { open: boolean; userUuid: string | null }
+    bankForm:      { open: boolean; data: BankAccount | null }
   }
 }
 
@@ -20,12 +22,14 @@ const initialState: SettingsState = {
   users: [],
   numbering: null,
   company: null,
+  bankAccounts: [],
   isLoading: false,
   isSaving: false,
   error: null,
   modals: {
     userForm:      { open: false, data: null },
     resetPassword: { open: false, userUuid: null },
+    bankForm:      { open: false, data: null },
   },
 }
 
@@ -61,6 +65,20 @@ export const saveCompanyProfile = createAsyncThunk('settings/saveCompany', async
   catch (e) { return rejectWithValue((e as Error).message) }
 })
 
+export const fetchBankAccounts = createAsyncThunk('settings/fetchBankAccounts', async () => settingsRepository.getBankAccounts())
+export const createBankAccount = createAsyncThunk('settings/createBankAccount', async (data: Omit<BankAccount, 'id' | 'uuid'>, { rejectWithValue }) => {
+  try { return await settingsRepository.createBankAccount(data) }
+  catch (e) { return rejectWithValue((e as Error).message) }
+})
+export const updateBankAccount = createAsyncThunk('settings/updateBankAccount', async ({ uuid, data }: { uuid: string; data: Partial<Omit<BankAccount, 'id' | 'uuid'>> }, { rejectWithValue }) => {
+  try { return await settingsRepository.updateBankAccount(uuid, data) }
+  catch (e) { return rejectWithValue((e as Error).message) }
+})
+export const deleteBankAccount = createAsyncThunk('settings/deleteBankAccount', async (uuid: string, { rejectWithValue }) => {
+  try { await settingsRepository.deleteBankAccount(uuid); return uuid }
+  catch (e) { return rejectWithValue((e as Error).message) }
+})
+
 const settingsSlice = createSlice({
   name: 'settings',
   initialState,
@@ -76,6 +94,12 @@ const settingsSlice = createSlice({
     },
     closeResetPassword(state) {
       state.modals.resetPassword = { open: false, userUuid: null }
+    },
+    openBankForm(state, action: PayloadAction<BankAccount | null>) {
+      state.modals.bankForm = { open: true, data: action.payload }
+    },
+    closeBankForm(state) {
+      state.modals.bankForm = { open: false, data: null }
     },
     clearError(state) { state.error = null },
   },
@@ -121,8 +145,28 @@ const settingsSlice = createSlice({
       .addCase(saveCompanyProfile.pending, state => { state.isSaving = true })
       .addCase(saveCompanyProfile.fulfilled, (state, a) => { state.isSaving = false; state.company = a.payload })
       .addCase(saveCompanyProfile.rejected, (state, a) => { state.isSaving = false; state.error = a.payload as string })
+
+      .addCase(fetchBankAccounts.fulfilled, (state, a) => { state.bankAccounts = a.payload })
+      .addCase(createBankAccount.pending, state => { state.isSaving = true })
+      .addCase(createBankAccount.fulfilled, (state, a) => {
+        state.isSaving = false
+        state.bankAccounts.push(a.payload)
+        state.modals.bankForm = { open: false, data: null }
+      })
+      .addCase(createBankAccount.rejected, (state, a) => { state.isSaving = false; state.error = a.payload as string })
+      .addCase(updateBankAccount.pending, state => { state.isSaving = true })
+      .addCase(updateBankAccount.fulfilled, (state, a) => {
+        state.isSaving = false
+        const idx = state.bankAccounts.findIndex(b => b.uuid === a.payload.uuid)
+        if (idx !== -1) state.bankAccounts[idx] = a.payload
+        state.modals.bankForm = { open: false, data: null }
+      })
+      .addCase(updateBankAccount.rejected, (state, a) => { state.isSaving = false; state.error = a.payload as string })
+      .addCase(deleteBankAccount.fulfilled, (state, a) => {
+        state.bankAccounts = state.bankAccounts.filter(b => b.uuid !== a.payload)
+      })
   },
 })
 
-export const { openUserForm, closeUserForm, openResetPassword, closeResetPassword, clearError } = settingsSlice.actions
+export const { openUserForm, closeUserForm, openResetPassword, closeResetPassword, openBankForm, closeBankForm, clearError } = settingsSlice.actions
 export default settingsSlice.reducer

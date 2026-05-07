@@ -4,12 +4,40 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
 } from 'recharts'
-import { revenueData } from '@/lib/mockData'
+import type { RevenueMonthEntry, RevenueSummary } from '@/lib/dashboardApi'
 
-export default function RevenueChart() {
-  const avgRevenue = Math.round(revenueData.reduce((s, d) => s + d.revenue, 0) / revenueData.length)
-  const totalBiaya = revenueData.reduce((s, d) => s + d.biaya, 0)
-  const avgMargin = ((revenueData.reduce((s, d) => s + ((d.revenue - d.biaya) / d.revenue * 100), 0)) / revenueData.length).toFixed(1)
+function formatRupiahJuta(raw: number) {
+  const juta = Math.round(raw / 1_000_000)
+  if (juta >= 1000) return `Rp ${(juta / 1000).toFixed(2)}M`
+  return `Rp ${juta}Jt`
+}
+
+interface RevenueChartProps {
+  data: RevenueMonthEntry[]
+  summary: RevenueSummary
+}
+
+export default function RevenueChart({ data, summary }: RevenueChartProps) {
+  const analysisRows = [
+    {
+      label: 'Revenue Tertinggi',
+      value: summary.highest_revenue
+        ? `${summary.highest_revenue.bulan} (${formatRupiahJuta(summary.highest_revenue.value)})`
+        : '—',
+    },
+    {
+      label: 'Biaya Tertinggi',
+      value: summary.highest_biaya
+        ? `${summary.highest_biaya.bulan} (${formatRupiahJuta(summary.highest_biaya.value)})`
+        : '—',
+    },
+    {
+      label: 'Margin Terbaik',
+      value: summary.best_margin
+        ? `${summary.best_margin.bulan} (${summary.best_margin.percent}%)`
+        : '—',
+    },
+  ]
 
   return (
     <div
@@ -29,19 +57,19 @@ export default function RevenueChart() {
       <div className="grid grid-cols-3 gap-4 mt-4 mb-4">
         <div>
           <div className="text-base font-bold" style={{ fontFamily: "'JetBrains Mono', monospace", color: 'var(--text-primary)' }}>
-            Rp {avgRevenue >= 1000 ? (avgRevenue / 1000).toFixed(2) + 'M' : avgRevenue + 'Jt'}
+            {formatRupiahJuta(summary.avg_revenue)}
           </div>
           <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>Avg Revenue</div>
         </div>
         <div>
           <div className="text-base font-bold" style={{ fontFamily: "'JetBrains Mono', monospace", color: 'var(--text-primary)' }}>
-            Rp {totalBiaya}Jt
+            {formatRupiahJuta(summary.total_biaya)}
           </div>
           <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>Total Biaya</div>
         </div>
         <div>
           <div className="text-base font-bold" style={{ fontFamily: "'JetBrains Mono', monospace", color: 'var(--text-primary)' }}>
-            {avgMargin}%
+            {summary.avg_margin !== null ? `${summary.avg_margin}%` : '—'}
           </div>
           <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>Margin Rata-rata</div>
         </div>
@@ -50,7 +78,7 @@ export default function RevenueChart() {
       {/* Chart */}
       <div style={{ height: '180px' }}>
         <ResponsiveContainer width="100%" height={180}>
-          <LineChart data={revenueData} margin={{ top: 5, right: 10, bottom: 5, left: -20 }}>
+          <LineChart data={data} margin={{ top: 5, right: 10, bottom: 5, left: -20 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
             <XAxis
               dataKey="bulan"
@@ -105,11 +133,7 @@ export default function RevenueChart() {
 
       {/* Analysis */}
       <div className="mt-4 space-y-1.5">
-        {[
-          { label: 'Revenue Tertinggi', value: 'Maret 2026 (Rp 1.24M)' },
-          { label: 'Biaya Tertinggi', value: 'Januari 2026 (Rp 320Jt)' },
-          { label: 'Margin Terbaik', value: 'Oktober 2025 (81.4%)' },
-        ].map(row => (
+        {analysisRows.map(row => (
           <div key={row.label} className="flex justify-between text-xs py-1 border-t" style={{ borderColor: 'var(--border-light)' }}>
             <span style={{ color: 'var(--text-secondary)' }}>{row.label}</span>
             <span className="font-medium" style={{ color: 'var(--text-primary)' }}>{row.value}</span>
