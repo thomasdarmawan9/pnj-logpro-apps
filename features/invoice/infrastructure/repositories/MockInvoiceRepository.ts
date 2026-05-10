@@ -7,7 +7,7 @@ import { RecordPaymentDto } from '../../application/dto/RecordPaymentDto'
 
 type ApiId = number | string | null
 
-type ApiInvoiceItem = Omit<InvoiceItem, 'id' | 'invoice_id' | 'fleet_id' | 'qty' | 'unit_price' | 'subtotal' | 'sort_order'> & {
+type ApiInvoiceItem = Omit<InvoiceItem, 'id' | 'invoice_id' | 'fleet_id' | 'qty' | 'unit_price' | 'subtotal' | 'sort_order' | 'source_sj_id'> & {
   id?: ApiId
   invoice_id?: ApiId
   fleet_id?: ApiId
@@ -15,6 +15,7 @@ type ApiInvoiceItem = Omit<InvoiceItem, 'id' | 'invoice_id' | 'fleet_id' | 'qty'
   unit_price: number | string
   subtotal: number | string
   sort_order: number | string
+  source_sj_id?: ApiId
 }
 
 type ApiAttachedSJ = Omit<AttachedSJ, 'fleet_label' | 'driver_name'> & {
@@ -134,6 +135,7 @@ function normalizeItem(item: ApiInvoiceItem): InvoiceItem {
     unit_price: Number(item.unit_price || 0),
     subtotal: Number(item.subtotal || 0),
     sort_order: Number(item.sort_order || 0),
+    source_sj_id: toNullableNumber(item.source_sj_id),
   }
 }
 
