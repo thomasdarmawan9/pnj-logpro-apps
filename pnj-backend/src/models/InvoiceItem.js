@@ -61,6 +61,11 @@ module.exports = (sequelize) => {
       type:         DataTypes.SMALLINT,
       defaultValue: 0,
     },
+    source_sj_id: {
+      type:      DataTypes.BIGINT,
+      allowNull: true,
+      comment:   'Null = item manual. Non-null = item disalin dari SJ saat attach.',
+    },
   }, {
     tableName: 'invoice_items',
     paranoid:  false,
