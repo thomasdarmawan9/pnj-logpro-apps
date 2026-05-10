@@ -322,6 +322,7 @@ export const SCENARIO_INVOICE: Invoice = {
       unit_price: 138_000_000,
       subtotal: 138_000_000,
       sort_order: 0,
+      source_sj_id: null,
     },
     {
       id: 2,
@@ -338,6 +339,7 @@ export const SCENARIO_INVOICE: Invoice = {
       unit_price: 80_000_000,
       subtotal: 80_000_000,
       sort_order: 1,
+      source_sj_id: null,
     },
   ],
   subtotal_amount: 218_000_000,
