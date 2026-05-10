@@ -60,6 +60,11 @@ module.exports = (sequelize) => {
       allowNull:    false,
       comment:      'subtotal × pph_percent / 100',
     },
+    insurance_amount: {
+      type:         DataTypes.DECIMAL(15, 2),
+      defaultValue: 0,
+      comment:      'Nominal asuransi — ditambahkan setelah PPN/PPh, tidak masuk DPP',
+    },
     total_amount: {
       type:      DataTypes.DECIMAL(15, 2),
       allowNull: false,
