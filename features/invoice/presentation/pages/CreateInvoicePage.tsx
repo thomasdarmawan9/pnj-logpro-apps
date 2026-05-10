@@ -38,8 +38,10 @@ export default function CreateInvoicePage() {
 
   const {
     header, taxPercent, taxEnabled, pphPercent, pphEnabled,
+    insuranceEnabled, insuranceAmount,
     selectedProject, updateHeader, selectProject,
     toggleTax, setTaxPercent, togglePph, setPphPercent,
+    toggleInsurance, setInsuranceAmount,
     isDueDatePast, projects,
   } = useInvoiceForm()
 
@@ -66,7 +68,7 @@ export default function CreateInvoicePage() {
 
   const taxAmount = taxEnabled ? calculateTax(subtotalAmount, taxPercent) : 0
   const pphAmount = pphEnabled ? Math.round(subtotalAmount * pphPercent / 100) : 0
-  const nettoAmount = totalAmount(subtotalAmount, taxAmount) - pphAmount
+  const nettoAmount = totalAmount(subtotalAmount, taxAmount) - pphAmount + (insuranceEnabled ? insuranceAmount : 0)
 
   const getDto = (sendImmediately = false) => ({
     project_id: header.project_id!,
@@ -76,6 +78,7 @@ export default function CreateInvoicePage() {
     bank_account_id: paymentMethod === 'transfer' ? bankAccountId : null,
     tax_percent: taxEnabled ? taxPercent : 0,
     pph_percent: pphEnabled ? pphPercent : 0,
+    insurance_amount: insuranceEnabled ? insuranceAmount : 0,
     notes: header.notes || null,
     items: items.map((item, idx) => ({
       fleet_id: item.fleet_id ?? null,
@@ -291,6 +294,10 @@ export default function CreateInvoicePage() {
               onChangeTaxPercent={setTaxPercent}
               onTogglePph={togglePph}
               onChangePphPercent={setPphPercent}
+              insuranceEnabled={insuranceEnabled}
+              insuranceAmount={insuranceAmount}
+              onToggleInsurance={toggleInsurance}
+              onChangeInsuranceAmount={setInsuranceAmount}
             />
           </div>
 

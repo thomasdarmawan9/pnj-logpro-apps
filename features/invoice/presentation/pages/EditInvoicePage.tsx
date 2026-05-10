@@ -39,6 +39,8 @@ export default function EditInvoicePage({ uuid }: Props) {
   const [taxEnabled, setTaxEnabled] = useState(false)
   const [pphPercent, setPphPercent] = useState(2)
   const [pphEnabled, setPphEnabled] = useState(false)
+  const [insuranceEnabled, setInsuranceEnabled] = useState(false)
+  const [insuranceAmount, setInsuranceAmount] = useState(0)
   const [dragFrom, setDragFrom] = useState<number | null>(null)
   const [dragOver, setDragOver] = useState<number | null>(null)
   const [lampiranPaths, setLampiranPaths] = useState<string[]>([])
@@ -70,6 +72,8 @@ export default function EditInvoicePage({ uuid }: Props) {
       setTaxEnabled(invoice.tax_percent > 0)
       setPphPercent(invoice.pph_percent > 0 ? invoice.pph_percent : 2)
       setPphEnabled(invoice.pph_percent > 0)
+      setInsuranceAmount(invoice.insurance_amount > 0 ? invoice.insurance_amount : 0)
+      setInsuranceEnabled(invoice.insurance_amount > 0)
 
       // Pre-fill DP form dengan DP existing kalau ada.
       if (invoice.down_payment) {
@@ -111,15 +115,19 @@ export default function EditInvoicePage({ uuid }: Props) {
 
   const taxAmount = taxEnabled ? calculateTax(subtotalAmount, taxPercent) : 0
   const pphAmount = pphEnabled ? Math.round(subtotalAmount * pphPercent / 100) : 0
-  const nettoAmount = totalAmount(subtotalAmount, taxAmount) - pphAmount
+  const nettoAmount = totalAmount(subtotalAmount, taxAmount) - pphAmount + (insuranceEnabled ? insuranceAmount : 0)
   const today = new Date().toISOString().split('T')[0]
   const isDueDatePast = dueDate < today
+
+  const toggleInsurance = (enabled: boolean) => {
+    setInsuranceEnabled(enabled)
+    if (!enabled) setInsuranceAmount(0)
+  }
 
   const handleSave = async () => {
     // DP payload — selalu disertakan (kalau berubah dari current).
     // null = clear DP, object = upsert.
     const dpPayload = downPayment === null ? null : { ...downPayment }
-    const dpMaxAmount = fullEditable ? nettoAmount : (invoice?.total_amount ?? 0)
 
     if (dpPayload) {
       const nextErrors: Record<string, string> = {}
@@ -141,6 +149,7 @@ export default function EditInvoicePage({ uuid }: Props) {
         bank_account_id: paymentMethod === 'transfer' ? bankAccountId : null,
         tax_percent: taxEnabled ? taxPercent : 0,
         pph_percent: pphEnabled ? pphPercent : 0,
+        insurance_amount: insuranceEnabled ? insuranceAmount : 0,
         lampiran_paths: lampiranPaths.length > 0 ? lampiranPaths : null,
         items: items.map((item, idx) => ({
           fleet_id: item.fleet_id ?? null,
@@ -290,6 +299,10 @@ export default function EditInvoicePage({ uuid }: Props) {
               onChangeTaxPercent={setTaxPercent}
               onTogglePph={e => { setPphEnabled(e); if (e && pphPercent === 0) setPphPercent(2) }}
               onChangePphPercent={setPphPercent}
+              insuranceEnabled={insuranceEnabled}
+              insuranceAmount={insuranceAmount}
+              onToggleInsurance={toggleInsurance}
+              onChangeInsuranceAmount={setInsuranceAmount}
             />
           </div>}
 
