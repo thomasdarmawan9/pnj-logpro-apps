@@ -39,11 +39,15 @@ async function processJob(bullJob) {
   })
 
   try {
+    // Baca options: utamakan dari BullMQ payload (always up-to-date), fallback
+    // ke kolom options di DB untuk ketahanan jika Redis/BullMQ restart.
+    const resolvedOptions = payload.options || pdfJob.options || {}
+
     const absPath = await renderPdf({
       pdfJobUuid,
       job_type:  payload.job_type,
       record_id: payload.record_id,
-      options:   payload.options || {},
+      options:   resolvedOptions,
     })
 
     // Simpan path relatif terhadap PDF_OUTPUT_DIR — supaya kalau dir dipindah,

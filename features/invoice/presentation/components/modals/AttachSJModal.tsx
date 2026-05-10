@@ -54,10 +54,10 @@ export default function AttachSJModal({ open, invoice, attachableSJ, onClose, on
         <div className="rounded-lg px-3 py-2.5 text-xs" style={{ backgroundColor: '#EFF6FF', border: '1px solid #BFDBFE', color: '#1E40AF' }}>
           Hanya SJ dari proyek &ldquo;{invoice?.project.name}&rdquo; yang belum dilampirkan ke invoice lain yang ditampilkan.
         </div>
-        <div className="relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+        <div className="flex items-center gap-2.5 rounded-xl border px-3 py-2.5" style={{ borderColor: 'var(--border-card)' }}>
+          <Search size={14} className="shrink-0 text-gray-400" />
           <input
-            className="form-input w-full pl-8 text-sm"
+            className="flex-1 text-sm bg-transparent outline-none placeholder-gray-400"
             placeholder="Cari no. SJ, armada, supir..."
             value={search}
             onChange={e => setSearch(e.target.value)}

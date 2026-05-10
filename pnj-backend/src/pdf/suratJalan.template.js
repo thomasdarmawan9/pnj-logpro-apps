@@ -14,7 +14,7 @@
 
 const fs   = require('fs')
 const path = require('path')
-const { formatDateShort } = require('./utils')
+const { formatDateShort, formatIDR } = require('./utils')
 
 // ── Warna ──────────────────────────────────────────────────────────────────
 const C_BLACK   = '#000000'
@@ -29,7 +29,7 @@ const PAGE_H    = 841.89
 const MARGIN_H  = 32   // left & right margin
 
 const COPY_W    = PAGE_W - MARGIN_H * 2          // 531.28
-const COPY_H    = 390                             // tinggi setiap salinan
+const COPY_H    = 410                             // tinggi setiap salinan (naik dari 390 untuk accommodate baris total)
 const TOP_COPY_Y  = 12
 const BOT_COPY_Y  = TOP_COPY_Y + COPY_H + 14     // 416
 
@@ -171,119 +171,140 @@ function renderCopy(doc, sj, company, options, Y0) {
   const TABLE_Y = INTRO_Y + 13
   const ROW_H   = 14
 
-  // Lebar kolom main table (75%) + kolom kanan (25%)
-  const COL_NO   = 26
-  const COL_QTY  = 72
-  const RIGHT_W  = 130
-  const COL_NAMA = W - COL_NO - COL_QTY - RIGHT_W
+  // Kolom: No | Nama Barang | Qty & Satuan | Harga Satuan | Subtotal | [kanan: Sopir/Pol]
+  const COL_NO       = 20
+  const COL_NAMA     = 185
+  const COL_QTY      = 55
+  const COL_PRICE    = 72
+  const COL_SUBTOTAL = 74
+  const RIGHT_W      = W - COL_NO - COL_NAMA - COL_QTY - COL_PRICE - COL_SUBTOTAL  // ~93.28
 
   const TABLE_ROWS = 11
-  const TABLE_BODY_H = (TABLE_ROWS + 1) * ROW_H   // +1 header row
-  const EXTRA_ROWS   = 3                            // Nama Sopir, No Pol, spare
-  const TABLE_TOTAL_H = TABLE_BODY_H + EXTRA_ROWS * ROW_H
 
   // X positions
-  const X_NO   = L
-  const X_NAMA = X_NO + COL_NO
-  const X_QTY  = X_NAMA + COL_NAMA
-  const X_RGT  = X_QTY + COL_QTY   // start kolom kanan
+  const X_NO       = L
+  const X_NAMA     = X_NO       + COL_NO
+  const X_QTY      = X_NAMA     + COL_NAMA
+  const X_PRICE    = X_QTY      + COL_QTY
+  const X_SUBTOTAL = X_PRICE    + COL_PRICE
+  const X_RGT      = X_SUBTOTAL + COL_SUBTOTAL   // start kolom kanan
 
   // --- Header row ---
-  doc.rect(X_NO, TABLE_Y, COL_NO + COL_NAMA + COL_QTY, ROW_H)
-     .fillAndStroke(C_HEAD_BG, C_BORDER)
-  // Header kanan — biarkan putih
+  const MAIN_W = COL_NO + COL_NAMA + COL_QTY + COL_PRICE + COL_SUBTOTAL
+  doc.rect(X_NO, TABLE_Y, MAIN_W, ROW_H).fillAndStroke(C_HEAD_BG, C_BORDER)
   doc.rect(X_RGT, TABLE_Y, RIGHT_W, ROW_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
 
-  doc.font('Helvetica-Bold').fontSize(8.5).fillColor(C_DARK)
-  doc.text('No',         X_NO   + 2, TABLE_Y + 3, { width: COL_NO   - 4, align: 'center' })
-  doc.text('Nama Barang', X_NAMA + 2, TABLE_Y + 3, { width: COL_NAMA - 4, align: 'center' })
-  doc.text('QUANTITY',   X_QTY  + 2, TABLE_Y + 3, { width: COL_QTY  - 4, align: 'center' })
+  doc.font('Helvetica-Bold').fontSize(7.5).fillColor(C_DARK)
+  doc.text('No',           X_NO       + 2, TABLE_Y + 3, { width: COL_NO       - 4, align: 'center' })
+  doc.text('Nama Barang',  X_NAMA     + 2, TABLE_Y + 3, { width: COL_NAMA     - 4, align: 'center' })
+  doc.text('Qty & Satuan', X_QTY      + 2, TABLE_Y + 3, { width: COL_QTY      - 4, align: 'center' })
+  doc.text('Harga Satuan', X_PRICE    + 2, TABLE_Y + 3, { width: COL_PRICE    - 4, align: 'right'  })
+  doc.text('Subtotal',     X_SUBTOTAL + 2, TABLE_Y + 3, { width: COL_SUBTOTAL - 4, align: 'right'  })
 
-  // --- Data rows 1–11 ---
-  // Cargo: pakai cargo_description baris pertama, sisanya kosong
-  const cargoLines = (sj.cargo_description || '').split('\n').filter(Boolean)
+  // --- Build row data ---
+  // Pakai sj.items (array) kalau ada, fallback ke cargo_description split baris
+  let rowData = []
+  const hasItems = Array.isArray(sj.items) && sj.items.length > 0
+  if (hasItems) {
+    rowData = sj.items.map(item => ({
+      nama:      item.description || '',
+      qty:       item.qty ? `${item.qty} ${item.unit || ''}`.trim() : '',
+      unitPrice: Number(item.unit_price) || 0,
+      subtotal:  (Number(item.qty) || 0) * (Number(item.unit_price) || 0),
+    }))
+  } else {
+    rowData = (sj.cargo_description || '').split('\n').filter(Boolean)
+      .map(line => ({ nama: line, qty: '', unitPrice: 0, subtotal: 0 }))
+  }
+
+  const grandTotal = rowData.reduce((s, r) => s + r.subtotal, 0)
 
   for (let i = 0; i < TABLE_ROWS; i++) {
     const rowY = TABLE_Y + ROW_H + i * ROW_H
-    // Borders main table
-    doc.rect(X_NO,   rowY, COL_NO,   ROW_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
-    doc.rect(X_NAMA, rowY, COL_NAMA, ROW_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
-    doc.rect(X_QTY,  rowY, COL_QTY,  ROW_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
-    // Border kolom kanan (data rows span seperti di gambar — biarkan kosong)
-    doc.rect(X_RGT, rowY, RIGHT_W, ROW_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+    doc.rect(X_NO,       rowY, COL_NO,       ROW_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+    doc.rect(X_NAMA,     rowY, COL_NAMA,     ROW_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+    doc.rect(X_QTY,      rowY, COL_QTY,      ROW_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+    doc.rect(X_PRICE,    rowY, COL_PRICE,    ROW_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+    doc.rect(X_SUBTOTAL, rowY, COL_SUBTOTAL, ROW_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+    doc.rect(X_RGT,      rowY, RIGHT_W,      ROW_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
 
-    // No
-    doc.font('Helvetica').fontSize(8).fillColor(C_DARK)
+    doc.font('Helvetica').fontSize(7.5).fillColor(C_DARK)
        .text(String(i + 1), X_NO + 2, rowY + 3, { width: COL_NO - 4, align: 'center' })
 
-    // Nama Barang — isi baris pertama saja dengan cargo
-    if (i < cargoLines.length) {
-      doc.font('Helvetica').fontSize(8).fillColor(C_DARK)
-         .text(cargoLines[i], X_NAMA + 3, rowY + 3, { width: COL_NAMA - 6, lineBreak: false })
+    if (i < rowData.length) {
+      const r = rowData[i]
+      doc.font('Helvetica').fontSize(7.5).fillColor(C_DARK)
+         .text(r.nama, X_NAMA + 3, rowY + 3, { width: COL_NAMA - 6, lineBreak: false, ellipsis: true })
+      if (r.qty) {
+        doc.text(r.qty, X_QTY + 2, rowY + 3, { width: COL_QTY - 4, align: 'center', lineBreak: false })
+      }
+      if (r.unitPrice > 0) {
+        doc.text(formatIDR(r.unitPrice), X_PRICE + 2, rowY + 3, { width: COL_PRICE - 4, align: 'right', lineBreak: false })
+        doc.font('Helvetica-Bold')
+           .text(formatIDR(r.subtotal), X_SUBTOTAL + 2, rowY + 3, { width: COL_SUBTOTAL - 4, align: 'right', lineBreak: false })
+        doc.font('Helvetica')
+      }
     }
   }
 
-  // --- Extra rows kanan bawah (Nama Sopir / No Pol) ---
+  // --- Baris total (di bawah data rows, sebelum extra rows) ---
+  const TOTAL_ROW_Y = TABLE_Y + ROW_H + TABLE_ROWS * ROW_H
+  doc.rect(X_NO,       TOTAL_ROW_Y, COL_NO + COL_NAMA + COL_QTY + COL_PRICE, ROW_H)
+     .fillAndStroke(C_HEAD_BG, C_BORDER)
+  doc.rect(X_SUBTOTAL, TOTAL_ROW_Y, COL_SUBTOTAL, ROW_H)
+     .fillAndStroke(C_HEAD_BG, C_BORDER)
+  doc.rect(X_RGT,      TOTAL_ROW_Y, RIGHT_W, ROW_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+
+  doc.font('Helvetica-Bold').fontSize(7.5).fillColor(C_DARK)
+     .text('TOTAL', X_NO + 2, TOTAL_ROW_Y + 3, { width: COL_NO + COL_NAMA + COL_QTY + COL_PRICE - 4, align: 'right' })
+  if (grandTotal > 0) {
+    doc.font('Helvetica-Bold').fontSize(7.5).fillColor(C_DARK)
+       .text(formatIDR(grandTotal), X_SUBTOTAL + 2, TOTAL_ROW_Y + 3, { width: COL_SUBTOTAL - 4, align: 'right', lineBreak: false })
+  }
+
+  // --- Extra rows kanan bawah (Nama Sopir / No Pol) — stacked layout ---
   const fleetIsTbd = !sj.fleet || sj.fleet.is_tbd
   const platNomor  = fleetIsTbd ? '-' : (sj.fleet.plate_number || '-')
   const namaSopir  = sj.driver?.name || sj.driver_name_manual || '-'
 
-  const EXTRA_START = TABLE_Y + ROW_H + TABLE_ROWS * ROW_H
-  const PAD_V   = 5    // padding atas + bawah teks dalam sel
+  // +1 ROW_H untuk baris total yang baru ditambahkan
+  const EXTRA_START = TABLE_Y + ROW_H + TABLE_ROWS * ROW_H + ROW_H
   const FONT_SZ = 8.5
+  const LBL_H  = 14   // tinggi baris label
+  const VAL_PAD = 4   // padding vertikal dalam value row
+  const LEFT_W = COL_NO + COL_NAMA + COL_QTY + COL_PRICE + COL_SUBTOTAL
 
-  // Sub-kolom dalam RIGHT_W: label fixed 62pt | divider | nilai sisa
-  const LBL_W = 62
-  const VAL_W = RIGHT_W - LBL_W - 1   // -1 untuk garis pembatas
-  const LEFT_W = COL_NO + COL_NAMA + COL_QTY
-
-  // Hitung tinggi sel otomatis berdasarkan konten nilai terpanjang
-  function cellHeight(value) {
+  // Render satu field stacked: [label row] + [value row], return total height
+  function stackedRow(y, label, value) {
     doc.font('Helvetica').fontSize(FONT_SZ)
-    const textH = doc.heightOfString(value, { width: VAL_W - 8 })
-    return Math.max(18, textH + PAD_V * 2)
-  }
+    const textH = doc.heightOfString(value, { width: RIGHT_W - 8 })
+    const valH  = Math.max(LBL_H, textH + VAL_PAD * 2)
 
-  // Helper: render satu baris extra dengan tinggi auto
-  function extraRow(y, label, value, h) {
-    const divX = X_RGT + LBL_W
-    const textY = y + PAD_V
-
-    // Sel kiri (kosong)
-    doc.rect(X_NO, y, LEFT_W, h).strokeColor(C_BORDER).lineWidth(0.5).stroke()
-
-    // Sel kanan — kotak luar
-    doc.rect(X_RGT, y, RIGHT_W, h).strokeColor(C_BORDER).lineWidth(0.5).stroke()
-
-    // Garis vertikal pemisah label | nilai
-    vLine(doc, divX, y, y + h, 0.5)
-
-    // Label — selalu satu baris, vertikal center
-    const labelY = y + (h - FONT_SZ) / 2
+    // Baris label
+    doc.rect(X_NO,  y,        LEFT_W,  LBL_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+    doc.rect(X_RGT, y,        RIGHT_W, LBL_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
     doc.font('Helvetica-Bold').fontSize(FONT_SZ).fillColor(C_DARK)
-       .text(label, X_RGT + 4, labelY, { width: LBL_W - 8, lineBreak: false, ellipsis: true })
+       .text(label, X_RGT + 4, y + (LBL_H - FONT_SZ) / 2, { width: RIGHT_W - 8, lineBreak: false })
 
-    // Nilai — bisa wrap, dibatasi lebar sel
+    // Baris nilai
+    const vY = y + LBL_H
+    doc.rect(X_NO,  vY, LEFT_W,  valH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+    doc.rect(X_RGT, vY, RIGHT_W, valH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
     doc.font('Helvetica').fontSize(FONT_SZ).fillColor(C_DARK)
-       .text(value, divX + 4, textY, { width: VAL_W - 8 })
+       .text(value, X_RGT + 4, vY + VAL_PAD, { width: RIGHT_W - 8 })
+
+    return LBL_H + valH
   }
 
-  // Hitung tinggi masing-masing baris sebelum render
-  const hNamaSopir = cellHeight(namaSopir)
-  const hNoPol     = cellHeight(platNomor)
-  const hSpare     = 18
-
-  const rNamaSopir = EXTRA_START
-  const rNoPol     = rNamaSopir + hNamaSopir
+  const hNamaSopir = stackedRow(EXTRA_START, 'Nama Sopir :', namaSopir)
+  const rNoPol     = EXTRA_START + hNamaSopir
+  const hNoPol     = stackedRow(rNoPol, 'No Pol :', platNomor)
   const rSpare     = rNoPol + hNoPol
-
-  extraRow(rNamaSopir, 'Nama Sopir :', namaSopir, hNamaSopir)
-  extraRow(rNoPol,     'No Pol :',     platNomor, hNoPol)
+  const hSpare     = 18
 
   // Baris spare kosong
   doc.rect(X_NO,  rSpare, LEFT_W,   hSpare).strokeColor(C_BORDER).lineWidth(0.5).stroke()
   doc.rect(X_RGT, rSpare, RIGHT_W,  hSpare).strokeColor(C_BORDER).lineWidth(0.5).stroke()
-  vLine(doc, X_RGT + LBL_W, rSpare, rSpare + hSpare, 0.5)
 
   if (includeNotes && sj.internal_notes) {
     doc.font('Helvetica').fontSize(7).fillColor(C_GRAY)
@@ -301,14 +322,140 @@ function renderCopy(doc, sj, company, options, Y0) {
   }
 }
 
-// ── PUBLIC: render ─────────────────────────────────────────────────────────
-function render(doc, sj, company, options = {}) {
-  // Salinan 1 — halaman pertama
-  renderCopy(doc, sj, company, options, TOP_COPY_Y)
+// ── Lampiran foto + Foto Pengiriman (halaman terakhir) ───────────────────
+function drawLampiranPage(doc, sj, company, options) {
+  const L       = MARGIN_H
+  const W       = COPY_W
+  const GAP     = 10
+  const IMG_PAD = 6
 
-  // Salinan 2 — halaman baru
+  const podBuffer      = options.podBuffer || null
+  const lampiranBuffers = (options.lampiranBuffers || []).slice(0, 3)
+  const hasAny = podBuffer || lampiranBuffers.length > 0
+  if (!hasAny) return
+
   doc.addPage()
-  renderCopy(doc, sj, company, options, TOP_COPY_Y)
+
+  // ── Header ringkas ────────────────────────────────────────────────────────
+  const KOP_H  = 62
+  const LOGO_S = 50
+  doc.rect(L, TOP_COPY_Y, W, KOP_H).strokeColor(C_BORDER).lineWidth(0.8).stroke()
+  drawLogo(doc, company, L + 4, TOP_COPY_Y + 6, LOGO_S)
+
+  const infoX = L + LOGO_S + 8
+  const infoW = W - LOGO_S - 12
+  doc.font('Helvetica-Bold').fontSize(14).fillColor(C_DARK)
+     .text(company.name || 'PT. PELANGI NUANSA JAYA', infoX, TOP_COPY_Y + 4, { width: infoW })
+  const nameW = doc.widthOfString(company.name || 'PT. PELANGI NUANSA JAYA', { fontSize: 14 })
+  hLine(doc, infoX, TOP_COPY_Y + 19, Math.min(nameW, infoW), 0.6, C_DARK)
+  doc.font('Helvetica').fontSize(7.5).fillColor(C_DARK)
+  if (company.address) doc.text(company.address, infoX, TOP_COPY_Y + 22, { width: infoW })
+
+  // ── Judul ─────────────────────────────────────────────────────────────────
+  const TITLE_Y = TOP_COPY_Y + KOP_H + 8
+  doc.font('Helvetica-Bold').fontSize(12).fillColor(C_DARK)
+     .text('LAMPIRAN FOTO SURAT JALAN', L, TITLE_Y, { width: W, align: 'center' })
+  doc.font('Helvetica').fontSize(9).fillColor(C_GRAY)
+     .text(sj.sj_number || '', L, TITLE_Y + 16, { width: W, align: 'center' })
+  doc.fillColor(C_BLACK)
+  hLine(doc, L, TITLE_Y + 30, W, 0.8)
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  // Gambar tinggi saat keduanya ada: lebih kompak
+  const hasBoth  = podBuffer && lampiranBuffers.length > 0
+  const IMG_H_LG = hasBoth ? 200 : 320  // tinggi gambar POD (solo: lebih besar)
+  const IMG_H_SM = hasBoth ? 160 : 210  // tinggi gambar lampiran (solo: lebih besar)
+
+  function sectionLabel(y, text) {
+    doc.font('Helvetica-Bold').fontSize(8.5).fillColor(C_GRAY)
+       .text(text.toUpperCase(), L, y, { width: W })
+    hLine(doc, L, y + 13, W, 0.4, C_GRAY)
+    doc.fillColor(C_BLACK)
+    return y + 20
+  }
+
+  function drawImageCell(buf, x, y, cw, ch) {
+    doc.rect(x, y, cw, ch).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+    try {
+      doc.image(buf, x + IMG_PAD, y + IMG_PAD, {
+        width:  cw - IMG_PAD * 2,
+        height: ch - IMG_PAD * 2,
+        fit:    [cw - IMG_PAD * 2, ch - IMG_PAD * 2],
+        align:  'center',
+        valign: 'center',
+      })
+    } catch (_) {
+      doc.font('Helvetica').fontSize(8).fillColor(C_GRAY)
+         .text('Gambar tidak dapat ditampilkan', x + 4, y + ch / 2 - 5,
+               { width: cw - 8, align: 'center' })
+      doc.fillColor(C_BLACK)
+    }
+  }
+
+  let curY = TITLE_Y + 40
+
+  // ── Section: Foto Pengiriman ──────────────────────────────────────────────
+  if (podBuffer) {
+    curY = sectionLabel(curY, 'Foto Pengiriman (Bukti Tiba)')
+    const podW = hasBoth ? W * 0.55 : W
+    const podX = L + (W - podW) / 2
+    drawImageCell(podBuffer, podX, curY, podW, IMG_H_LG)
+    curY += IMG_H_LG + (hasBoth ? 16 : 0)
+  }
+
+  // ── Section: Foto Lampiran ────────────────────────────────────────────────
+  if (lampiranBuffers.length > 0) {
+    curY = sectionLabel(curY, `Foto Lampiran (${lampiranBuffers.length} foto)`)
+
+    const count  = lampiranBuffers.length
+    const CELL_W = count === 1 ? W : (W - GAP) / 2
+    const CELL_H = IMG_H_SM
+
+    if (count === 1) {
+      drawImageCell(lampiranBuffers[0], L, curY, CELL_W, CELL_H)
+    } else {
+      drawImageCell(lampiranBuffers[0], L,                curY, CELL_W, CELL_H)
+      drawImageCell(lampiranBuffers[1], L + CELL_W + GAP, curY, CELL_W, CELL_H)
+      if (count === 3) {
+        const centerX = L + (W - CELL_W) / 2
+        drawImageCell(lampiranBuffers[2], centerX, curY + CELL_H + GAP, CELL_W, CELL_H)
+      }
+    }
+  }
+}
+
+// ── PUBLIC: render ─────────────────────────────────────────────────────────
+/**
+ * Render SJ rangkap N — tiap salinan di halaman terpisah (1 page = 1 table).
+ *
+ * options.copies        — jumlah rangkap (default 3)
+ * options.copyLabel     — true → tambah watermark "Lembar X / N" tiap salinan
+ * options.includeLampiran — true → tambah halaman lampiran foto di akhir (default true)
+ * options.lampiranBuffers — array JPEG Buffer dari render.js (diisi otomatis)
+ */
+function render(doc, sj, company, options = {}) {
+  const copies    = typeof options.copies === 'number' && options.copies > 0
+    ? options.copies
+    : 3
+
+  for (let i = 0; i < copies; i++) {
+    if (i > 0) doc.addPage()
+    renderCopy(doc, sj, company, options, TOP_COPY_Y)
+
+    // Opsional: label lembar di sudut kanan bawah
+    if (options.copyLabel) {
+      const labelText = `Lembar ${i + 1} / ${copies}`
+      doc.font('Helvetica').fontSize(7).fillColor('#AAAAAA')
+         .text(labelText, 0, PAGE_H - 18, { width: PAGE_W - MARGIN_H, align: 'right' })
+      doc.fillColor(C_BLACK)
+    }
+  }
+
+  // Halaman foto (POD + lampiran) di akhir dokumen, jika ada
+  if (options.includeLampiran !== false &&
+      (options.podBuffer || (Array.isArray(options.lampiranBuffers) && options.lampiranBuffers.length > 0))) {
+    drawLampiranPage(doc, sj, company, options)
+  }
 }
 
 module.exports = { render }

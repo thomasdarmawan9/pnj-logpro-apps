@@ -1,6 +1,7 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { MoreHorizontal, Eye, Printer, Pencil, CheckCircle, AlertTriangle, Paperclip, Trash2, Play } from 'lucide-react'
 import { SuratJalan, StatusLampiran, StatusOperasional } from '../../domain/entities/SuratJalan'
 import SJStatusBadge from './SJStatusBadge'
@@ -16,6 +17,8 @@ interface SJTableRowProps {
 
 export default function SJTableRow({ sj, checked, onToggle, onAction, role }: SJTableRowProps) {
   const [open, setOpen] = useState(false)
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null)
+  const btnRef = useRef<HTMLButtonElement>(null)
   const isAttention = sj.status === StatusOperasional.DELIVERED && sj.invoice_attachment_status === StatusLampiran.NO_INVOICE
 
   const actions = useMemo(() => {
@@ -53,6 +56,30 @@ export default function SJTableRow({ sj, checked, onToggle, onAction, role }: SJ
     }
     return common
   }, [sj.status, sj.invoice_attachment_status, role])
+
+  const handleToggle = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!open && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect()
+      setMenuPos({
+        top:   rect.bottom + 4,
+        right: window.innerWidth - rect.right,
+      })
+    }
+    setOpen(v => !v)
+  }
+
+  // Tutup saat klik di luar atau scroll
+  useEffect(() => {
+    if (!open) return
+    const close = () => setOpen(false)
+    document.addEventListener('mousedown', close)
+    document.addEventListener('scroll', close, true)
+    return () => {
+      document.removeEventListener('mousedown', close)
+      document.removeEventListener('scroll', close, true)
+    }
+  }, [open])
 
   return (
     <tr
@@ -94,16 +121,22 @@ export default function SJTableRow({ sj, checked, onToggle, onAction, role }: SJ
       <td className="px-4 py-3">
         <SJStatusBadge statusOps={sj.status} statusLampiran={sj.invoice_attachment_status} invoiceNumber={sj.invoice?.invoice_number || null} />
       </td>
-      <td className="px-4 py-3 text-right relative">
+      <td className="px-4 py-3 text-right">
         <button
-          onClick={() => setOpen(v => !v)}
+          ref={btnRef}
+          onClick={handleToggle}
           className="p-2 rounded-lg border"
           style={{ borderColor: 'var(--border-card)', color: 'var(--text-secondary)' }}
         >
           <MoreHorizontal size={16} />
         </button>
-        {open && (
-          <div className="absolute right-4 mt-2 w-52 rounded-xl border bg-white shadow-lg z-20 text-left">
+
+        {open && menuPos && createPortal(
+          <div
+            className="fixed w-52 rounded-xl border bg-white shadow-lg text-left"
+            style={{ top: menuPos.top, right: menuPos.right, zIndex: 9999 }}
+            onMouseDown={e => e.stopPropagation()}
+          >
             {actions.map(action => {
               const Icon = action.icon
               return (
@@ -120,7 +153,8 @@ export default function SJTableRow({ sj, checked, onToggle, onAction, role }: SJ
                 </button>
               )
             })}
-          </div>
+          </div>,
+          document.body,
         )}
       </td>
     </tr>

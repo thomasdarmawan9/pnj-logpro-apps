@@ -6,6 +6,15 @@ const STATUSES  = ['draft', 'assigned', 'delivered', 'void']
 const INV_STATES = ['no_invoice', 'attached']
 const PERIODS    = ['today', 'week', 'month', 'last_month', 'all']
 
+const sjItemSchema = Joi.object({
+  id:          Joi.string().trim().max(36).allow('', null),
+  description: Joi.string().trim().max(255).allow('', null).default(''),
+  qty:         Joi.number().min(0).default(1),
+  unit:        Joi.string().trim().max(30).default('pcs'),
+  unit_price:  Joi.number().min(0).default(0),
+  notes:       Joi.string().trim().max(500).allow('', null).default(''),
+})
+
 const createSJSchema = Joi.object({
   project_uuid:        Joi.string().uuid({ version: ['uuidv4'] }),
   project_id:          Joi.number().integer().min(1),
@@ -18,6 +27,7 @@ const createSJSchema = Joi.object({
   origin:              Joi.string().trim().min(2).max(200).required(),
   destination:         Joi.string().trim().min(2).max(200).required(),
   cargo_description:   Joi.string().trim().allow('', null),
+  items:               Joi.array().items(sjItemSchema).allow(null).default(null),
   operational_cost:    Joi.number().precision(2).min(0).default(0),
   internal_notes:      Joi.string().trim().allow('', null),
   publish:             Joi.boolean().default(false),
@@ -48,6 +58,7 @@ const updateSJSchema = Joi.object({
   origin:              Joi.string().trim().min(2).max(200),
   destination:         Joi.string().trim().min(2).max(200),
   cargo_description:   Joi.string().trim().allow('', null),
+  items:               Joi.array().items(sjItemSchema).allow(null),
   operational_cost:    Joi.number().precision(2).min(0),
   internal_notes:      Joi.string().trim().allow('', null),
   lampiran_paths:      Joi.array().items(Joi.string().trim().max(255)).allow(null),

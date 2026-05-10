@@ -493,15 +493,17 @@ function drawSJAppendix(doc, invoice, company, options) {
   drawPageFooter(doc, invoice)
 }
 
-// ── PUBLIC: render ─────────────────────────────────────────────────────────
-function render(doc, invoice, company, options = {}) {
+// ── Render satu salinan Invoice ───────────────────────────────────────────
+/**
+ * Render satu copy invoice penuh ke dalam doc mulai dari halaman aktif saat ini.
+ * Jika konten melebihi satu halaman, fungsi ini akan memanggil doc.addPage()
+ * sendiri (perilaku sama dengan sebelumnya).
+ */
+function renderOneCopy(doc, invoice, company, options = {}) {
   const {
     includeLogo = true,
     includeSig  = true,
-    includeSJ   = false,
   } = options
-
-  const { L, R, W } = pageGeom(doc)
 
   // 1. Kop
   let y = drawHeader(doc, company, { includeLogo })
@@ -534,10 +536,44 @@ function render(doc, invoice, company, options = {}) {
     drawSignatures(doc, invoice, company, y)
   }
 
-  // Page footer
+  // Page footer (nomor + tanggal cetak) pada halaman terakhir copy ini
   drawPageFooter(doc, invoice)
+}
 
-  // Lampiran SJ
+// ── PUBLIC: render ─────────────────────────────────────────────────────────
+/**
+ * Render Invoice rangkap N — tiap salinan di halaman terpisah.
+ *
+ * options.copies   — jumlah rangkap (default 3)
+ * options.copyLabel — true → tambah watermark kecil "Lembar X / N" di sudut kanan bawah
+ *
+ * Lampiran SJ (jika includeSJ = true) tetap dicetak sekali di akhir dokumen,
+ * setelah semua salinan invoice.
+ */
+function render(doc, invoice, company, options = {}) {
+  const {
+    includeSJ = false,
+  } = options
+
+  const copies = typeof options.copies === 'number' && options.copies > 0
+    ? options.copies
+    : 3
+
+  for (let i = 0; i < copies; i++) {
+    if (i > 0) doc.addPage()
+    renderOneCopy(doc, invoice, company, options)
+
+    // Opsional: label lembar di sudut kanan bawah tiap salinan
+    if (options.copyLabel) {
+      const { L, W } = pageGeom(doc)
+      const footerY  = doc.page.height - doc.page.margins.bottom + 4
+      doc.font('Helvetica').fontSize(7).fillColor('#AAAAAA')
+         .text(`Lembar ${i + 1} / ${copies}`, L, footerY, { width: W, align: 'right' })
+      doc.fillColor('#000000')
+    }
+  }
+
+  // Lampiran SJ dicetak sekali di akhir (bukan per salinan)
   if (includeSJ && Array.isArray(invoice.attachedSJs) && invoice.attachedSJs.length > 0) {
     drawSJAppendix(doc, invoice, company, options)
   }

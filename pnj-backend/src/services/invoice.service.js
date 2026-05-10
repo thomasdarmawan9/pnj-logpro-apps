@@ -685,7 +685,7 @@ async function recordPayment(invoiceUuid, payload, actor) {
  */
 async function attachSJ(invoiceUuid, sjUuids, actor) {
   return sequelize.transaction(async (t) => {
-    const invoice = await Invoice.findOne({ where: { uuid: invoiceUuid }, transaction: t })
+    const invoice = await Invoice.findOne({ where: { uuid: invoiceUuid }, transaction: t, lock: t.LOCK.UPDATE })
     if (!invoice) throw new NotFoundError('Invoice tidak ditemukan.')
     if (FINAL_STATUSES.includes(invoice.status)) {
       throw new ForbiddenError(`Invoice status ${invoice.status} tidak dapat diubah attachment-nya.`)
@@ -716,12 +716,15 @@ async function attachSJ(invoiceUuid, sjUuids, actor) {
       }
     }
 
+    // Filter SJ yang belum ter-attach ke invoice ini (idempotent)
+    const sjToProcess = sjList.filter(sj => sj.invoice_id !== invoice.id)
+
     // Update delivery_orders
     await DeliveryOrder.update({
       invoice_id:                invoice.id,
       invoice_attachment_status: 'attached',
     }, {
-      where:       { id: sjList.map(sj => sj.id) },
+      where:       { id: sjToProcess.map(sj => sj.id) },
       transaction: t,
     })
 
@@ -730,7 +733,7 @@ async function attachSJ(invoiceUuid, sjUuids, actor) {
     let globalIndex = existingCount
 
     const allNewRows = []
-    for (const sj of sjList) {
+    for (const sj of sjToProcess) {
       const rows = buildSJItemRows(sj, invoice.id, globalIndex)
       allNewRows.push(...rows)
       globalIndex += rows.length
@@ -748,7 +751,7 @@ async function attachSJ(invoiceUuid, sjUuids, actor) {
 
 async function detachSJ(invoiceUuid, sjUuid, actor) {
   return sequelize.transaction(async (t) => {
-    const invoice = await Invoice.findOne({ where: { uuid: invoiceUuid }, transaction: t })
+    const invoice = await Invoice.findOne({ where: { uuid: invoiceUuid }, transaction: t, lock: t.LOCK.UPDATE })
     if (!invoice) throw new NotFoundError('Invoice tidak ditemukan.')
     if (FINAL_STATUSES.includes(invoice.status)) {
       throw new ForbiddenError(`Invoice status ${invoice.status} tidak dapat diubah attachment-nya.`)

@@ -124,9 +124,6 @@ export default function EditInvoicePage({ uuid }: Props) {
       const nextErrors: Record<string, string> = {}
       if (!dpPayload.payment_date) nextErrors.down_payment = 'Tanggal DP wajib diisi'
       if (dpPayload.amount <= 0) nextErrors.down_payment = 'Nominal DP harus lebih dari 0'
-      if (dpMaxAmount > 0 && dpPayload.amount > dpMaxAmount) {
-        nextErrors.down_payment = `Nominal DP tidak boleh melebihi total invoice (${formatRupiah(dpMaxAmount)})`
-      }
       if (Object.keys(nextErrors).length > 0) {
         setErrors(nextErrors)
         pushToast({ title: 'DP belum valid', description: nextErrors.down_payment, variant: 'error' })

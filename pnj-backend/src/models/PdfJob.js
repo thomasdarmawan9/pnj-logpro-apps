@@ -37,6 +37,12 @@ module.exports = (sequelize) => {
       type:      DataTypes.TEXT,
       allowNull: true,
     },
+    options: {
+      type:         DataTypes.JSONB,
+      allowNull:    true,
+      defaultValue: null,
+      comment:      'Opsi render PDF (copies, copyLabel, includeHeader, dst.)',
+    },
     requested_by: {
       type:      DataTypes.BIGINT,
       allowNull: true,

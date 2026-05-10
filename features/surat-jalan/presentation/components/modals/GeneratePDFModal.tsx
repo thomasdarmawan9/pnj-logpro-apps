@@ -16,6 +16,13 @@ export default function GeneratePDFModal({ open, sj, onClose }: GeneratePDFModal
   const [includeHeader, setIncludeHeader] = useState(true)
   const [includeSign, setIncludeSign] = useState(true)
   const [includeNotes, setIncludeNotes] = useState(false)
+  const [includeLampiran, setIncludeLampiran] = useState(true)
+  const [copies, setCopies] = useState(3)
+  const [copyLabel, setCopyLabel] = useState(false)
+
+  const hasLampiranFoto = (sj?.lampiran_paths ?? []).filter(p => !p.endsWith('.pdf')).length > 0
+  const hasPod = !!sj?.pod_photo_path
+  const hasAnyFoto = hasLampiranFoto || hasPod
   const [status, setStatus] = useState<'idle' | 'processing' | 'done' | 'failed'>('idle')
   const [jobUuid, setJobUuid] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -28,6 +35,9 @@ export default function GeneratePDFModal({ open, sj, onClose }: GeneratePDFModal
       setIncludeHeader(true)
       setIncludeSign(true)
       setIncludeNotes(false)
+      setIncludeLampiran(true)
+      setCopies(3)
+      setCopyLabel(false)
     }
   }, [open])
 
@@ -37,7 +47,7 @@ export default function GeneratePDFModal({ open, sj, onClose }: GeneratePDFModal
     setError(null)
 
     try {
-      const job = await generateSuratJalanPdf(sj.uuid, { includeHeader, includeSign, includeNotes })
+      const job = await generateSuratJalanPdf(sj.uuid, { includeHeader, includeSign, includeNotes, includeLampiran: hasAnyFoto ? includeLampiran : false, copies, copyLabel })
       setJobUuid(job.uuid)
 
       let latestStatus = job.status
@@ -109,6 +119,31 @@ export default function GeneratePDFModal({ open, sj, onClose }: GeneratePDFModal
               </label>
             </div>
 
+            {/* Jumlah Rangkap */}
+            <div>
+              <label className="text-xs font-medium text-gray-600 block mb-2">Jumlah Rangkap</label>
+              <div className="flex gap-2">
+                {[1, 2, 3].map(n => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setCopies(n)}
+                    className="flex-1 py-2 rounded-xl border text-sm font-medium transition-colors"
+                    style={
+                      copies === n
+                        ? { backgroundColor: 'var(--green-primary)', color: '#fff', borderColor: 'var(--green-primary)' }
+                        : { backgroundColor: '#fff', color: '#374151', borderColor: 'var(--border-card)' }
+                    }
+                  >
+                    {n}×
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-gray-400 mt-1.5">
+                Menghasilkan {copies} halaman identik (1 tabel per halaman)
+              </p>
+            </div>
+
             <div>
               <label className="text-xs font-medium text-gray-600 block mb-2">Pilihan Opsional</label>
               <div className="space-y-2">
@@ -122,6 +157,28 @@ export default function GeneratePDFModal({ open, sj, onClose }: GeneratePDFModal
                     <span className="text-sm text-gray-700">{opt.label}</span>
                   </label>
                 ))}
+                {/* Lampiran foto — hanya tampil jika SJ punya lampiran gambar */}
+                {hasAnyFoto && (
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input type="checkbox" checked={includeLampiran} onChange={e => setIncludeLampiran(e.target.checked)} className="rounded" />
+                    <span className="text-sm text-gray-700">
+                      Sertakan foto lampiran &amp; pengiriman
+                      <span className="text-gray-400 ml-1">
+                        ({[hasPod ? 'POD' : '', hasLampiranFoto ? `${(sj?.lampiran_paths ?? []).filter(p => !p.endsWith('.pdf')).length} lampiran` : ''].filter(Boolean).join(', ')}, halaman terakhir)
+                      </span>
+                    </span>
+                  </label>
+                )}
+                {/* Label lembar — hanya tampil jika rangkap > 1 */}
+                {copies > 1 && (
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input type="checkbox" checked={copyLabel} onChange={e => setCopyLabel(e.target.checked)} className="rounded" />
+                    <span className="text-sm text-gray-700">
+                      Tambah label lembar
+                      <span className="text-gray-400 ml-1">(Lembar 1/{copies}, 2/{copies}, …)</span>
+                    </span>
+                  </label>
+                )}
               </div>
             </div>
           </>

@@ -12,13 +12,45 @@
 const fs   = require('fs')
 const path = require('path')
 const PDFDocument = require('pdfkit')
+const sharp = require('sharp')
 
 const env  = require('../config/env')
+const logger = require('../utils/logger')
 const sjRepo      = require('../repositories/deliveryOrder.repository')
 const invoiceRepo = require('../repositories/invoice.repository')
 const { getCompanyInfo } = require('../services/companySettings.service')
 const sjTemplate      = require('./suratJalan.template')
 const invoiceTemplate = require('./invoice.template')
+
+/**
+ * Konversi satu image file (webp/png/jpg) ke JPEG Buffer.
+ * Return null jika file tidak ada, bukan image, atau gagal konversi.
+ */
+async function resolveImageBuffer(relPath) {
+  if (!relPath || typeof relPath !== 'string') return null
+  if (relPath.toLowerCase().endsWith('.pdf')) return null
+  const absPath = path.resolve(env.upload.dir, relPath)
+  if (!fs.existsSync(absPath)) return null
+  try {
+    return await sharp(absPath).jpeg({ quality: 85 }).toBuffer()
+  } catch (err) {
+    logger.warn(`[render] gagal konversi image ${relPath}: ${err.message}`)
+    return null
+  }
+}
+
+/**
+ * Konversi lampiran images ke JPEG Buffer array, max 3 item.
+ * PDF lampiran dilewati (PDFKit tidak bisa embed PDF sebagai image).
+ */
+async function resolveLampiranBuffers(lampiranPaths) {
+  if (!Array.isArray(lampiranPaths) || lampiranPaths.length === 0) return []
+  const imgPaths = lampiranPaths
+    .filter(p => typeof p === 'string' && !p.toLowerCase().endsWith('.pdf'))
+    .slice(0, 3)
+  const results = await Promise.all(imgPaths.map(resolveImageBuffer))
+  return results.filter(Boolean)
+}
 
 function ensureOutputDir() {
   const outputDir = path.resolve(env.pdf.outputDir)
@@ -63,6 +95,18 @@ async function renderPdf(job) {
 
   const plain = typeof record.get === 'function' ? record.get({ plain: true }) : record
 
+  // Pre-process foto lampiran + POD sebelum render (sharp async, harus di luar Promise)
+  let resolvedOptions = { ...options }
+  if (job_type === 'surat_jalan' && options.includeLampiran !== false) {
+    const [lampiranBuffers, podBuffer] = await Promise.all([
+      resolveLampiranBuffers(plain.lampiran_paths),
+      resolveImageBuffer(plain.pod_photo_path),
+    ])
+    if (lampiranBuffers.length > 0 || podBuffer) {
+      resolvedOptions = { ...resolvedOptions, lampiranBuffers, podBuffer: podBuffer || null }
+    }
+  }
+
   const filename = `${prefix}_${safeFilename(numberLabel)}_${pdfJobUuid.slice(0, 8)}.pdf`
   const filePath = path.join(outputDir, filename)
 
@@ -91,9 +135,9 @@ async function renderPdf(job) {
 
       try {
         if (job_type === 'surat_jalan') {
-          sjTemplate.render(doc, plain, company, options)
+          sjTemplate.render(doc, plain, company, resolvedOptions)
         } else {
-          invoiceTemplate.render(doc, plain, company, options)
+          invoiceTemplate.render(doc, plain, company, resolvedOptions)
         }
       } catch (err) {
         // PDFKit throw saat render — hentikan stream & reject.

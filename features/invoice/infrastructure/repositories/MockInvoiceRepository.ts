@@ -368,7 +368,16 @@ export async function deleteInvoiceLampiran(uuid: string, path: string): Promise
   return normalizeInvoice(response.data)
 }
 
-export async function generateInvoicePdf(uuid: string, options: { includeLogo: boolean; includeSig: boolean; includeSJ: boolean }) {
+export async function generateInvoicePdf(
+  uuid: string,
+  options: {
+    includeLogo: boolean
+    includeSig: boolean
+    includeSJ: boolean
+    copies?: number
+    copyLabel?: boolean
+  },
+) {
   const response = await apiRequest<{ uuid: string; status: string; download_url: string | null }>(`/invoices/${uuid}/generate-pdf`, {
     method: 'POST',
     body: { options },

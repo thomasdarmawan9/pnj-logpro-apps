@@ -1,3 +1,12 @@
+export interface SJItem {
+  id: string
+  description: string
+  qty: number
+  unit: string
+  unit_price: number
+  notes: string
+}
+
 export enum StatusOperasional {
   DRAFT = 'draft',
   ASSIGNED = 'assigned',
@@ -54,6 +63,7 @@ export interface SuratJalan {
   } | null
   delivered_at: string | null
   pod_photo_path: string | null
+  items: SJItem[] | null
   lampiran_paths: string[] | null
   void_reason: string | null
   internal_notes: string | null

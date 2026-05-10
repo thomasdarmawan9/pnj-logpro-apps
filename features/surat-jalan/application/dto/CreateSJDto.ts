@@ -1,3 +1,5 @@
+import { SJItem } from '../../domain/entities/SuratJalan'
+
 export interface CreateSJDto {
   project_id: number
   fleet_id: number
@@ -7,6 +9,7 @@ export interface CreateSJDto {
   origin: string
   destination: string
   cargo_description: string | null
+  items: SJItem[]
   operational_cost: number
   internal_notes: string | null
   publish: boolean

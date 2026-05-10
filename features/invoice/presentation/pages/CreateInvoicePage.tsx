@@ -99,7 +99,6 @@ export default function CreateInvoicePage() {
     if (downPayment) {
       if (!downPayment.payment_date) result.errors.down_payment = 'Tanggal DP wajib diisi'
       if (downPayment.amount <= 0) result.errors.down_payment = 'Nominal DP harus lebih dari 0'
-      if (downPayment.amount > nettoAmount) result.errors.down_payment = `Nominal DP tidak boleh melebihi total invoice (${formatRupiah(nettoAmount)})`
       result.valid = Object.keys(result.errors).length === 0
     }
     setErrors(result.errors)

@@ -227,7 +227,7 @@ async function getCustomerDetail(customerId) {
     projectIds.add(inv.project.id)
     totalInvoiced    = round2(totalInvoiced    + Number(inv.total_amount))
     totalPaid        = round2(totalPaid        + Number(inv.paid_amount))
-    totalOutstanding = round2(totalOutstanding + Number(inv.total_amount) - Number(inv.paid_amount))
+    totalOutstanding = round2(totalOutstanding + Math.max(0, Number(inv.total_amount) - Number(inv.paid_amount)))
   }
 
   // SJ count (delivered + non-void).
@@ -331,7 +331,7 @@ async function getProjectDetail(projectId, opts = {}) {
     const allPayments = plain.payments || []
     const dp = allPayments.find(p => p.is_down_payment === true) || null
     const regularPayments = allPayments.filter(p => p.is_down_payment !== true)
-    const remaining = round2(round2(plain.total_amount) - round2(plain.paid_amount))
+    const remaining = round2(Math.max(0, round2(plain.total_amount) - round2(plain.paid_amount)))
     let aging_bucket = null
     let days_overdue = 0
     if (['sent', 'outstanding'].includes(plain.status) && remaining > 0) {
@@ -409,7 +409,7 @@ async function getProjectDetail(projectId, opts = {}) {
   // Aggregate
   const totalInvoiced    = round2(invoices.filter(i => i.status !== 'void').reduce((s, i) => s + Number(i.total_amount), 0))
   const totalPaid        = round2(invoices.filter(i => i.status !== 'void').reduce((s, i) => s + Number(i.paid_amount),  0))
-  const totalOutstanding = round2(totalInvoiced - totalPaid)
+  const totalOutstanding = round2(invoices.filter(i => i.status !== 'void').reduce((s, i) => s + Math.max(0, Number(i.total_amount) - Number(i.paid_amount)), 0))
   const totalOpsCost     = round2(sjs.filter(s => s.status !== 'void').reduce((s, sj) => s + Number(sj.operational_cost), 0))
   const invoiceCount     = invoices.filter(i => i.status !== 'void').length
   const sjCount          = sjs.filter(s => s.status !== 'void').length

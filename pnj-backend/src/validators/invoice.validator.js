@@ -55,9 +55,7 @@ const createInvoiceSchema = Joi.object({
   tax_percent:      Joi.number().precision(2).min(0).max(100).default(0),
   pph_percent:      Joi.number().precision(2).min(0).max(100).default(0),
   notes:            Joi.string().trim().allow('', null),
-  items:            Joi.array().items(itemSchema).min(1).required().messages({
-    'array.min':    'Minimal 1 item harus diisi.',
-  }),
+  items:            Joi.array().items(itemSchema).min(0).default([]),
   send_immediately: Joi.boolean().default(false),
   // DP opsional saat create. Kalau dikirim → otomatis dibuat sebagai
   // Payment(is_down_payment=true) di transaksi yang sama dgn invoice.

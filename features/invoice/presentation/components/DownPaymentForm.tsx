@@ -68,10 +68,6 @@ export default function DownPaymentForm({
       setError('Nominal DP harus lebih dari 0.')
       return
     }
-    if (amount > totalAmount && totalAmount > 0) {
-      setError(`DP tidak boleh melebihi total invoice (${formatRupiah(totalAmount)}).`)
-      return
-    }
     setError(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, payment_date, amount, paymentMethod, notes, totalAmount])

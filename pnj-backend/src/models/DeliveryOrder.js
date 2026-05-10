@@ -92,6 +92,11 @@ module.exports = (sequelize) => {
       allowNull: true,
       comment:   'Path lampiran tambahan SJ (BAP, tanda terima, dll)',
     },
+    items: {
+      type:      DataTypes.JSONB,
+      allowNull: true,
+      comment:   'Rincian item muatan SJ [{ id, description, qty, unit, notes }]',
+    },
     internal_notes: {
       type:      DataTypes.TEXT,
       allowNull: true,

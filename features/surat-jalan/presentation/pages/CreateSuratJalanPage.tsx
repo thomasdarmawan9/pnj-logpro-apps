@@ -12,9 +12,11 @@ import { useToast } from '@/components/toast/useToast'
 import SJFormProyekSection from '../components/SJFormProyekSection'
 import SJFormArmadaSection from '../components/SJFormArmadaSection'
 import SJFormSupirSection from '../components/SJFormSupirSection'
+import SJFormItemsSection from '../components/SJFormItemsSection'
 import useSuratJalanForm from '../hooks/useSuratJalanForm'
 import { formatLongDate } from '../utils/format'
 import type { ArmadaOption, DriverOption, ProjectOption } from '../utils/mockOptions'
+import type { SJItem } from '../../domain/entities/SuratJalan'
 
 export default function CreateSuratJalanPage() {
   const router = useRouter()
@@ -83,6 +85,8 @@ export default function CreateSuratJalanPage() {
     supir: driverMode === 'tbd' ? 'Belum ditentukan' : (selectedDriver?.name || '-'),
     rute: `${form.origin || '-'} → ${form.destination || '-'}`,
     tanggal: formatLongDate(form.sj_date),
+    jumlahItem: form.items.length,
+    totalNilai: form.items.reduce((s, i) => s + i.qty * i.unit_price, 0),
   }), [form, selectedArmada, selectedDriver, selectedProject, driverMode])
 
   const handleSubmit = async (publish: boolean) => {
@@ -253,6 +257,11 @@ export default function CreateSuratJalanPage() {
             </label>
           </div>
 
+          <SJFormItemsSection
+            items={form.items}
+            onChange={(items: SJItem[]) => updateField('items', items)}
+          />
+
           <div className="rounded-xl bg-white p-6 border mt-4" style={{ borderColor: 'var(--border-card)' }}>
             <div className="text-sm font-semibold mb-4">Catatan Internal</div>
             <label className="text-xs font-medium" style={{ color: '#374151' }}>
@@ -308,6 +317,16 @@ export default function CreateSuratJalanPage() {
             <div className="text-sm">{summary.rute}</div>
             <div className="text-xs text-gray-500 mt-2">Tanggal</div>
             <div className="text-sm">{summary.tanggal}</div>
+            <div className="text-xs text-gray-500 mt-2">Rincian Item</div>
+            <div className="text-sm">{summary.jumlahItem > 0 ? `${summary.jumlahItem} item` : '-'}</div>
+            {summary.totalNilai > 0 && (
+              <>
+                <div className="text-xs text-gray-500 mt-2">Total Nilai</div>
+                <div className="text-sm font-semibold" style={{ color: '#166534' }}>
+                  {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(summary.totalNilai)}
+                </div>
+              </>
+            )}
             <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-gray-100 text-gray-700 px-2.5 py-0.5 text-xs font-semibold">DRAFT</div>
           </div>
 

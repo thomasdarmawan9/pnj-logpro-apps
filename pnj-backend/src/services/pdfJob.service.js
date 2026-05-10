@@ -113,6 +113,7 @@ async function enqueue({ jobType, recordUuid, options, requestedBy }) {
       job_type:      jobType,
       record_id:     ctx.recordId,
       status:        'pending',
+      options:       options || null,
       requested_by:  requestedBy?.id || null,
     }, { transaction: t })
 

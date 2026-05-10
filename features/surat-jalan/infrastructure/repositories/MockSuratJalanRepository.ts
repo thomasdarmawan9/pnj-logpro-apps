@@ -92,6 +92,7 @@ function toCreatePayload(dto: CreateSJDto) {
     origin: dto.origin,
     destination: dto.destination,
     cargo_description: dto.cargo_description,
+    items: dto.items.length > 0 ? dto.items : null,
     operational_cost: dto.operational_cost,
     internal_notes: dto.internal_notes,
     publish: dto.publish,
@@ -106,6 +107,7 @@ function toUpdatePayload(dto: UpdateSJDto) {
     origin: dto.origin,
     destination: dto.destination,
     cargo_description: dto.cargo_description,
+    items: dto.items,
     operational_cost: dto.operational_cost,
     internal_notes: dto.internal_notes,
     lampiran_paths: dto.lampiran_paths,
@@ -223,7 +225,17 @@ export async function deleteSuratJalanLampiran(uuid: string, filePath: string): 
   return normalizeSJ(response.data)
 }
 
-export async function generateSuratJalanPdf(uuid: string, options: { includeHeader: boolean; includeSign: boolean; includeNotes: boolean }) {
+export async function generateSuratJalanPdf(
+  uuid: string,
+  options: {
+    includeHeader: boolean
+    includeSign: boolean
+    includeNotes: boolean
+    includeLampiran?: boolean
+    copies?: number
+    copyLabel?: boolean
+  },
+) {
   const response = await apiRequest<{ uuid: string; status: string; download_url: string | null }>(`/surat-jalan/${uuid}/generate-pdf`, {
     method: 'POST',
     body: { options },

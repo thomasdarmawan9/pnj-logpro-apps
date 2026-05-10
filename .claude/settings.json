@@ -37,7 +37,8 @@
       "Bash(curl -s 'http://localhost:3001/api/v1/dashboard/summary?period=this_month&module=all&status=all' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIxIiwicm9sZSI6InN1cGVyX2FkbWluIiwiZW1haWwiOiJhZG1pbkBwbmouY28uaWQiLCJpYXQiOjE3Nzc5MDY3MDEsImV4cCI6MTc3NzkwNzYwMX0.mhI8IA4jSTj7si07Jlc6SU0lFVQguyiiijAE9w-eMPA')",
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('success:', d.get\\('success'\\)\\); print\\('metrics count:', len\\(d.get\\('data',{}\\).get\\('metrics',[]\\)\\) if d.get\\('success'\\) else 'N/A'\\); print\\('error:', d.get\\('message',''\\)\\)\")",
       "Bash(curl -s 'http://localhost:3000/dashboard' -I)",
-      "Bash(curl -s 'http://localhost:3000/dashboard' -I -H 'Cookie: pnj_auth=true')"
+      "Bash(curl -s 'http://localhost:3000/dashboard' -I -H 'Cookie: pnj_auth=true')",
+      "Bash(rtk npm *)"
     ]
   }
 }

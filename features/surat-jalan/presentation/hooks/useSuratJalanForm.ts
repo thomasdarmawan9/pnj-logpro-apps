@@ -20,6 +20,7 @@ export default function useSuratJalanForm({ mode, initial }: UseSuratJalanFormOp
     origin: initial?.origin || '',
     destination: initial?.destination || '',
     cargo_description: initial?.cargo_description || '',
+    items: initial?.items || [],
     operational_cost: initial?.operational_cost || 0,
     internal_notes: initial?.internal_notes || '',
     publish: initial?.publish || false,
@@ -42,7 +43,13 @@ export default function useSuratJalanForm({ mode, initial }: UseSuratJalanFormOp
     return result.valid
   }
 
-  const isDirty = useMemo(() => Object.values(form).some(val => val !== '' && val !== null), [form])
+  const isDirty = useMemo(() => (
+    !!form.origin.trim() ||
+    !!form.destination.trim() ||
+    !!form.cargo_description?.trim() ||
+    !!form.internal_notes?.trim() ||
+    form.items.length > 0
+  ), [form])
 
   return {
     form,

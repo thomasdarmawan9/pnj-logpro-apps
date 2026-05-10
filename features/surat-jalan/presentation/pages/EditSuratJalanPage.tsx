@@ -13,9 +13,10 @@ import useSuratJalanDetail from '../hooks/useSuratJalanDetail'
 import useSuratJalanForm from '../hooks/useSuratJalanForm'
 import SJFormArmadaSection from '../components/SJFormArmadaSection'
 import SJFormSupirSection from '../components/SJFormSupirSection'
+import SJFormItemsSection from '../components/SJFormItemsSection'
 import SJLampiranUploadZone from '../components/SJLampiranUploadZone'
 import type { ArmadaOption, DriverOption } from '../utils/mockOptions'
-import { StatusOperasional } from '../../domain/entities/SuratJalan'
+import { StatusOperasional, SJItem } from '../../domain/entities/SuratJalan'
 
 interface EditSuratJalanPageProps {
   uuid: string
@@ -73,6 +74,7 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
         origin: selectedSJ.origin,
         destination: selectedSJ.destination,
         cargo_description: selectedSJ.cargo_description || '',
+        items: selectedSJ.items ?? [],
         operational_cost: selectedSJ.operational_cost,
         internal_notes: selectedSJ.internal_notes || '',
         publish: false,
@@ -98,6 +100,7 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
         origin: form.origin,
         destination: form.destination,
         cargo_description: form.cargo_description || null,
+        items: form.items.length > 0 ? form.items : null,
         internal_notes: form.internal_notes || null,
         lampiran_paths: lampiranPaths.length > 0 ? lampiranPaths : null,
       },
@@ -250,6 +253,11 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
               />
             </label>
           </div>
+
+          <SJFormItemsSection
+            items={form.items}
+            onChange={(items: SJItem[]) => updateField('items', items)}
+          />
 
           <div className="rounded-xl bg-white p-6 border" style={{ borderColor: 'var(--border-card)' }}>
             <div className="text-sm font-semibold mb-4">Catatan Internal</div>
