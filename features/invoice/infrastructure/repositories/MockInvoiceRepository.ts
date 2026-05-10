@@ -64,6 +64,7 @@ type ApiInvoice = Omit<
   tax_amount: number | string
   pph_percent?: number | string | null
   pph_amount?: number | string | null
+  insurance_amount?: number | string | null
   total_amount: number | string
   paid_amount: number | string
   down_payment?: ApiPayment | null
@@ -173,6 +174,7 @@ function normalizeInvoice(inv: ApiInvoice): Invoice {
     tax_amount: Number(inv.tax_amount || 0),
     pph_percent: Number(inv.pph_percent || 0),
     pph_amount: Number(inv.pph_amount || 0),
+    insurance_amount: Number(inv.insurance_amount || 0),
     total_amount: total,
     paid_amount: paid,
     down_payment: downPayment,
@@ -376,6 +378,7 @@ export async function generateInvoicePdf(
     includeLogo: boolean
     includeSig: boolean
     includeSJ: boolean
+    includeLampiran?: boolean
     copies?: number
     copyLabel?: boolean
   },

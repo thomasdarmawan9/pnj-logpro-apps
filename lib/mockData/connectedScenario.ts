@@ -347,6 +347,7 @@ export const SCENARIO_INVOICE: Invoice = {
   tax_amount: 2_398_000,
   pph_percent: 0,
   pph_amount: 0,
+  insurance_amount: 0,
   total_amount: 220_398_000,
   paid_amount: 0,
   remaining_amount: 220_398_000,

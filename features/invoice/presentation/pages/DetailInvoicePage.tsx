@@ -218,6 +218,9 @@ export default function DetailInvoicePage({ uuid }: Props) {
                 subtotalAmount={invoice.subtotal_amount}
                 taxPercent={invoice.tax_percent}
                 taxAmount={invoice.tax_amount}
+                pphPercent={invoice.pph_percent}
+                pphAmount={invoice.pph_amount}
+                insuranceAmount={invoice.insurance_amount}
                 totalAmount={invoice.total_amount}
               />
             </div>
