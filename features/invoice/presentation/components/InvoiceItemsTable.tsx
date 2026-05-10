@@ -28,10 +28,13 @@ interface Props {
   subtotalAmount: number
   taxPercent: number
   taxAmount: number
+  pphPercent: number
+  pphAmount: number
+  insuranceAmount: number
   totalAmount: number
 }
 
-export default function InvoiceItemsTable({ items, subtotalAmount, taxPercent, taxAmount, totalAmount }: Props) {
+export default function InvoiceItemsTable({ items, subtotalAmount, taxPercent, taxAmount, pphPercent, pphAmount, insuranceAmount, totalAmount }: Props) {
   return (
     <div className="bg-white rounded-xl border shadow-sm overflow-hidden" style={{ borderColor: 'var(--border-card)' }}>
       <table className="min-w-full text-sm">
@@ -82,8 +85,22 @@ export default function InvoiceItemsTable({ items, subtotalAmount, taxPercent, t
           {taxPercent > 0 && (
             <tr>
               <td colSpan={5} />
-              <td className="px-4 py-1 text-right text-sm text-gray-500 italic">PPN {taxPercent}%</td>
+              <td className="px-4 py-1 text-right text-sm text-gray-500 italic">+ PPN {taxPercent}%</td>
               <td className="px-4 py-1 text-right font-mono text-sm text-gray-500 italic" style={{ fontFamily: 'var(--font-mono)' }}>{formatRupiah(taxAmount)}</td>
+            </tr>
+          )}
+          {pphPercent > 0 && (
+            <tr>
+              <td colSpan={5} />
+              <td className="px-4 py-1 text-right text-sm italic" style={{ color: '#DC2626' }}>− PPh 23 {pphPercent}%</td>
+              <td className="px-4 py-1 text-right font-mono text-sm italic" style={{ fontFamily: 'var(--font-mono)', color: '#DC2626' }}>({formatRupiah(pphAmount)})</td>
+            </tr>
+          )}
+          {insuranceAmount > 0 && (
+            <tr>
+              <td colSpan={5} />
+              <td className="px-4 py-1 text-right text-sm text-gray-500 italic">+ Asuransi</td>
+              <td className="px-4 py-1 text-right font-mono text-sm text-gray-500 italic" style={{ fontFamily: 'var(--font-mono)' }}>{formatRupiah(insuranceAmount)}</td>
             </tr>
           )}
           <tr className="border-t-2 border-double" style={{ borderColor: '#9CA3AF' }}>
