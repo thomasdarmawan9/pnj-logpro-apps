@@ -36,6 +36,7 @@ export interface InvoiceItem {
   unit_price: number
   subtotal: number
   sort_order: number
+  source_sj_id: number | null
 }
 
 export interface AttachedSJ {
