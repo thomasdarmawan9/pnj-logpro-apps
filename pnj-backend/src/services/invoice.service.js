@@ -77,19 +77,21 @@ function periodToRange(period) {
 }
 
 // ── HELPER: hitung total invoice dari list items + tax/pph percent ────────
-function calcTotals(items, taxPercent, pphPercent) {
-  const subtotal = items.reduce(
+function calcTotals(items, taxPercent, pphPercent, insuranceAmount = 0) {
+  const subtotal    = items.reduce(
     (sum, it) => sum + Number(it.qty || 0) * Number(it.unit_price || 0),
     0,
   )
-  const taxAmount = subtotal * Number(taxPercent || 0) / 100
-  const pphAmount = subtotal * Number(pphPercent || 0) / 100
-  const total     = subtotal + taxAmount - pphAmount
+  const taxAmount  = subtotal * Number(taxPercent || 0) / 100
+  const pphAmount  = subtotal * Number(pphPercent || 0) / 100
+  const insurance  = round2(Number(insuranceAmount) || 0)
+  const total      = subtotal + taxAmount - pphAmount + insurance
   return {
-    subtotal_amount: round2(subtotal),
-    tax_amount:      round2(taxAmount),
-    pph_amount:      round2(pphAmount),
-    total_amount:    round2(total),
+    subtotal_amount:  round2(subtotal),
+    tax_amount:       round2(taxAmount),
+    pph_amount:       round2(pphAmount),
+    insurance_amount: insurance,
+    total_amount:     round2(total),
   }
 }
 
@@ -242,7 +244,7 @@ async function recalcInvoiceTotals(invoice, t) {
     transaction: t,
   })
   const plain  = items.map(i => ({ qty: i.qty, unit_price: i.unit_price }))
-  const totals = calcTotals(plain, invoice.tax_percent, invoice.pph_percent)
+  const totals = calcTotals(plain, invoice.tax_percent, invoice.pph_percent, invoice.insurance_amount)
   await invoice.update(totals, { transaction: t })
 }
 
@@ -402,7 +404,7 @@ async function create(payload, actor) {
     const sentAt        = payload.send_immediately ? new Date()  : null
 
     // Buat invoice tanpa total dulu, set 0 — akan di-update setelah items dibuat.
-    const totals = calcTotals(payload.items, payload.tax_percent, payload.pph_percent)
+    const totals = calcTotals(payload.items, payload.tax_percent, payload.pph_percent, payload.insurance_amount)
 
     const invoice = await Invoice.create({
       invoice_number:   invoiceNumber,
@@ -414,6 +416,7 @@ async function create(payload, actor) {
       bank_account_id:  payload.payment_method === 'transfer' ? (payload.bank_account_id || null) : null,
       tax_percent:      payload.tax_percent || 0,
       pph_percent:      payload.pph_percent || 0,
+      insurance_amount: round2(Number(payload.insurance_amount) || 0),
       ...totals,
       paid_amount:      0,
       status:           initialStatus,
@@ -501,6 +504,7 @@ async function update(uuid, payload, actor) {
       nextPphPercent = payload.pph_percent
       updates.pph_percent = payload.pph_percent
     }
+    if ('insurance_amount' in payload) updates.insurance_amount = round2(Number(payload.insurance_amount) || 0)
 
     let itemRowsForRecalc = null
 
@@ -513,8 +517,8 @@ async function update(uuid, payload, actor) {
       itemRowsForRecalc = itemRows
     }
 
-    // Recalc total kalau items / tax / pph berubah
-    if (payload.items || 'tax_percent' in payload || 'pph_percent' in payload) {
+    // Recalc total kalau items / tax / pph / insurance berubah
+    if (payload.items || 'tax_percent' in payload || 'pph_percent' in payload || 'insurance_amount' in payload) {
       const items = itemRowsForRecalc
         ? itemRowsForRecalc.map(r => ({ qty: r.qty, unit_price: r.unit_price }))
         : await InvoiceItem.findAll({
@@ -522,7 +526,8 @@ async function update(uuid, payload, actor) {
             transaction: t,
           }).then(rows => rows.map(r => ({ qty: r.qty, unit_price: r.unit_price })))
 
-      const newTotals = calcTotals(items, nextTaxPercent, nextPphPercent)
+      const nextInsurance = 'insurance_amount' in payload ? round2(Number(payload.insurance_amount) || 0) : round2(Number(invoice.insurance_amount) || 0)
+      const newTotals = calcTotals(items, nextTaxPercent, nextPphPercent, nextInsurance)
       Object.assign(updates, newTotals)
 
       // Guard: kalau total baru < paid_amount existing (DP + payments) →
@@ -680,7 +685,7 @@ async function recordPayment(invoiceUuid, payload, actor) {
 /**
  * Attach beberapa SJ ke invoice. Validasi:
  *  - SJ project_id harus sama dengan invoice.project_id
- *  - SJ status harus delivered
+ *  - SJ status harus assigned atau delivered (draft dan void tidak bisa)
  *  - SJ belum punya invoice_id (belum attached ke invoice lain)
  */
 async function attachSJ(invoiceUuid, sjUuids, actor) {
@@ -708,8 +713,8 @@ async function attachSJ(invoiceUuid, sjUuids, actor) {
       if (sj.project_id !== invoice.project_id) {
         throw new BadRequestError(`SJ ${sj.sj_number} bukan dari project yang sama dengan invoice.`)
       }
-      if (sj.status !== 'delivered') {
-        throw new BadRequestError(`SJ ${sj.sj_number} status ${sj.status} — hanya SJ delivered yang bisa di-attach.`)
+      if (!['assigned', 'delivered'].includes(sj.status)) {
+        throw new BadRequestError(`SJ ${sj.sj_number} status ${sj.status} — hanya SJ berstatus Terbit atau Terkirim yang bisa dilampirkan.`)
       }
       if (sj.invoice_id && sj.invoice_id !== invoice.id) {
         throw new ConflictError(`SJ ${sj.sj_number} sudah ter-attach ke invoice lain.`)
@@ -785,7 +790,7 @@ async function detachSJ(invoiceUuid, sjUuid, actor) {
 /**
  * List SJ yang bisa di-attach ke invoice tertentu:
  *  - project_id sama dengan invoice
- *  - status = delivered
+ *  - status = assigned atau delivered
  *  - belum punya invoice_id
  */
 async function getAttachableSJ(invoiceUuid) {
@@ -795,7 +800,7 @@ async function getAttachableSJ(invoiceUuid) {
   const rows = await DeliveryOrder.findAll({
     where: {
       project_id: invoice.project_id,
-      status:     'delivered',
+      status:     { [require('sequelize').Op.in]: ['assigned', 'delivered'] },
       invoice_id: null,
     },
     include: [
@@ -817,9 +822,9 @@ async function addLampiran(uuid, savedPath, actor) {
       lampiranSvc.safeUnlink(savedPath)
       throw new NotFoundError('Invoice tidak ditemukan.')
     }
-    if (FINAL_STATUSES.includes(invoice.status)) {
+    if (invoice.status === STATUS.VOID) {
       lampiranSvc.safeUnlink(savedPath)
-      throw new ForbiddenError(`Invoice status ${invoice.status} tidak dapat diubah lampirannya.`)
+      throw new ForbiddenError('Invoice yang sudah void tidak dapat diubah lampirannya.')
     }
     let nextPaths
     try {
@@ -840,8 +845,8 @@ async function removeLampiran(uuid, targetPath, actor) {
       where: { uuid }, transaction: t, lock: t.LOCK.UPDATE,
     })
     if (!invoice) throw new NotFoundError('Invoice tidak ditemukan.')
-    if (FINAL_STATUSES.includes(invoice.status)) {
-      throw new ForbiddenError(`Invoice status ${invoice.status} tidak dapat diubah lampirannya.`)
+    if (invoice.status === STATUS.VOID) {
+      throw new ForbiddenError('Invoice yang sudah void tidak dapat diubah lampirannya.')
     }
     const nextPaths = lampiranSvc.removeLampiranPath(invoice.lampiran_paths, targetPath)
     await invoice.update({ lampiran_paths: nextPaths }, { transaction: t })
