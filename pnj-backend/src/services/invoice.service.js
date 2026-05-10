@@ -197,6 +197,55 @@ function buildItemRows(items, invoiceId, fleetMap) {
   })
 }
 
+/**
+ * Buat InvoiceItem rows dari items milik satu SJ.
+ * period_start dan period_end sengaja dikosongkan (null).
+ * source_sj_id diisi dengan sj.id untuk tracking saat detach.
+ */
+function buildSJItemRows(sj, invoiceId, startOrder) {
+  const items = Array.isArray(sj.items) ? sj.items : []
+  if (items.length === 0) return []
+
+  const fleetIsTbd = !sj.fleet || sj.fleet.is_tbd
+  const fleetLabel = fleetIsTbd
+    ? 'TBD'
+    : `${sj.fleet.name} (${sj.fleet.plate_number})`
+
+  return items.map((item, i) => {
+    const qty       = Number(item.qty)       || 1
+    const unitPrice = Number(item.unit_price) || 0
+    return {
+      invoice_id:   invoiceId,
+      fleet_id:     fleetIsTbd ? null : sj.fleet_id,
+      fleet_label:  fleetLabel,
+      description:  item.description || null,
+      period_start: null,
+      period_end:   null,
+      qty,
+      unit:         item.unit || 'Unit',
+      unit_price:   unitPrice,
+      subtotal:     round2(qty * unitPrice),
+      sort_order:   startOrder + i,
+      source_sj_id: sj.id,
+    }
+  })
+}
+
+/**
+ * Recalculate subtotal_amount, tax_amount, pph_amount, total_amount invoice
+ * berdasarkan semua invoice_items yang ada saat ini.
+ */
+async function recalcInvoiceTotals(invoice, t) {
+  const items = await InvoiceItem.findAll({
+    where:       { invoice_id: invoice.id },
+    attributes:  ['qty', 'unit_price'],
+    transaction: t,
+  })
+  const plain  = items.map(i => ({ qty: i.qty, unit_price: i.unit_price }))
+  const totals = calcTotals(plain, invoice.tax_percent, invoice.pph_percent)
+  await invoice.update(totals, { transaction: t })
+}
+
 // ── LIST & DETAIL ─────────────────────────────────────────────────────────
 async function list(params) {
   const {
@@ -269,7 +318,6 @@ async function getByUuid(uuid) {
  *   - dp = { amount, payment_date, method, ... } → upsert (replace existing or create)
  *
  * Validasi:
- *   - DP amount + sum payment lain tidak boleh > total_amount
  *   - paid_amount invoice di-recompute dari sum semua payments setelah upsert
  *
  * Status TIDAK auto-transition (per kebijakan: DP tidak ubah status).
@@ -310,16 +358,6 @@ async function upsertDownPayment(invoice, dp, actor, t) {
 
   // Upsert DP.
   const dpAmount = round2(dp.amount)
-  const total    = Number(invoice.total_amount || 0)
-
-  // Validasi: regular_paid + dp_amount tidak boleh > total.
-  if (round2(regularPaid + dpAmount) > round2(total) + 0.001) {
-    const remaining = round2(total - regularPaid)
-    throw new BadRequestError(
-      `Nominal DP melebihi sisa tagihan. Maksimal Rp ${remaining.toLocaleString('id-ID')}.`,
-      { code: 'DP_EXCEEDS_TOTAL' },
-    )
-  }
 
   if (existing) {
     await existing.update({
@@ -602,7 +640,7 @@ async function recordPayment(invoiceUuid, payload, actor) {
 
     const total     = Number(invoice.total_amount || 0)
     const paid      = Number(invoice.paid_amount  || 0)
-    const remaining = round2(total - paid)
+    const remaining = round2(Math.max(0, total - paid))
     const amount    = round2(payload.amount)
 
     if (amount > remaining + 0.001) {
@@ -653,35 +691,32 @@ async function attachSJ(invoiceUuid, sjUuids, actor) {
       throw new ForbiddenError(`Invoice status ${invoice.status} tidak dapat diubah attachment-nya.`)
     }
 
+    // Fetch SJ dengan Fleet untuk fleet_label
     const sjList = await DeliveryOrder.findAll({
       where:       { uuid: sjUuids },
+      include:     [{ model: Fleet, as: 'fleet', attributes: ['id', 'uuid', 'name', 'plate_number', 'is_tbd'], required: false }],
       transaction: t,
     })
 
     if (sjList.length !== sjUuids.length) {
-      const found = new Set(sjList.map(sj => sj.uuid))
+      const found   = new Set(sjList.map(sj => sj.uuid))
       const missing = sjUuids.filter(u => !found.has(u))
       throw new NotFoundError(`SJ tidak ditemukan: ${missing.join(', ')}`)
     }
 
     for (const sj of sjList) {
       if (sj.project_id !== invoice.project_id) {
-        throw new BadRequestError(
-          `SJ ${sj.sj_number} bukan dari project yang sama dengan invoice.`,
-        )
+        throw new BadRequestError(`SJ ${sj.sj_number} bukan dari project yang sama dengan invoice.`)
       }
       if (sj.status !== 'delivered') {
-        throw new BadRequestError(
-          `SJ ${sj.sj_number} status ${sj.status} — hanya SJ delivered yang bisa di-attach.`,
-        )
+        throw new BadRequestError(`SJ ${sj.sj_number} status ${sj.status} — hanya SJ delivered yang bisa di-attach.`)
       }
       if (sj.invoice_id && sj.invoice_id !== invoice.id) {
-        throw new ConflictError(
-          `SJ ${sj.sj_number} sudah ter-attach ke invoice lain.`,
-        )
+        throw new ConflictError(`SJ ${sj.sj_number} sudah ter-attach ke invoice lain.`)
       }
     }
 
+    // Update delivery_orders
     await DeliveryOrder.update({
       invoice_id:                invoice.id,
       invoice_attachment_status: 'attached',
@@ -689,6 +724,22 @@ async function attachSJ(invoiceUuid, sjUuids, actor) {
       where:       { id: sjList.map(sj => sj.id) },
       transaction: t,
     })
+
+    // Salin items dari SJ ke invoice_items
+    const existingCount = await InvoiceItem.count({ where: { invoice_id: invoice.id }, transaction: t })
+    let globalIndex = existingCount
+
+    const allNewRows = []
+    for (const sj of sjList) {
+      const rows = buildSJItemRows(sj, invoice.id, globalIndex)
+      allNewRows.push(...rows)
+      globalIndex += rows.length
+    }
+
+    if (allNewRows.length > 0) {
+      await InvoiceItem.bulkCreate(allNewRows, { transaction: t })
+      await recalcInvoiceTotals(invoice, t)
+    }
 
     const fresh = await repo.findByUuid(invoice.uuid, { transaction: t })
     return decorate(fresh)
@@ -704,9 +755,18 @@ async function detachSJ(invoiceUuid, sjUuid, actor) {
     }
 
     const sj = await DeliveryOrder.findOne({ where: { uuid: sjUuid }, transaction: t })
-    if (!sj)                       throw new NotFoundError('Surat Jalan tidak ditemukan.')
-    if (sj.invoice_id !== invoice.id) {
-      throw new BadRequestError('SJ ini tidak ter-attach ke invoice tersebut.')
+    if (!sj)                          throw new NotFoundError('Surat Jalan tidak ditemukan.')
+    if (sj.invoice_id !== invoice.id) throw new BadRequestError('SJ ini tidak ter-attach ke invoice tersebut.')
+
+    // Hapus items yang berasal dari SJ ini
+    const deletedCount = await InvoiceItem.destroy({
+      where:       { invoice_id: invoice.id, source_sj_id: sj.id },
+      transaction: t,
+    })
+
+    // Recalc total hanya kalau ada item yang dihapus
+    if (deletedCount > 0) {
+      await recalcInvoiceTotals(invoice, t)
     }
 
     await sj.update({
