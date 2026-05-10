@@ -96,6 +96,7 @@ export default function EditInvoicePage({ uuid }: Props) {
         unit_price: item.unit_price,
         subtotal: item.subtotal,
         sort_order: item.sort_order,
+        source_sj_id: item.source_sj_id,
       })))
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps

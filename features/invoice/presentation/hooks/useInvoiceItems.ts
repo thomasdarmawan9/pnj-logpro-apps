@@ -34,6 +34,7 @@ export function useInvoiceItems(initialItems: PartialItem[] = []) {
       unit_price: 0,
       subtotal: 0,
       sort_order: items.length,
+      source_sj_id: null,
     }
     setItems(prev => [...prev, newItem])
   }
