@@ -109,6 +109,7 @@ export interface Invoice {
   tax_amount: number
   pph_percent: number
   pph_amount: number
+  insurance_amount: number
   total_amount: number
   paid_amount: number          // termasuk DP + pembayaran reguler
   remaining_amount: number     // total_amount - paid_amount

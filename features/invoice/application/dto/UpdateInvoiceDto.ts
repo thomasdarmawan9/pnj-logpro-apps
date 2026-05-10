@@ -7,6 +7,7 @@ export interface UpdateInvoiceDto {
   bank_account_id?: number | null
   tax_percent?: number
   pph_percent?: number
+  insurance_amount?: number
   notes?: string | null
   items?: CreateInvoiceItemDto[]
   lampiran_paths?: string[] | null

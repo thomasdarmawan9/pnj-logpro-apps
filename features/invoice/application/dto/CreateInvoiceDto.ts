@@ -30,6 +30,7 @@ export interface CreateInvoiceDto {
   bank_account_id?: number | null
   tax_percent: number
   pph_percent: number
+  insurance_amount?: number
   notes?: string | null
   items: CreateInvoiceItemDto[]
   send_immediately?: boolean

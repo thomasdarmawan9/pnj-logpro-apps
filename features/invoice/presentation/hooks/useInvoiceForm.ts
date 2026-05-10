@@ -55,6 +55,8 @@ export default function useInvoiceForm(initial?: Partial<InvoiceFormHeader>) {
 
   const [pphPercent, setPphPercent] = useState(2)
   const [pphEnabled, setPphEnabled] = useState(false)
+  const [insuranceEnabled, setInsuranceEnabled] = useState(false)
+  const [insuranceAmount, setInsuranceAmount] = useState(0)
   const [projects, setProjects] = useState<InvoiceProjectOption[]>([])
 
   useEffect(() => {
@@ -98,6 +100,11 @@ export default function useInvoiceForm(initial?: Partial<InvoiceFormHeader>) {
     if (enabled && pphPercent === 0) setPphPercent(2)
   }
 
+  const toggleInsurance = (enabled: boolean) => {
+    setInsuranceEnabled(enabled)
+    if (!enabled) setInsuranceAmount(0)
+  }
+
   const isDueDatePast = header.due_date < today
 
   return {
@@ -106,6 +113,8 @@ export default function useInvoiceForm(initial?: Partial<InvoiceFormHeader>) {
     taxEnabled,
     pphPercent,
     pphEnabled,
+    insuranceEnabled,
+    insuranceAmount,
     selectedProject,
     updateHeader,
     selectProject,
@@ -113,6 +122,8 @@ export default function useInvoiceForm(initial?: Partial<InvoiceFormHeader>) {
     setTaxPercent,
     togglePph,
     setPphPercent,
+    toggleInsurance,
+    setInsuranceAmount,
     isDueDatePast,
     projects,
   }
