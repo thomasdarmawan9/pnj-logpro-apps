@@ -22,6 +22,7 @@ export const MOCK_INVOICES: Invoice[] = [
     },
     invoice_date: '2026-03-11',
     due_date: '2026-04-10',
+    service_type: 'delivery',
     items: [
       {
         id: 1, uuid: 'item-001', invoice_id: 1, fleet_id: 1,
@@ -111,6 +112,7 @@ export const MOCK_INVOICES: Invoice[] = [
     },
     invoice_date: '2026-02-01',
     due_date: '2026-03-01',
+    service_type: 'delivery',
     items: [
       {
         id: 4, uuid: 'item-004', invoice_id: 2, fleet_id: 2,
@@ -174,6 +176,7 @@ export const MOCK_INVOICES: Invoice[] = [
     },
     invoice_date: '2026-01-15',
     due_date: '2026-02-15',
+    service_type: 'delivery',
     items: [
       {
         id: 5, uuid: 'item-005', invoice_id: 3, fleet_id: 5,
@@ -237,6 +240,7 @@ export const MOCK_INVOICES: Invoice[] = [
     },
     invoice_date: '2026-02-20',
     due_date: '2026-03-20',
+    service_type: 'delivery',
     items: [
       {
         id: 6, uuid: 'item-006', invoice_id: 4, fleet_id: null,
@@ -289,6 +293,7 @@ export const MOCK_INVOICES: Invoice[] = [
     },
     invoice_date: '2025-12-01',
     due_date: '2025-12-31',
+    service_type: 'delivery',
     items: [
       {
         id: 7, uuid: 'item-007', invoice_id: 5, fleet_id: null,
@@ -341,6 +346,7 @@ export const MOCK_INVOICES: Invoice[] = [
     },
     invoice_date: '2026-03-15',
     due_date: '2026-04-14',
+    service_type: 'delivery',
     items: [
       {
         id: 8, uuid: 'item-008', invoice_id: 6, fleet_id: 6,
@@ -393,6 +399,7 @@ export const MOCK_INVOICES: Invoice[] = [
     },
     invoice_date: '2026-03-10',
     due_date: '2026-04-09',
+    service_type: 'delivery',
     items: [
       {
         id: 9, uuid: 'item-009', invoice_id: 7, fleet_id: 2,
@@ -453,6 +460,7 @@ export const MOCK_INVOICES: Invoice[] = [
     },
     invoice_date: '2025-12-15',
     due_date: '2026-01-15',
+    service_type: 'delivery',
     items: [
       {
         id: 11, uuid: 'item-011', invoice_id: 8, fleet_id: null,

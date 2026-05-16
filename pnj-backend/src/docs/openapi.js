@@ -1042,6 +1042,7 @@ Object.assign(openApiSpec.components.schemas, {
       customer_id: { type: 'string', example: '1' },
       invoice_date: { type: 'string', format: 'date', example: '2026-04-28' },
       due_date: { type: 'string', format: 'date', example: '2026-05-28' },
+      service_type: { type: 'string', enum: ['delivery', 'rental'], example: 'delivery' },
       subtotal_amount: { type: 'number', example: 2500000 },
       tax_percent: { type: 'number', example: 11 },
       tax_amount: { type: 'number', example: 275000 },
@@ -1090,11 +1091,13 @@ Object.assign(openApiSpec.components.schemas, {
   },
   CreateInvoiceRequest: {
     type: 'object',
-    required: ['project_uuid', 'invoice_date', 'due_date', 'items'],
+    required: ['invoice_date', 'due_date', 'service_type', 'items'],
     properties: {
       project_uuid: { type: 'string', format: 'uuid' },
+      project_id: { type: 'integer', minimum: 1, example: 1 },
       invoice_date: { type: 'string', format: 'date', example: '2026-04-28' },
       due_date: { type: 'string', format: 'date', example: '2026-05-28' },
+      service_type: { type: 'string', enum: ['delivery', 'rental'], example: 'delivery' },
       tax_percent: { type: 'number', minimum: 0, maximum: 100, default: 0, example: 11 },
       pph_percent: { type: 'number', minimum: 0, maximum: 100, default: 0, example: 2 },
       notes: { type: 'string', nullable: true },
@@ -1310,6 +1313,7 @@ Object.assign(openApiSpec.paths, {
     post: {
       tags: ['Invoice'],
       summary: 'Attach Surat Jalan ke Invoice',
+      description: 'Hanya berlaku untuk invoice service_type=delivery.',
       security: [{ bearerAuth: [] }],
       parameters: [uuidPathParam],
       requestBody: { required: true, content: { 'application/json': { schema: { $ref: '#/components/schemas/AttachSJRequest' } } } },

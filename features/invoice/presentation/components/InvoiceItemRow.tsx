@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { GripVertical, Trash2 } from 'lucide-react'
 import { InvoiceItem } from '../../domain/entities/Invoice'
+import type { InvoiceServiceType } from '../../domain/entities/Invoice'
 import { apiRequest } from '@/lib/apiClient'
 
 type PartialItem = Omit<InvoiceItem, 'id' | 'invoice_id'>
@@ -16,6 +17,7 @@ interface Props {
   onDragOver: (index: number) => void
   onDrop: () => void
   errors?: Record<string, string>
+  serviceType?: InvoiceServiceType
 }
 
 const UNIT_OPTIONS = [
@@ -65,7 +67,7 @@ function calcDuration(start: string | null, end: string | null): string | null {
   return parts.join(' ') || null
 }
 
-export default function InvoiceItemRow({ item, index, onChange, onRemove, onDragStart, onDragOver, onDrop, errors = {} }: Props) {
+export default function InvoiceItemRow({ item, index, onChange, onRemove, onDragStart, onDragOver, onDrop, errors = {}, serviceType = 'delivery' }: Props) {
   const [fleetOptions, setFleetOptions] = useState<FleetOption[]>([])
   const duration = calcDuration(item.period_start, item.period_end)
   const subtotalFormatted = item.subtotal > 0 ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(item.subtotal) : '—'
@@ -131,7 +133,7 @@ export default function InvoiceItemRow({ item, index, onChange, onRemove, onDrag
             <option key={f.id} value={f.id}>{f.label}</option>
           ))}
         </select>
-        <label className="text-xs text-gray-500 mb-1 block">Label di invoice *</label>
+        <label className="text-xs text-gray-500 mb-1 block">{serviceType === 'rental' ? 'Jenis kendaraan di invoice *' : 'Armada di invoice *'}</label>
         <input
           className={`form-input w-full text-sm ${errors[`${errPrefix}.fleet_label`] ? 'border-red-400' : ''}`}
           value={item.fleet_label}
@@ -141,14 +143,14 @@ export default function InvoiceItemRow({ item, index, onChange, onRemove, onDrag
         {errors[`${errPrefix}.fleet_label`] && <p className="text-xs text-red-500 mt-1">{errors[`${errPrefix}.fleet_label`]}</p>}
       </div>
 
-      {/* Keterangan */}
+      {/* Deskripsi barang/catatan */}
       <div className="mb-3">
-        <label className="text-xs font-medium text-gray-600 mb-1 block">Keterangan</label>
+        <label className="text-xs font-medium text-gray-600 mb-1 block">{serviceType === 'rental' ? 'Catatan Item' : 'Barang Kiriman'}</label>
         <input
           className="form-input w-full text-sm"
           value={item.description ?? ''}
           onChange={e => onChange(item.uuid, 'description', e.target.value)}
-          placeholder="Tagihan Biaya Jasa Sewa Kendaraan"
+          placeholder={serviceType === 'rental' ? 'Opsional' : 'Contoh: Pipa, semen, material proyek'}
         />
       </div>
 

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useDispatch, useSelector } from 'react-redux'
-import { Plus, ArrowLeft, Pencil } from 'lucide-react'
+import { Plus, ArrowLeft, Pencil, Truck, KeyRound } from 'lucide-react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { AppDispatch, RootState } from '@/store'
 import { updateInvoice } from '@/store/slices/invoiceSlice'
@@ -241,6 +241,14 @@ export default function EditInvoicePage({ uuid }: Props) {
                 <div className="form-input bg-gray-50 text-gray-500 italic font-mono" style={{ fontFamily: 'var(--font-mono)' }}>{invoice?.invoice_number}</div>
               </div>
               <div>
+                <label className="text-xs font-medium text-gray-600 block mb-1">Jenis Jasa</label>
+                <div className="form-input bg-gray-50 text-gray-600 flex items-center gap-2">
+                  {invoice?.service_type === 'rental' ? <KeyRound size={15} /> : <Truck size={15} />}
+                  <span>{invoice?.service_type === 'rental' ? 'Jasa Penyewaan' : 'Jasa Pengiriman'}</span>
+                </div>
+                <p className="text-xs text-amber-600 mt-1">Jenis jasa tidak dapat diedit. Jika salah pilih, void invoice lalu buat invoice baru.</p>
+              </div>
+              <div>
                 <label className="text-xs font-medium text-gray-600 block mb-1">Tanggal Jatuh Tempo *</label>
                 <input type="date" className="form-input w-full disabled:bg-gray-50 disabled:text-gray-500" value={dueDate} onChange={e => setDueDate(e.target.value)} disabled={!fullEditable} />
                 {isDueDatePast && <p className="text-xs text-amber-600 mt-1">⚠ Tanggal jatuh tempo sudah terlewat</p>}
@@ -277,6 +285,7 @@ export default function EditInvoicePage({ uuid }: Props) {
                     if (dragFrom !== null && dragOver !== null && dragFrom !== dragOver) reorderItems(dragFrom, dragOver)
                     setDragFrom(null); setDragOver(null)
                   }}
+                  serviceType={invoice?.service_type ?? 'delivery'}
                 />
               ))}
             </div>

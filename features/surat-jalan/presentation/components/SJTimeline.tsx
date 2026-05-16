@@ -7,9 +7,9 @@ interface SJTimelineProps {
 
 const statusLabel: Record<StatusOperasional, string> = {
   draft: 'DRAFT',
-  assigned: 'ASSIGNED',
-  delivered: 'DELIVERED',
-  void: 'VOID',
+  assigned: 'TERBIT',
+  delivered: 'TERKIRIM',
+  void: 'DIBATALKAN',
 }
 
 export default function SJTimeline({ events }: SJTimelineProps) {

@@ -412,6 +412,7 @@ async function create(payload, actor) {
       customer_id:      project.customer_id,
       invoice_date:     payload.invoice_date,
       due_date:         payload.due_date,
+      service_type:     payload.service_type || 'delivery',
       payment_method:   payload.payment_method || 'transfer',
       bank_account_id:  payload.payment_method === 'transfer' ? (payload.bank_account_id || null) : null,
       tax_percent:      payload.tax_percent || 0,
@@ -695,6 +696,9 @@ async function attachSJ(invoiceUuid, sjUuids, actor) {
     if (FINAL_STATUSES.includes(invoice.status)) {
       throw new ForbiddenError(`Invoice status ${invoice.status} tidak dapat diubah attachment-nya.`)
     }
+    if (invoice.service_type === 'rental') {
+      throw new ForbiddenError('Invoice jasa penyewaan tidak dapat dikaitkan dengan Surat Jalan.')
+    }
 
     // Fetch SJ dengan Fleet untuk fleet_label
     const sjList = await DeliveryOrder.findAll({
@@ -796,6 +800,7 @@ async function detachSJ(invoiceUuid, sjUuid, actor) {
 async function getAttachableSJ(invoiceUuid) {
   const invoice = await Invoice.findOne({ where: { uuid: invoiceUuid } })
   if (!invoice) throw new NotFoundError('Invoice tidak ditemukan.')
+  if (invoice.service_type === 'rental') return []
 
   const rows = await DeliveryOrder.findAll({
     where: {

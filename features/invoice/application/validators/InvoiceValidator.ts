@@ -7,6 +7,7 @@ export interface ValidationResult {
 }
 
 const VALID_PAYMENT_METHODS = ['transfer', 'cash', 'check'] as const
+const VALID_SERVICE_TYPES = ['delivery', 'rental'] as const
 
 function validateDownPayment(
   dp: CreateDownPaymentDto | null | undefined,
@@ -30,6 +31,9 @@ export function validateCreateInvoice(dto: CreateInvoiceDto): ValidationResult {
   const errors: Record<string, string> = {}
 
   if (!dto.project_id) errors.project_id = 'Proyek wajib dipilih'
+  if (!dto.service_type || !VALID_SERVICE_TYPES.includes(dto.service_type)) {
+    errors.service_type = 'Jenis jasa wajib dipilih'
+  }
   if (!dto.invoice_date) errors.invoice_date = 'Tanggal invoice wajib diisi'
   if (!dto.due_date) errors.due_date = 'Tanggal jatuh tempo wajib diisi'
   if (!dto.payment_method || !VALID_PAYMENT_METHODS.includes(dto.payment_method)) {

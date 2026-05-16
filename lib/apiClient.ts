@@ -65,6 +65,47 @@ export function clearAuthSession() {
   window.localStorage.removeItem(USER_KEY)
 }
 
+function forceLogout() {
+  clearAuthSession()
+  document.cookie = 'pnj_auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
+  window.location.href = '/login'
+}
+
+// Singleton promise untuk prevent concurrent refresh calls
+let refreshPromise: Promise<string | null> | null = null
+
+async function tryRefreshToken(): Promise<string | null> {
+  if (refreshPromise) return refreshPromise
+
+  refreshPromise = (async () => {
+    try {
+      const session = getStoredAuthSession<unknown>()
+      if (!session?.refreshToken) return null
+
+      const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ refresh_token: session.refreshToken }),
+      })
+      if (!res.ok) return null
+
+      const data = await res.json()
+      const newAccess  = data?.data?.access_token
+      const newRefresh = data?.data?.refresh_token
+      if (!newAccess) return null
+
+      storeAuthSession(newAccess, newRefresh ?? session.refreshToken, session.user)
+      return newAccess as string
+    } catch {
+      return null
+    } finally {
+      refreshPromise = null
+    }
+  })()
+
+  return refreshPromise
+}
+
 interface ApiRequestOptions extends Omit<RequestInit, 'body'> {
   body?: unknown
 }
@@ -94,9 +135,17 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
   })
 
   if (response.status === 401 && isBrowser()) {
-    clearAuthSession()
-    document.cookie = 'pnj_auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
-    window.location.href = '/login'
+    const newToken = await tryRefreshToken()
+    if (newToken) {
+      // Retry request dengan token baru
+      headers.set('Authorization', `Bearer ${newToken}`)
+      const retry = await fetch(`${API_BASE_URL}${path}`, { ...options, headers, body })
+      if (retry.ok) {
+        const retryText = await retry.text()
+        return (retryText ? JSON.parse(retryText) : null) as ApiEnvelope<T>
+      }
+    }
+    forceLogout()
     throw new ApiError('Sesi berakhir. Silakan login kembali.', 401)
   }
 

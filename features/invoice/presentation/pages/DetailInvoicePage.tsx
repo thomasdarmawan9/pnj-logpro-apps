@@ -83,6 +83,7 @@ export default function DetailInvoicePage({ uuid }: Props) {
   const canManage = invoice.status !== InvoiceStatus.PAID && invoice.status !== InvoiceStatus.VOID
   const canEditDownPayment = invoice.status !== InvoiceStatus.VOID &&
     (role === 'super_admin' || role === 'admin_finance')
+  const isRentalInvoice = invoice.service_type === 'rental'
 
   const handleSaveLampiran = async () => {
     setIsSavingLampiran(true)
@@ -188,7 +189,7 @@ export default function DetailInvoicePage({ uuid }: Props) {
           <div className="flex border-b mb-6" style={{ borderColor: 'var(--border-card)' }}>
             {[
               { id: 'items', label: `Rincian Item (${invoice.items.length})` },
-              { id: 'sj', label: `Surat Jalan Terlampir (${invoice.attached_sj.length})` },
+              ...(!isRentalInvoice ? [{ id: 'sj', label: `Surat Jalan Terlampir (${invoice.attached_sj.length})` }] : []),
               { id: 'payments', label: `Riwayat Pembayaran (${invoice.payments.length})` },
               { id: 'lampiran', label: `Dokumen Terlampir (${(invoice.lampiran_paths ?? []).length})` },
             ].map(tab => (
@@ -209,6 +210,7 @@ export default function DetailInvoicePage({ uuid }: Props) {
                 <div><span className="text-gray-500">Proyek</span><span className="ml-2 font-medium">{invoice.project.name}</span></div>
                 <div><span className="text-gray-500">Customer</span><span className="ml-2 font-medium">{invoice.customer.name}</span></div>
                 <div><span className="text-gray-500">No. Kontrak</span><span className="ml-2">{invoice.project.contract_number}</span></div>
+                <div><span className="text-gray-500">Jenis Jasa</span><span className="ml-2">{isRentalInvoice ? 'Jasa Penyewaan' : 'Jasa Pengiriman'}</span></div>
                 <div><span className="text-gray-500">Tgl Invoice</span><span className="ml-2">{formatDate(invoice.invoice_date)}</span></div>
                 <div><span className="text-gray-500">Jatuh Tempo</span><span className="ml-2">{formatDate(invoice.due_date)}</span></div>
                 <div><span className="text-gray-500">Catatan</span><span className="ml-2 text-gray-500 italic">{invoice.notes || '(kosong)'}</span></div>
@@ -303,7 +305,7 @@ export default function DetailInvoicePage({ uuid }: Props) {
                   <button onClick={() => dispatch(openRecordPaymentModal())} className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: 'var(--green-primary)' }}>
                     <DollarSign size={14} />Catat Pembayaran
                   </button>
-                  <button onClick={async () => {
+                  {!isRentalInvoice && <button onClick={async () => {
                     const result = await dispatch(fetchAttachableSJ(invoice.uuid))
                     if (fetchAttachableSJ.rejected.match(result)) {
                       pushToast({
@@ -317,7 +319,7 @@ export default function DetailInvoicePage({ uuid }: Props) {
                     setActiveTab('sj')
                   }} className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm border" style={{ borderColor: 'var(--border-card)' }}>
                     <Paperclip size={14} />Kelola SJ Terlampir
-                  </button>
+                  </button>}
                   <button onClick={() => dispatch(openGeneratePDFModal())} className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm border" style={{ borderColor: 'var(--border-card)' }}>
                     <Printer size={14} />Cetak PDF
                   </button>

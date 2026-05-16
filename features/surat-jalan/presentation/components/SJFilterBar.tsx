@@ -59,9 +59,9 @@ export default function SJFilterBar({ filters, onChange, onReset }: SJFilterBarP
             >
               <option value="all">Semua</option>
               <option value={StatusOperasional.DRAFT}>Draft</option>
-              <option value={StatusOperasional.ASSIGNED}>Assigned</option>
-              <option value={StatusOperasional.DELIVERED}>Delivered</option>
-              <option value={StatusOperasional.VOID}>Void</option>
+              <option value={StatusOperasional.ASSIGNED}>Terbit</option>
+              <option value={StatusOperasional.DELIVERED}>Terkirim</option>
+              <option value={StatusOperasional.VOID}>Dibatalkan</option>
             </select>
             <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           </div>

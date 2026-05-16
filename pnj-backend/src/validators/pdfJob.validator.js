@@ -14,13 +14,14 @@ const sjOptionsSchema = Joi.object({
 }).default()
 
 const invoiceOptionsSchema = Joi.object({
-  includeLogo: Joi.boolean().default(true),
-  includeSig:  Joi.boolean().default(true),
-  includeSJ:   Joi.boolean().default(false),
+  includeLogo:     Joi.boolean().default(true),
+  includeSig:      Joi.boolean().default(true),
+  includeSJ:       Joi.boolean().default(false),
+  includeLampiran: Joi.boolean().default(true),
   // Jumlah rangkap — tiap salinan di halaman terpisah (default 3)
-  copies:      Joi.number().integer().min(1).max(10).default(3),
+  copies:          Joi.number().integer().min(1).max(10).default(3),
   // Tambahkan label "Lembar X/N" di sudut kanan bawah tiap salinan
-  copyLabel:   Joi.boolean().default(false),
+  copyLabel:       Joi.boolean().default(false),
 }).default()
 
 const generateSJPdfSchema      = Joi.object({ options: sjOptionsSchema })

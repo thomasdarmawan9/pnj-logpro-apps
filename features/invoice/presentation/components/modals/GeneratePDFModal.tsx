@@ -16,8 +16,12 @@ export default function GeneratePDFModal({ open, invoice, onClose }: Props) {
   const [includeLogo, setIncludeLogo] = useState(true)
   const [includeSig, setIncludeSig] = useState(true)
   const [includeSJ, setIncludeSJ] = useState(false)
+  const [includeLampiran, setIncludeLampiran] = useState(true)
   const [copies, setCopies] = useState(3)
   const [copyLabel, setCopyLabel] = useState(false)
+
+  const hasLampiranFoto = (invoice?.lampiran_paths ?? []).filter(p => !p.endsWith('.pdf')).length > 0
+  const canIncludeSJ = invoice?.service_type !== 'rental'
   const [status, setStatus] = useState<'idle' | 'processing' | 'done' | 'failed'>('idle')
   const [jobUuid, setJobUuid] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -30,6 +34,7 @@ export default function GeneratePDFModal({ open, invoice, onClose }: Props) {
       setIncludeLogo(true)
       setIncludeSig(true)
       setIncludeSJ(false)
+      setIncludeLampiran(true)
       setCopies(3)
       setCopyLabel(false)
     }
@@ -41,7 +46,14 @@ export default function GeneratePDFModal({ open, invoice, onClose }: Props) {
     setError(null)
 
     try {
-      const job = await generateInvoicePdf(invoice.uuid, { includeLogo, includeSig, includeSJ, copies, copyLabel })
+      const job = await generateInvoicePdf(invoice.uuid, {
+        includeLogo,
+        includeSig,
+        includeSJ: canIncludeSJ ? includeSJ : false,
+        includeLampiran: hasLampiranFoto ? includeLampiran : false,
+        copies,
+        copyLabel,
+      })
       setJobUuid(job.uuid)
 
       let latestStatus = job.status
@@ -139,13 +151,25 @@ export default function GeneratePDFModal({ open, invoice, onClose }: Props) {
                 {[
                   { id: 'logo', label: 'Sertakan kop perusahaan', value: includeLogo, set: setIncludeLogo },
                   { id: 'sig', label: 'Kolom tanda tangan & materai', value: includeSig, set: setIncludeSig },
-                  { id: 'sj', label: 'Lampirkan daftar SJ terlampir (halaman terakhir PDF)', value: includeSJ, set: setIncludeSJ },
+                  ...(canIncludeSJ ? [{ id: 'sj', label: 'Lampirkan daftar SJ terlampir (halaman terakhir PDF)', value: includeSJ, set: setIncludeSJ }] : []),
                 ].map(opt => (
                   <label key={opt.id} className="flex items-center gap-3 cursor-pointer">
                     <input type="checkbox" checked={opt.value} onChange={e => opt.set(e.target.checked)} className="rounded" />
                     <span className="text-sm text-gray-700">{opt.label}</span>
                   </label>
                 ))}
+                {/* Lampiran foto — hanya tampil jika invoice punya lampiran gambar */}
+                {hasLampiranFoto && (
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input type="checkbox" checked={includeLampiran} onChange={e => setIncludeLampiran(e.target.checked)} className="rounded" />
+                    <span className="text-sm text-gray-700">
+                      Sertakan foto lampiran
+                      <span className="text-gray-400 ml-1">
+                        ({(invoice?.lampiran_paths ?? []).filter(p => !p.endsWith('.pdf')).length} foto, halaman terakhir)
+                      </span>
+                    </span>
+                  </label>
+                )}
                 {/* Label lembar — hanya tampil jika rangkap > 1 */}
                 {copies > 1 && (
                   <label className="flex items-center gap-3 cursor-pointer">

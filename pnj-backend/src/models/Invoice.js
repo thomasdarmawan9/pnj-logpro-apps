@@ -36,6 +36,13 @@ module.exports = (sequelize) => {
       type:      DataTypes.DATEONLY,
       allowNull: false,
     },
+    service_type: {
+      type:         DataTypes.STRING(20),
+      allowNull:    false,
+      defaultValue: 'delivery',
+      validate:     { isIn: [['delivery', 'rental']] },
+      comment:      'delivery = jasa pengiriman, rental = jasa penyewaan',
+    },
     subtotal_amount: {
       type:         DataTypes.DECIMAL(15, 2),
       defaultValue: 0,

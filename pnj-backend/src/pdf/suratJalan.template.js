@@ -65,8 +65,11 @@ function drawLogo(doc, company, x, y, size) {
   doc.fillColor(C_BLACK)
 }
 
+// Warna background baris data tabel per salinan (index 0-based)
+const COPY_ROW_BG = [null, '#FFFDE7', '#FCE4EC']   // copy1: putih, copy2: cream, copy3: pink
+
 // ── Render satu salinan SJ ─────────────────────────────────────────────────
-function renderCopy(doc, sj, company, options, Y0) {
+function renderCopy(doc, sj, company, options, Y0, copyIndex = 0) {
   const L  = MARGIN_H
   const W  = COPY_W
   const R  = L + W
@@ -191,8 +194,9 @@ function renderCopy(doc, sj, company, options, Y0) {
 
   // --- Header row ---
   const MAIN_W = COL_NO + COL_NAMA + COL_QTY + COL_PRICE + COL_SUBTOTAL
-  doc.rect(X_NO, TABLE_Y, MAIN_W, ROW_H).fillAndStroke(C_HEAD_BG, C_BORDER)
-  doc.rect(X_RGT, TABLE_Y, RIGHT_W, ROW_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+  const rowBg  = COPY_ROW_BG[copyIndex] || null
+  doc.rect(X_NO, TABLE_Y, MAIN_W, ROW_H).fillAndStroke(rowBg || C_HEAD_BG, C_BORDER)
+  doc.rect(X_RGT, TABLE_Y, RIGHT_W, ROW_H).fillAndStroke(rowBg || C_HEAD_BG, C_BORDER)
 
   doc.font('Helvetica-Bold').fontSize(7.5).fillColor(C_DARK)
   doc.text('No',           X_NO       + 2, TABLE_Y + 3, { width: COL_NO       - 4, align: 'center' })
@@ -221,12 +225,21 @@ function renderCopy(doc, sj, company, options, Y0) {
 
   for (let i = 0; i < TABLE_ROWS; i++) {
     const rowY = TABLE_Y + ROW_H + i * ROW_H
-    doc.rect(X_NO,       rowY, COL_NO,       ROW_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
-    doc.rect(X_NAMA,     rowY, COL_NAMA,     ROW_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
-    doc.rect(X_QTY,      rowY, COL_QTY,      ROW_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
-    doc.rect(X_PRICE,    rowY, COL_PRICE,    ROW_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
-    doc.rect(X_SUBTOTAL, rowY, COL_SUBTOTAL, ROW_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
-    doc.rect(X_RGT,      rowY, RIGHT_W,      ROW_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+    if (rowBg) {
+      doc.rect(X_NO, rowY, COL_NO + COL_NAMA + COL_QTY + COL_PRICE + COL_SUBTOTAL, ROW_H)
+         .fillAndStroke(rowBg, C_BORDER)
+      doc.rect(X_RGT, rowY, RIGHT_W, ROW_H).fillAndStroke(rowBg, C_BORDER)
+      // vertical dividers kembali setelah fill
+      ;[X_NAMA, X_QTY, X_PRICE, X_SUBTOTAL].forEach(x =>
+        vLine(doc, x, rowY, rowY + ROW_H))
+    } else {
+      doc.rect(X_NO,       rowY, COL_NO,       ROW_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+      doc.rect(X_NAMA,     rowY, COL_NAMA,     ROW_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+      doc.rect(X_QTY,      rowY, COL_QTY,      ROW_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+      doc.rect(X_PRICE,    rowY, COL_PRICE,    ROW_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+      doc.rect(X_SUBTOTAL, rowY, COL_SUBTOTAL, ROW_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+      doc.rect(X_RGT,      rowY, RIGHT_W,      ROW_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+    }
 
     doc.font('Helvetica').fontSize(7.5).fillColor(C_DARK)
        .text(String(i + 1), X_NO + 2, rowY + 3, { width: COL_NO - 4, align: 'center' })
@@ -250,10 +263,11 @@ function renderCopy(doc, sj, company, options, Y0) {
   // --- Baris total (di bawah data rows, sebelum extra rows) ---
   const TOTAL_ROW_Y = TABLE_Y + ROW_H + TABLE_ROWS * ROW_H
   doc.rect(X_NO,       TOTAL_ROW_Y, COL_NO + COL_NAMA + COL_QTY + COL_PRICE, ROW_H)
-     .fillAndStroke(C_HEAD_BG, C_BORDER)
+     .fillAndStroke(rowBg || C_HEAD_BG, C_BORDER)
   doc.rect(X_SUBTOTAL, TOTAL_ROW_Y, COL_SUBTOTAL, ROW_H)
-     .fillAndStroke(C_HEAD_BG, C_BORDER)
-  doc.rect(X_RGT,      TOTAL_ROW_Y, RIGHT_W, ROW_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+     .fillAndStroke(rowBg || C_HEAD_BG, C_BORDER)
+  doc.rect(X_RGT,      TOTAL_ROW_Y, RIGHT_W, ROW_H)
+     .fillAndStroke(rowBg || C_HEAD_BG, C_BORDER)
 
   doc.font('Helvetica-Bold').fontSize(7.5).fillColor(C_DARK)
      .text('TOTAL', X_NO + 2, TOTAL_ROW_Y + 3, { width: COL_NO + COL_NAMA + COL_QTY + COL_PRICE - 4, align: 'right' })
@@ -281,15 +295,25 @@ function renderCopy(doc, sj, company, options, Y0) {
     const valH  = Math.max(LBL_H, textH + VAL_PAD * 2)
 
     // Baris label
-    doc.rect(X_NO,  y,        LEFT_W,  LBL_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
-    doc.rect(X_RGT, y,        RIGHT_W, LBL_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+    if (rowBg) {
+      doc.rect(X_NO,  y, LEFT_W,  LBL_H).fillAndStroke(rowBg, C_BORDER)
+      doc.rect(X_RGT, y, RIGHT_W, LBL_H).fillAndStroke(rowBg, C_BORDER)
+    } else {
+      doc.rect(X_NO,  y, LEFT_W,  LBL_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+      doc.rect(X_RGT, y, RIGHT_W, LBL_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+    }
     doc.font('Helvetica-Bold').fontSize(FONT_SZ).fillColor(C_DARK)
        .text(label, X_RGT + 4, y + (LBL_H - FONT_SZ) / 2, { width: RIGHT_W - 8, lineBreak: false })
 
     // Baris nilai
     const vY = y + LBL_H
-    doc.rect(X_NO,  vY, LEFT_W,  valH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
-    doc.rect(X_RGT, vY, RIGHT_W, valH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+    if (rowBg) {
+      doc.rect(X_NO,  vY, LEFT_W,  valH).fillAndStroke(rowBg, C_BORDER)
+      doc.rect(X_RGT, vY, RIGHT_W, valH).fillAndStroke(rowBg, C_BORDER)
+    } else {
+      doc.rect(X_NO,  vY, LEFT_W,  valH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+      doc.rect(X_RGT, vY, RIGHT_W, valH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+    }
     doc.font('Helvetica').fontSize(FONT_SZ).fillColor(C_DARK)
        .text(value, X_RGT + 4, vY + VAL_PAD, { width: RIGHT_W - 8 })
 
@@ -303,8 +327,13 @@ function renderCopy(doc, sj, company, options, Y0) {
   const hSpare     = 18
 
   // Baris spare kosong
-  doc.rect(X_NO,  rSpare, LEFT_W,   hSpare).strokeColor(C_BORDER).lineWidth(0.5).stroke()
-  doc.rect(X_RGT, rSpare, RIGHT_W,  hSpare).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+  if (rowBg) {
+    doc.rect(X_NO,  rSpare, LEFT_W,  hSpare).fillAndStroke(rowBg, C_BORDER)
+    doc.rect(X_RGT, rSpare, RIGHT_W, hSpare).fillAndStroke(rowBg, C_BORDER)
+  } else {
+    doc.rect(X_NO,  rSpare, LEFT_W,  hSpare).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+    doc.rect(X_RGT, rSpare, RIGHT_W, hSpare).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+  }
 
   if (includeNotes && sj.internal_notes) {
     doc.font('Helvetica').fontSize(7).fillColor(C_GRAY)
@@ -440,7 +469,7 @@ function render(doc, sj, company, options = {}) {
 
   for (let i = 0; i < copies; i++) {
     if (i > 0) doc.addPage()
-    renderCopy(doc, sj, company, options, TOP_COPY_Y)
+    renderCopy(doc, sj, company, options, TOP_COPY_Y, i)
 
     // Opsional: label lembar di sudut kanan bawah
     if (options.copyLabel) {

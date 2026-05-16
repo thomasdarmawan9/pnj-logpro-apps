@@ -17,6 +17,8 @@ export enum InvoiceStatus {
   VOID        = 'void',
 }
 
+export type InvoiceServiceType = 'delivery' | 'rental'
+
 export interface InvoiceItem {
   id?: number
   uuid: string
@@ -103,6 +105,7 @@ export interface Invoice {
   }
   invoice_date: string
   due_date: string
+  service_type: InvoiceServiceType
   items: InvoiceItem[]
   subtotal_amount: number
   tax_percent: number

@@ -90,7 +90,18 @@ export default function InvoiceListPage() {
     }
     if (action === 'attach-sj') {
       setActiveUuid(uuid)
-      await dispatch(fetchInvoiceDetail(uuid))
+      const detail = await dispatch(fetchInvoiceDetail(uuid))
+      const invoice = fetchInvoiceDetail.fulfilled.match(detail)
+        ? detail.payload
+        : list.find(i => i.uuid === uuid)
+      if (invoice?.service_type === 'rental') {
+        pushToast({
+          title: 'SJ tidak tersedia',
+          description: 'Invoice jasa penyewaan tidak dapat dikaitkan dengan Surat Jalan.',
+          variant: 'info',
+        })
+        return
+      }
       const result = await dispatch(fetchAttachableSJ(uuid))
       if (fetchAttachableSJ.rejected.match(result)) {
         pushToast({

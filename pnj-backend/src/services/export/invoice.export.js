@@ -11,6 +11,11 @@ const STATUS_LABEL = {
   void:        'Void',
 }
 
+const SERVICE_TYPE_LABEL = {
+  delivery: 'Jasa Pengiriman',
+  rental:   'Jasa Penyewaan',
+}
+
 async function exportXlsx(filters, res) {
   const allRows = []
   let page = 1
@@ -36,6 +41,7 @@ async function exportXlsx(filters, res) {
     { header: 'No. Invoice',     key: 'invoice_number', width: 14, align: 'left' },
     { header: 'Tanggal',          key: 'invoice_date',   width: 13, align: 'center', format: FMT.DATE_ID },
     { header: 'Jatuh Tempo',      key: 'due_date',       width: 13, align: 'center', format: FMT.DATE_ID },
+    { header: 'Jenis Jasa',       key: 'service_type',   width: 18 },
     { header: 'Customer',         key: 'customer',       width: 30 },
     { header: 'Project',          key: 'project',        width: 22 },
     { header: 'Subtotal',         key: 'subtotal',       width: 16, align: 'right', format: FMT.IDR },
@@ -54,6 +60,7 @@ async function exportXlsx(filters, res) {
       invoice_number: inv.invoice_number,
       invoice_date:   inv.invoice_date ? new Date(inv.invoice_date) : null,
       due_date:       inv.due_date ? new Date(inv.due_date) : null,
+      service_type:   SERVICE_TYPE_LABEL[inv.service_type] || SERVICE_TYPE_LABEL.delivery,
       customer:       inv.customer?.name || '-',
       project:        inv.project?.code || '-',
       subtotal:       Number(inv.subtotal_amount || 0),

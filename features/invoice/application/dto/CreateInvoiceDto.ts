@@ -26,6 +26,7 @@ export interface CreateInvoiceDto {
   project_id: number
   invoice_date: string
   due_date: string
+  service_type: 'delivery' | 'rental'
   payment_method: 'transfer' | 'cash' | 'check'
   bank_account_id?: number | null
   tax_percent: number

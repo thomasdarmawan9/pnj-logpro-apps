@@ -14,8 +14,8 @@ interface Props {
 }
 
 const SJ_STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-  delivered: { label: 'DELIVERED', color: '#166534' },
-  assigned:  { label: 'ASSIGNED',  color: '#1E40AF' },
+  delivered: { label: 'TERKIRIM',  color: '#166534' },
+  assigned:  { label: 'TERBIT',    color: '#1E40AF' },
   draft:     { label: 'DRAFT',     color: '#6B7280' },
 }
 

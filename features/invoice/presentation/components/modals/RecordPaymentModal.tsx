@@ -15,9 +15,6 @@ function formatNumber(n: number): string {
   return n > 0 ? n.toLocaleString('id-ID') : ''
 }
 
-function parseNumber(val: string): number {
-  return Number(val.replace(/\D/g, '')) || 0
-}
 
 interface Props {
   open: boolean
@@ -118,12 +115,12 @@ export default function RecordPaymentModal({ open, invoice, onClose, onSuccess }
         {/* Nominal */}
         <div>
           <label className="text-xs font-medium text-gray-600 block mb-1">Nominal Pembayaran *</label>
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400 pointer-events-none">Rp</span>
+          <div className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 ${errors.amount ? 'border-red-400' : ''}`} style={{ borderColor: errors.amount ? undefined : 'var(--border-card)' }}>
+            <span className="shrink-0 text-sm text-gray-400 select-none">Rp</span>
             <input
               type="text"
               inputMode="numeric"
-              className={`form-input w-full text-sm pl-9 font-mono ${errors.amount ? 'border-red-400' : ''}`}
+              className="flex-1 text-sm font-mono bg-transparent outline-none placeholder-gray-400"
               value={amountDisplay}
               onChange={e => handleAmountChange(e.target.value)}
               onFocus={handleAmountFocus}

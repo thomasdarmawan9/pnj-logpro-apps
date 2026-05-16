@@ -4,6 +4,7 @@ const Joi = require('joi')
 
 const STATUSES = ['draft', 'sent', 'outstanding', 'paid', 'void']
 const PAYMENT_METHODS = ['transfer', 'cash', 'check']
+const SERVICE_TYPES = ['delivery', 'rental']
 const PERIODS = ['today', 'week', 'month', 'last_month', 'all']
 
 /**
@@ -50,6 +51,7 @@ const createInvoiceSchema = Joi.object({
   due_date:         Joi.date().iso().min(Joi.ref('invoice_date')).required().messages({
     'date.min': 'Tanggal jatuh tempo tidak boleh lebih kecil dari tanggal invoice.',
   }),
+  service_type:     Joi.string().valid(...SERVICE_TYPES).required(),
   payment_method:   Joi.string().valid('transfer', 'cash', 'check').default('transfer'),
   bank_account_id:  Joi.number().integer().min(1).allow(null).optional(),
   tax_percent:      Joi.number().precision(2).min(0).max(100).default(0),
@@ -146,6 +148,7 @@ const listInvoiceQuery = Joi.object({
 module.exports = {
   STATUSES,
   PAYMENT_METHODS,
+  SERVICE_TYPES,
   PERIODS,
   downPaymentSchema,
   createInvoiceSchema,

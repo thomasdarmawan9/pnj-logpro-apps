@@ -42,6 +42,73 @@ function borderRect(doc, x, y, w, h, color = C_BORDER, lw = 0.5) {
   doc.rect(x, y, w, h).strokeColor(color).lineWidth(lw).stroke()
 }
 
+function formatDateNumeric(input) {
+  if (!input) return '-'
+  const d = new Date(input)
+  if (Number.isNaN(d.getTime())) return String(input)
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
+}
+
+function formatQty(n) {
+  const num = Number(n || 0)
+  if (Number.isInteger(num)) return String(num)
+  return num.toLocaleString('id-ID', { maximumFractionDigits: 2 })
+}
+
+function serviceRemark(invoice) {
+  return invoice.service_type === 'rental'
+    ? 'Tagihan Biaya Jasa Penyewaan.'
+    : 'Tagihan Biaya Jasa Pengiriman.'
+}
+
+function findAttachedSjForItem(invoice, item) {
+  const attached = invoice.attachedSJs || invoice.attached_sj || []
+  if (!Array.isArray(attached) || attached.length === 0) return null
+  if (item.source_sj_id) {
+    const match = attached.find(sj => Number(sj.id) === Number(item.source_sj_id))
+    if (match) return match
+  }
+  return attached.length === 1 ? attached[0] : null
+}
+
+function uniqueNonEmpty(values) {
+  return [...new Set(values.map(v => String(v || '').trim()).filter(Boolean))]
+}
+
+function buildGroupedDescription(invoice, items) {
+  if (invoice.service_type === 'rental') {
+    const vehicleLines = items.map((item, idx) => {
+      const vehicle = item.fleet_label || item.description || '-'
+      const suffix = idx < items.length - 1 ? ',' : ''
+      return `${formatQty(item.qty || 1)} ${vehicle}${suffix}`
+    })
+    const periods = uniqueNonEmpty(items
+      .filter(item => item.period_start || item.period_end)
+      .map(item => `${formatDateNumeric(item.period_start)} - ${formatDateNumeric(item.period_end)}`))
+    const lines = ['Jenis Kendaraan :', ...vehicleLines]
+    if (periods.length > 0) {
+      lines.push('', 'Periode pakai :', periods.join(', '))
+    }
+    return lines.join('\n')
+  }
+
+  const cargo = uniqueNonEmpty(items.map(item => item.description)).join(', ') || '-'
+  const fleets = uniqueNonEmpty(items.map(item => item.fleet_label))
+  const routes = uniqueNonEmpty(items.map(item => {
+    const sj = findAttachedSjForItem(invoice, item)
+    if (!sj?.origin && !sj?.destination) return ''
+    return `${sj.origin || '-'} - ${sj.destination || '-'}`
+  }))
+  const lines = ['Barang Kiriman :', cargo]
+  if (fleets.length > 0) {
+    lines.push('', 'Armada :', fleets.join(', '))
+  }
+  if (routes.length > 0) {
+    lines.push('', 'rute pengiriman :', routes.join(', '))
+  }
+  return lines.join('\n')
+}
+
 // ── Draw logo (fallback: teks "PNJ" dalam kotak) ──────────────────────────
 function drawLogo(doc, company, x, y, size) {
   // Coba logo dari company settings
@@ -172,142 +239,113 @@ function drawRecipientBlock(doc, invoice, startY) {
 // ── 4. Tabel Item ─────────────────────────────────────────────────────────
 /**
  * Kolom: No | Deskripsi | Keterangan | Qty | Harga | Jumlah
- * Sesuai desain gambar fisik.
+ * Satu baris per item, tinggi baris auto-fit berdasarkan konten terpanjang.
  */
 function drawItemTable(doc, invoice, startY) {
-  const { L, R, W } = pageGeom(doc)
+  const { L, W } = pageGeom(doc)
 
   // Lebar kolom
   const COL_NO    = 24
-  const COL_QTY   = 72
-  const COL_HARGA = 88
-  const COL_JML   = 88
-  const COL_KET   = 120
+  const COL_QTY   = 55
+  const COL_HARGA = 90
+  const COL_JML   = 90
+  const COL_KET   = 115
   const COL_DESC  = W - COL_NO - COL_QTY - COL_HARGA - COL_JML - COL_KET
 
-  const cols = [
-    { label: 'No',          w: COL_NO,   align: 'center' },
-    { label: 'Deskripsi',   w: COL_DESC, align: 'center' },
-    { label: 'Keterangan',  w: COL_KET,  align: 'center' },
-    { label: 'Qty',         w: COL_QTY,  align: 'center' },
-    { label: 'Harga',       w: COL_HARGA, align: 'center' },
-    { label: 'Jumlah',      w: COL_JML,  align: 'center' },
-  ]
+  // X positions
+  const X_NO   = L
+  const X_DESC = X_NO   + COL_NO
+  const X_KET  = X_DESC + COL_DESC
+  const X_QTY  = X_KET  + COL_KET
+  const X_HRG  = X_QTY  + COL_QTY
+  const X_JML  = X_HRG  + COL_HARGA
+
+  const FONT_SZ  = 8.5
+  const PAD      = 4    // padding horizontal & vertical dalam sel
+  const MIN_ROW  = 22   // tinggi baris minimum
 
   const HEADER_H = 18
   let y = startY
 
-  // Header row
+  // ── Header row ───────────────────────────────────────────────────────────
   doc.rect(L, y, W, HEADER_H).fillAndStroke(C_HEAD_BG, C_BORDER)
-  doc.font('Helvetica-Bold').fontSize(9).fillColor(C_DARK)
-  let cx = L
-  cols.forEach(c => {
-    doc.text(c.label, cx + 2, y + 5, { width: c.w - 4, align: 'center' })
-    cx += c.w
-  })
+  doc.font('Helvetica-Bold').fontSize(FONT_SZ).fillColor(C_DARK)
+  ;[
+    { label: 'No',         x: X_NO,   w: COL_NO,    align: 'center' },
+    { label: 'Deskripsi',  x: X_DESC, w: COL_DESC,  align: 'center' },
+    { label: 'Keterangan', x: X_KET,  w: COL_KET,   align: 'center' },
+    { label: 'Qty',        x: X_QTY,  w: COL_QTY,   align: 'center' },
+    { label: 'Harga',      x: X_HRG,  w: COL_HARGA, align: 'center' },
+    { label: 'Jumlah',     x: X_JML,  w: COL_JML,   align: 'center' },
+  ].forEach(h => doc.text(h.label, h.x + 2, y + 5, { width: h.w - 4, align: h.align }))
   y += HEADER_H
 
-  // ── Item rows ──────────────────────────────────────────────────────────
+  // ── Item rows ─────────────────────────────────────────────────────────────
   const items = invoice.items || []
-  doc.font('Helvetica').fontSize(9).fillColor(C_DARK)
-
-  // Kita group item-item dan render sebagai satu blok besar seperti pada gambar:
-  // - Kolom Deskripsi: list kendaraan + periode
-  // - Kolom Keterangan: "Tagihan Biaya Jasa Sewa Kendaraan" (satu teks untuk semua)
-  // - Tiap item mendapat baris Qty / Harga / Jumlah tersendiri
 
   if (items.length === 0) {
     const rowH = 24
     borderRect(doc, L, y, W, rowH)
-    doc.font('Helvetica').fontSize(9).fillColor(C_GRAY)
+    doc.font('Helvetica').fontSize(FONT_SZ).fillColor(C_GRAY)
        .text('(tidak ada item)', L + 2, y + 7, { width: W - 4, align: 'center' })
     y += rowH
   } else {
-    // Hitung tinggi blok deskripsi (kolom kiri) → tinggi total per item ≈ 18pt minimum
-    const ROW_MIN_H = 20
-    const PAD       = 3
-
-    // Deskripsi bersama untuk semua item (jenis kendaraan list + periode)
-    // Gabungkan semua label kendaraan
-    const vehicleLines = items.map((it, i) => `${i + 1}. ${it.fleet_label || it.description || '-'}`)
-    const periodSet = new Set(
-      items
-        .filter(it => it.period_start || it.period_end)
-        .map(it => `${formatDateShort(it.period_start)} - ${formatDateShort(it.period_end)}`)
-    )
-    const periodLine = periodSet.size > 0 ? `Periode Pakai : ${[...periodSet].join(', ')}` : null
-
-    // Keterangan bersama
-    const keteranganText = items
-      .map(it => it.description)
-      .filter(Boolean)
-      .filter((v, i, a) => a.indexOf(v) === i)  // unique
-      .join('\n') || 'Tagihan Biaya Jasa Sewa Kendaraan.'
-
-    // Render satu blok besar untuk semua item
-    // Tinggi blok: max(tinggi desc, tinggi ket, sum(item rows))
-    const totalItemsH = Math.max(items.length, 1) * ROW_MIN_H
-
-    // Gambar border luar blok
+    const descText = buildGroupedDescription(invoice, items)
+    const ketText  = serviceRemark(invoice)
+    doc.font('Helvetica').fontSize(FONT_SZ)
+    const hDesc = doc.heightOfString(descText, { width: COL_DESC - PAD * 2 })
+    const hKet  = doc.heightOfString(ketText,  { width: COL_KET  - PAD * 2, align: 'center' })
+    const itemRows = items.map((it) => {
+      const qtyText = `${Number(it.qty || 1)} ${it.unit || 'Unit'}`
+      const hrgText = formatIDR(it.unit_price)
+      const jmlText = formatIDR(it.subtotal)
+      const hQty = doc.heightOfString(qtyText, { width: COL_QTY - PAD * 2 })
+      const hHrg = doc.heightOfString(hrgText, { width: COL_HARGA - PAD * 2 })
+      const hJml = doc.heightOfString(jmlText, { width: COL_JML - PAD * 2 })
+      return {
+        qtyText,
+        hrgText,
+        jmlText,
+        rowH: Math.max(MIN_ROW, hQty + PAD * 2, hHrg + PAD * 2, hJml + PAD * 2),
+      }
+    })
+    const detailRowsH = itemRows.reduce((sum, row) => sum + row.rowH, 0)
+    const blockH = Math.max(detailRowsH, hDesc + PAD * 2, hKet + PAD * 2)
     const blockStartY = y
 
-    // Kolom No — centered, span semua item
-    doc.rect(L, y, COL_NO, totalItemsH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
-    doc.font('Helvetica').fontSize(9).fillColor(C_DARK)
-       .text('1', L + 2, y + (totalItemsH / 2) - 5, { width: COL_NO - 4, align: 'center' })
+    doc.rect(X_NO,   blockStartY, COL_NO,   blockH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+    doc.rect(X_DESC, blockStartY, COL_DESC, blockH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+    doc.rect(X_KET,  blockStartY, COL_KET,  blockH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
 
-    // Kolom Deskripsi — kendaraan list + periode
-    const descX = L + COL_NO
-    doc.rect(descX, y, COL_DESC, totalItemsH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
-    let descY = y + PAD
-    doc.font('Helvetica-Bold').fontSize(8.5).fillColor(C_DARK)
-       .text('Jenis Kendaraan :', descX + 3, descY, { width: COL_DESC - 6 })
-    descY = doc.y + 1
-    doc.font('Helvetica').fontSize(8.5).fillColor(C_DARK)
-    vehicleLines.forEach(line => {
-      doc.text(line, descX + 3, descY, { width: COL_DESC - 6 })
-      descY = doc.y + 1
+    const centerY = (height) => blockStartY + Math.max(PAD, (blockH - height) / 2)
+    doc.font('Helvetica').fontSize(FONT_SZ).fillColor(C_DARK)
+       .text('1', X_NO + 2, centerY(doc.heightOfString('1', { width: COL_NO - 4 })), { width: COL_NO - 4, align: 'center', lineBreak: false })
+    doc.text(descText, X_DESC + PAD, blockStartY + PAD, { width: COL_DESC - PAD * 2 })
+    doc.font('Helvetica-Bold').fontSize(FONT_SZ).fillColor(C_DARK)
+       .text(ketText, X_KET + PAD, centerY(hKet), { width: COL_KET - PAD * 2, align: 'center' })
+    doc.font('Helvetica').fillColor(C_DARK)
+
+    let rowY = blockStartY
+    itemRows.forEach((row) => {
+      const textY = (height) => rowY + Math.max(PAD, (row.rowH - height) / 2)
+      doc.rect(X_QTY, rowY, COL_QTY, row.rowH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+      doc.rect(X_HRG, rowY, COL_HARGA, row.rowH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+      doc.rect(X_JML, rowY, COL_JML, row.rowH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+      doc.text(row.qtyText, X_QTY + PAD, textY(doc.heightOfString(row.qtyText, { width: COL_QTY - PAD * 2 })), { width: COL_QTY - PAD * 2, align: 'center' })
+      doc.text(row.hrgText, X_HRG + PAD, textY(doc.heightOfString(row.hrgText, { width: COL_HARGA - PAD * 2 })), { width: COL_HARGA - PAD * 2, align: 'right' })
+      doc.text(row.jmlText, X_JML + PAD, textY(doc.heightOfString(row.jmlText, { width: COL_JML - PAD * 2 })), { width: COL_JML - PAD * 2, align: 'right' })
+      rowY += row.rowH
     })
-    if (periodLine) {
-      descY += 3
-      doc.font('Helvetica').fontSize(8.5).fillColor(C_DARK)
-         .text(periodLine, descX + 3, descY, { width: COL_DESC - 6 })
+    if (rowY < blockStartY + blockH) {
+      const fillerH = blockStartY + blockH - rowY
+      doc.rect(X_QTY, rowY, COL_QTY, fillerH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+      doc.rect(X_HRG, rowY, COL_HARGA, fillerH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+      doc.rect(X_JML, rowY, COL_JML, fillerH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
     }
-
-    // Kolom Keterangan — satu teks, vertikal tengah
-    const ketX = descX + COL_DESC
-    doc.rect(ketX, y, COL_KET, totalItemsH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
-    const ketTextH = doc.heightOfString(keteranganText, { width: COL_KET - 6, align: 'center' })
-    doc.font('Helvetica-Bold').fontSize(8.5).fillColor(C_DARK)
-       .text(keteranganText, ketX + 3, y + Math.max(PAD, (totalItemsH - ketTextH) / 2), { width: COL_KET - 6, align: 'center' })
-
-    // Kolom Qty / Harga / Jumlah — satu baris per item
-    const qtyX  = ketX + COL_KET
-    const hrgX  = qtyX + COL_QTY
-    const jmlX  = hrgX + COL_HARGA
-
-    items.forEach((it, idx) => {
-      const rowY = y + idx * ROW_MIN_H
-      // border row
-      doc.rect(qtyX, rowY, COL_QTY,   ROW_MIN_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
-      doc.rect(hrgX, rowY, COL_HARGA, ROW_MIN_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
-      doc.rect(jmlX, rowY, COL_JML,   ROW_MIN_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
-
-      const qtyLabel = `${Number(it.qty || 1)} ${it.unit || 'Unit'}\n${it.fleet_label || ''}`
-      doc.font('Helvetica').fontSize(8).fillColor(C_DARK)
-         .text(qtyLabel, qtyX + 2, rowY + 3, { width: COL_QTY - 4, align: 'center' })
-
-      doc.font('Helvetica').fontSize(8.5).fillColor(C_DARK)
-         .text(formatIDR(it.unit_price), hrgX + 2, rowY + 6, { width: COL_HARGA - 4, align: 'right' })
-
-      doc.font('Helvetica').fontSize(8.5).fillColor(C_DARK)
-         .text(formatIDR(it.subtotal), jmlX + 2, rowY + 6, { width: COL_JML - 4, align: 'right' })
-    })
-
-    y += totalItemsH
+    y += blockH
   }
 
-  // Baris kosong bawah tabel (optional spacer)
+  // Baris spacer bawah tabel
   const spacerH = 14
   doc.rect(L, y, W, spacerH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
   y += spacerH
@@ -334,6 +372,13 @@ function drawFooter(doc, invoice, company, startY) {
   doc.font('Helvetica').fontSize(9).fillColor(C_DARK)
   const bankLine = `Transfer Ke no Rek ${company.bank.name || ''} : ${company.bank.account || '-'} a/n ${company.bank.holder || company.name || '-'}`
   doc.text(bankLine, L, leftY, { width: COL_LEFT_W - PAD })
+  leftY = doc.y + 4
+
+  doc.font('Helvetica-Bold').fontSize(9).fillColor(C_DARK)
+     .text('Note :', L, leftY)
+  leftY = doc.y + 2
+  doc.font('Helvetica').fontSize(8).fillColor(C_DARK)
+     .text('Setelah Pembayaran dilakukan, mohon kirimkan bukti transfer ke email kami atau hubungi admin kami melalui WhatsApp', L, leftY, { width: COL_LEFT_W - PAD })
   leftY = doc.y + 6
 
   if (invoice.notes) {
@@ -372,29 +417,21 @@ function drawFooter(doc, invoice, company, startY) {
   if (Number(invoice.pph_percent) > 0) {
     totalRow(`PPh (${invoice.pph_percent}%)`, `(${formatIDR(invoice.pph_amount)})`)
   }
-  totalRow('Netto', formatIDR(invoice.total_amount), true, true)
+  if (Number(invoice.insurance_amount) > 0) {
+    totalRow('Asuransi', formatIDR(invoice.insurance_amount))
+  }
 
-  // DP Diterima — pisahkan dari pembayaran reguler kalau ada.
-  // `decorate()` di service sudah menyediakan down_payment_amount.
-  // Untuk safety, hitung manual dari payments[] kalau decorate belum dipanggil.
+  // DP Diterima — tampil sebelum Netto
   let dpAmount = Number(invoice.down_payment_amount || 0)
   if (!dpAmount && Array.isArray(invoice.payments)) {
     const dp = invoice.payments.find(p => p.is_down_payment === true)
     if (dp) dpAmount = Number(dp.amount || 0)
   }
-  const totalPaid    = Number(invoice.paid_amount || 0)
-  const regularPaid  = Math.max(0, totalPaid - dpAmount)
-  const remaining    = Math.max(0, Number(invoice.total_amount) - totalPaid)
-
   if (dpAmount > 0) {
-    totalRow('DP Diterima', formatIDR(dpAmount))
+    totalRow('Down Payment', formatIDR(dpAmount))
   }
-  if (regularPaid > 0) {
-    totalRow('Pembayaran', formatIDR(regularPaid))
-  }
-  if (totalPaid > 0) {
-    totalRow('Sisa Tagihan', formatIDR(remaining), true)
-  }
+
+  totalRow('Netto', formatIDR(invoice.total_amount), true, true)
 
   return Math.max(leftY, rightY) + 6
 }
@@ -540,6 +577,65 @@ function renderOneCopy(doc, invoice, company, options = {}) {
   drawPageFooter(doc, invoice)
 }
 
+// ── Lampiran foto (halaman terakhir invoice) ──────────────────────────────
+function drawInvoiceLampiranPage(doc, invoice, company, options) {
+  const { L, W } = pageGeom(doc)
+  const GAP     = 10
+  const IMG_PAD = 6
+
+  const bufs  = (options.lampiranBuffers || []).slice(0, 3)
+  if (bufs.length === 0) return
+
+  doc.addPage()
+
+  // Header ringkas
+  let y = drawHeader(doc, company, options)
+
+  // Judul
+  doc.font('Helvetica-Bold').fontSize(12).fillColor(C_DARK)
+     .text('LAMPIRAN FOTO INVOICE', L, y, { width: W, align: 'center' })
+  doc.font('Helvetica').fontSize(9).fillColor(C_GRAY)
+     .text(invoice.invoice_number || '', L, y + 16, { width: W, align: 'center' })
+  doc.fillColor(C_BLACK)
+  hRule(doc, L, y + 30, W)
+  y += 40
+
+  // Grid gambar: 1 → full width; 2-3 → 2 kolom
+  const count  = bufs.length
+  const CELL_W = count === 1 ? W : (W - GAP) / 2
+  const CELL_H = count === 1 ? 400 : 230
+
+  function drawCell(buf, x, cellY) {
+    doc.rect(x, cellY, CELL_W, CELL_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+    try {
+      doc.image(buf, x + IMG_PAD, cellY + IMG_PAD, {
+        width:  CELL_W - IMG_PAD * 2,
+        height: CELL_H - IMG_PAD * 2,
+        fit:    [CELL_W - IMG_PAD * 2, CELL_H - IMG_PAD * 2],
+        align:  'center',
+        valign: 'center',
+      })
+    } catch (_) {
+      doc.font('Helvetica').fontSize(8).fillColor(C_GRAY)
+         .text('Gambar tidak dapat ditampilkan', x + 4, cellY + CELL_H / 2 - 5,
+               { width: CELL_W - 8, align: 'center' })
+      doc.fillColor(C_BLACK)
+    }
+  }
+
+  if (count === 1) {
+    drawCell(bufs[0], L, y)
+  } else {
+    drawCell(bufs[0], L,                    y)
+    drawCell(bufs[1], L + CELL_W + GAP,     y)
+    if (count === 3) {
+      drawCell(bufs[2], L + (W - CELL_W) / 2, y + CELL_H + GAP)
+    }
+  }
+
+  drawPageFooter(doc, invoice)
+}
+
 // ── PUBLIC: render ─────────────────────────────────────────────────────────
 /**
  * Render Invoice rangkap N — tiap salinan di halaman terpisah.
@@ -576,6 +672,13 @@ function render(doc, invoice, company, options = {}) {
   // Lampiran SJ dicetak sekali di akhir (bukan per salinan)
   if (includeSJ && Array.isArray(invoice.attachedSJs) && invoice.attachedSJs.length > 0) {
     drawSJAppendix(doc, invoice, company, options)
+  }
+
+  // Lampiran foto invoice di halaman paling akhir
+  if (options.includeLampiran !== false &&
+      Array.isArray(options.lampiranBuffers) &&
+      options.lampiranBuffers.length > 0) {
+    drawInvoiceLampiranPage(doc, invoice, company, options)
   }
 }
 

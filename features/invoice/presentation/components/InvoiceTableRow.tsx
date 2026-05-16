@@ -32,6 +32,7 @@ export default function InvoiceTableRow({ invoice, checked, onToggle, onAction, 
   const menuRef = useRef<HTMLDivElement>(null)
   const overdue = invoice.status === InvoiceStatus.OUTSTANDING && new Date(invoice.due_date) < new Date()
   const overdayCount = overdue ? daysOverdue(invoice.due_date) : 0
+  const canAttachSJ = invoice.service_type !== 'rental'
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -102,7 +103,7 @@ export default function InvoiceTableRow({ invoice, checked, onToggle, onAction, 
               {(invoice.status === InvoiceStatus.SENT || invoice.status === InvoiceStatus.OUTSTANDING) && (
                 <>
                   <ActionMenuItem icon={<DollarSign size={14}/>} label="Catat Pembayaran" onClick={() => { setMenuOpen(false); onAction('payment', invoice.uuid) }} />
-                  <ActionMenuItem icon={<Paperclip size={14}/>} label="Kelola SJ Terlampir" onClick={() => { setMenuOpen(false); onAction('attach-sj', invoice.uuid) }} />
+                  {canAttachSJ && <ActionMenuItem icon={<Paperclip size={14}/>} label="Kelola SJ Terlampir" onClick={() => { setMenuOpen(false); onAction('attach-sj', invoice.uuid) }} />}
                 </>
               )}
               {invoice.status !== InvoiceStatus.DRAFT && invoice.status !== InvoiceStatus.VOID && (role === 'super_admin' || role === 'admin_finance') && (

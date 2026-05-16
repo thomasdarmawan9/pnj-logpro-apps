@@ -8,10 +8,10 @@ interface SJStatusBadgeProps {
 }
 
 const statusOpsConfig: Record<StatusOperasional, { label: string; bg: string; text: string; dot: string }> = {
-  [StatusOperasional.DRAFT]: { label: 'Draft', bg: 'bg-gray-100', text: 'text-gray-700', dot: '#6B7280' },
-  [StatusOperasional.ASSIGNED]: { label: 'Assigned', bg: 'bg-blue-100', text: 'text-blue-800', dot: '#2563EB' },
-  [StatusOperasional.DELIVERED]: { label: 'Delivered', bg: 'bg-green-100', text: 'text-green-800', dot: '#16A34A' },
-  [StatusOperasional.VOID]: { label: 'Void', bg: 'bg-red-100', text: 'text-red-700', dot: '#DC2626' },
+  [StatusOperasional.DRAFT]:     { label: 'Draft',      bg: 'bg-gray-100',  text: 'text-gray-700',  dot: '#6B7280' },
+  [StatusOperasional.ASSIGNED]:  { label: 'Terbit',     bg: 'bg-blue-100',  text: 'text-blue-800',  dot: '#2563EB' },
+  [StatusOperasional.DELIVERED]: { label: 'Terkirim',   bg: 'bg-green-100', text: 'text-green-800', dot: '#16A34A' },
+  [StatusOperasional.VOID]:      { label: 'Dibatalkan', bg: 'bg-red-100',   text: 'text-red-700',   dot: '#DC2626' },
 }
 
 const statusLampiranConfig: Record<StatusLampiran, { label: string; bg: string; text: string; dot: string }> = {

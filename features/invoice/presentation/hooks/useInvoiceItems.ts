@@ -26,7 +26,7 @@ export function useInvoiceItems(initialItems: PartialItem[] = []) {
       fleet_id: null,
       fleet: null,
       fleet_label: '',
-      description: 'Tagihan Biaya Jasa Sewa Kendaraan',
+      description: '',
       period_start: null,
       period_end: null,
       qty: 1,

@@ -97,13 +97,20 @@ async function renderPdf(job) {
 
   // Pre-process foto lampiran + POD sebelum render (sharp async, harus di luar Promise)
   let resolvedOptions = { ...options }
-  if (job_type === 'surat_jalan' && options.includeLampiran !== false) {
-    const [lampiranBuffers, podBuffer] = await Promise.all([
-      resolveLampiranBuffers(plain.lampiran_paths),
-      resolveImageBuffer(plain.pod_photo_path),
-    ])
-    if (lampiranBuffers.length > 0 || podBuffer) {
-      resolvedOptions = { ...resolvedOptions, lampiranBuffers, podBuffer: podBuffer || null }
+  if (options.includeLampiran !== false) {
+    if (job_type === 'surat_jalan') {
+      const [lampiranBuffers, podBuffer] = await Promise.all([
+        resolveLampiranBuffers(plain.lampiran_paths),
+        resolveImageBuffer(plain.pod_photo_path),
+      ])
+      if (lampiranBuffers.length > 0 || podBuffer) {
+        resolvedOptions = { ...resolvedOptions, lampiranBuffers, podBuffer: podBuffer || null }
+      }
+    } else if (job_type === 'invoice') {
+      const lampiranBuffers = await resolveLampiranBuffers(plain.lampiran_paths)
+      if (lampiranBuffers.length > 0) {
+        resolvedOptions = { ...resolvedOptions, lampiranBuffers }
+      }
     }
   }
 

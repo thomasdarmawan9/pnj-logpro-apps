@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useDispatch, useSelector } from 'react-redux'
-import { Plus, ArrowLeft, Info } from 'lucide-react'
+import { Plus, ArrowLeft, Info, Truck, KeyRound } from 'lucide-react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { AppDispatch, RootState } from '@/store'
 import { createInvoice } from '@/store/slices/invoiceSlice'
@@ -16,6 +16,7 @@ import InvoiceItemRow from '../components/InvoiceItemRow'
 import InvoiceTaxCalculator from '../components/InvoiceTaxCalculator'
 import DownPaymentForm from '../components/DownPaymentForm'
 import type { CreateDownPaymentDto } from '../../application/dto/CreateInvoiceDto'
+import type { InvoiceServiceType } from '../../domain/entities/Invoice'
 
 function formatRupiah(amount: number): string {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(amount)
@@ -33,6 +34,7 @@ export default function CreateInvoicePage() {
   const [paymentMethod, setPaymentMethod] = useState<'transfer' | 'cash' | 'check'>('transfer')
   const [bankAccountId, setBankAccountId] = useState<number | null>(null)
   const [downPayment, setDownPayment] = useState<CreateDownPaymentDto | null>(null)
+  const [serviceType, setServiceType] = useState<InvoiceServiceType>('delivery')
   const formRef = useRef<HTMLDivElement>(null)
   const bankAccounts = useSelector((state: RootState) => state.settings.bankAccounts).filter(b => b.is_active)
 
@@ -74,6 +76,7 @@ export default function CreateInvoicePage() {
     project_id: header.project_id!,
     invoice_date: header.invoice_date,
     due_date: header.due_date,
+    service_type: serviceType,
     payment_method: paymentMethod,
     bank_account_id: paymentMethod === 'transfer' ? bankAccountId : null,
     tax_percent: taxEnabled ? taxPercent : 0,
@@ -218,6 +221,37 @@ export default function CreateInvoicePage() {
                 <p className="text-xs text-gray-400 mt-1">Nomor akan digenerate saat invoice disimpan</p>
               </div>
 
+              <div>
+                <label className="text-xs font-medium text-gray-600 block mb-1">Jenis Jasa *</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {([
+                    { value: 'delivery', label: 'Jasa Pengiriman', icon: Truck, help: 'Invoice dapat dikaitkan dengan Surat Jalan.' },
+                    { value: 'rental', label: 'Jasa Penyewaan', icon: KeyRound, help: 'Invoice tidak memakai kaitan Surat Jalan.' },
+                  ] as const).map(opt => {
+                    const Icon = opt.icon
+                    const selected = serviceType === opt.value
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => { setServiceType(opt.value); setErrors(prev => ({ ...prev, service_type: '' })) }}
+                        className={`flex items-start gap-3 rounded-lg border px-3 py-3 text-left transition-colors ${
+                          selected ? 'border-green-500 bg-green-50 text-green-800' : 'border-gray-200 hover:bg-gray-50'
+                        }`}
+                      >
+                        <Icon size={18} className={selected ? 'text-green-700' : 'text-gray-500'} />
+                        <span>
+                          <span className="block text-sm font-semibold">{opt.label}</span>
+                          <span className="block text-xs text-gray-500 mt-0.5">{opt.help}</span>
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+                {errors.service_type && <p className="text-xs text-red-500 mt-1">{errors.service_type}</p>}
+                <p className="text-xs text-amber-600 mt-2">Jenis jasa dikunci setelah invoice dibuat. Jika salah pilih, void invoice lalu buat invoice baru.</p>
+              </div>
+
               {/* Catatan */}
               <div>
                 <label className="text-xs font-medium text-gray-600 block mb-1">Catatan ke Customer</label>
@@ -263,6 +297,7 @@ export default function CreateInvoicePage() {
                       setDragFrom(null)
                       setDragOver(null)
                     }}
+                    serviceType={serviceType}
                   />
                 ))}
               </div>
@@ -391,6 +426,7 @@ export default function CreateInvoicePage() {
               <div><span className="text-gray-400">Kepada    :</span> {selectedProject?.customer.name ?? '—'}</div>
               <div><span className="text-gray-400">Kontrak   :</span> {selectedProject?.contract_number ?? '—'}</div>
               <div><span className="text-gray-400">Tgl       :</span> {header.invoice_date}</div>
+              <div><span className="text-gray-400">Jasa      :</span> {serviceType === 'delivery' ? 'Pengiriman' : 'Penyewaan'}</div>
               <div><span className="text-gray-400">Jth Tempo :</span> {header.due_date}</div>
               <div className="border-t my-2" style={{ borderColor: 'var(--border-card)' }} />
               <div className="text-gray-500">{items.length} baris item</div>
@@ -422,13 +458,24 @@ export default function CreateInvoicePage() {
           )}
 
           {/* SJ info */}
-          {selectedProject && (
+          {selectedProject && serviceType === 'delivery' && (
             <div className="rounded-xl border p-4" style={{ borderColor: '#BFDBFE', backgroundColor: '#EFF6FF' }}>
               <div className="flex items-start gap-2">
                 <Info size={16} className="text-blue-500 mt-0.5 shrink-0" />
                 <div>
                   <p className="text-sm text-blue-800">Ada SJ di proyek ini yang bisa dilampirkan ke invoice setelah disimpan.</p>
                   <p className="text-xs text-blue-600 mt-1">Lampirkan SJ dilakukan setelah invoice dibuat.</p>
+                </div>
+              </div>
+            </div>
+          )}
+          {selectedProject && serviceType === 'rental' && (
+            <div className="rounded-xl border p-4" style={{ borderColor: '#FED7AA', backgroundColor: '#FFF7ED' }}>
+              <div className="flex items-start gap-2">
+                <Info size={16} className="text-orange-500 mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-sm text-orange-800">Invoice jasa penyewaan tidak memakai lampiran SJ.</p>
+                  <p className="text-xs text-orange-600 mt-1">Periode pakai diambil dari tanggal periode pada rincian item.</p>
                 </div>
               </div>
             </div>

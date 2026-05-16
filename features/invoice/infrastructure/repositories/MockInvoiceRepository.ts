@@ -152,6 +152,7 @@ function normalizeInvoice(inv: ApiInvoice): Invoice {
   return {
     ...inv,
     payment_method: inv.payment_method ?? 'transfer',
+    service_type: inv.service_type ?? 'delivery',
     id: toNumber(inv.id),
     project_id: projectId,
     project: {
@@ -255,9 +256,11 @@ export class MockInvoiceRepository implements IInvoiceRepository {
         project_id: dto.project_id,
         invoice_date: dto.invoice_date,
         due_date: dto.due_date,
+        service_type: dto.service_type,
         payment_method: dto.payment_method,
         tax_percent: dto.tax_percent,
         pph_percent: dto.pph_percent,
+        insurance_amount: dto.insurance_amount ?? 0,
         notes: dto.notes,
         items: dto.items.map(toItemPayload),
         send_immediately: dto.send_immediately,
@@ -330,6 +333,7 @@ export class MockInvoiceRepository implements IInvoiceRepository {
       .map(normalizeInvoice)
       .filter(inv =>
         Number(inv.project_id) === projectId &&
+        inv.service_type !== 'rental' &&
         [InvoiceStatus.DRAFT, InvoiceStatus.SENT, InvoiceStatus.OUTSTANDING].includes(inv.status) &&
         !inv.attached_sj.some(s => s.uuid === sjUuid)
       )
