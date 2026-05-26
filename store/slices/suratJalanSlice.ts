@@ -151,9 +151,9 @@ export const deleteSuratJalan = createAsyncThunk(
 
 export const fetchAvailableInvoices = createAsyncThunk(
   'suratJalan/fetchAvailableInvoices',
-  async ({ projectId, sjUuid }: { projectId: number; sjUuid: string }, { rejectWithValue }) => {
+  async ({ projectId, customerId, sjUuid }: { projectId: number | null; customerId: number; sjUuid: string }, { rejectWithValue }) => {
     try {
-      return await invoiceRepository.getAvailableForAttachment(projectId, sjUuid)
+      return await invoiceRepository.getAvailableForAttachment(projectId, customerId, sjUuid)
     } catch {
       return rejectWithValue('Gagal memuat daftar invoice')
     }

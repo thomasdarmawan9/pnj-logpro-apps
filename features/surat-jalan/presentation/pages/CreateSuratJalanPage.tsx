@@ -7,7 +7,7 @@ import DashboardLayout from '@/components/layout/DashboardLayout'
 import { ArrowLeft, ArrowRightLeft } from 'lucide-react'
 import { AppDispatch, RootState } from '@/store'
 import { createSuratJalan } from '@/store/slices/suratJalanSlice'
-import { fetchDrivers, fetchFleets, fetchProjects } from '@/store/slices/masterSlice'
+import { fetchCustomers, fetchDrivers, fetchFleets, fetchProjects } from '@/store/slices/masterSlice'
 import { useToast } from '@/components/toast/useToast'
 import SJFormProyekSection from '../components/SJFormProyekSection'
 import SJFormArmadaSection from '../components/SJFormArmadaSection'
@@ -17,25 +17,33 @@ import useSuratJalanForm from '../hooks/useSuratJalanForm'
 import { formatLongDate } from '../utils/format'
 import type { ArmadaOption, DriverOption, ProjectOption } from '../utils/mockOptions'
 import type { SJItem } from '../../domain/entities/SuratJalan'
+import { stockRepository } from '@/features/stock/infrastructure/repositories/MockStockRepository'
+import type { CustomerStockAvailableItem } from '@/features/stock/application/use-cases/GetCustomerStockDetail'
+import type { Customer } from '@/features/master/domain/entities/Customer'
 
 export default function CreateSuratJalanPage() {
   const router = useRouter()
   const dispatch = useDispatch<AppDispatch>()
   const { push: pushToast } = useToast()
-  const { projects, fleets, drivers, isLoading: isMasterLoading } = useSelector((state: RootState) => state.master)
+  const { projects, customers, fleets, drivers, isLoading: isMasterLoading } = useSelector((state: RootState) => state.master)
 
   const { form, updateField, errors, validate, isDirty } = useSuratJalanForm({ mode: 'create' })
+  const [scopeMode, setScopeMode] = useState<'project' | 'customer'>('project')
   const [driverMode, setDriverMode] = useState<'master' | 'tbd'>('master')
   const [selectedProject, setSelectedProject] = useState<ProjectOption | null>(null)
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [selectedArmada, setSelectedArmada] = useState<ArmadaOption | null>(null)
   const [selectedDriver, setSelectedDriver] = useState<DriverOption | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [availableStockItems, setAvailableStockItems] = useState<CustomerStockAvailableItem[]>([])
+  const [isLoadingStockItems, setIsLoadingStockItems] = useState(false)
 
   useEffect(() => {
     if (!projects.length) dispatch(fetchProjects())
+    if (!customers.length) dispatch(fetchCustomers())
     if (!fleets.length) dispatch(fetchFleets())
     if (!drivers.length) dispatch(fetchDrivers())
-  }, [dispatch, projects.length, fleets.length, drivers.length])
+  }, [dispatch, projects.length, customers.length, fleets.length, drivers.length])
 
   const projectOptionsFromApi = useMemo<ProjectOption[]>(() => {
     return projects
@@ -45,9 +53,37 @@ export default function CreateSuratJalanPage() {
         name: project.name,
         code: project.code,
         customer: project.customer.name,
+        customerId: project.customer.id,
+        customerUuid: project.customer.uuid,
         contractNumber: project.contract_number,
       }))
   }, [projects])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const customerUuid = scopeMode === 'project' ? selectedProject?.customerUuid : selectedCustomer?.uuid
+
+    if (!customerUuid) {
+      setAvailableStockItems([])
+      setIsLoadingStockItems(false)
+      return
+    }
+
+    setIsLoadingStockItems(true)
+    stockRepository.getCustomerAvailableItems(customerUuid)
+      .then(rows => {
+        if (!cancelled) setAvailableStockItems(rows)
+      })
+      .catch(() => {
+        if (!cancelled) setAvailableStockItems([])
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingStockItems(false)
+      })
+
+    return () => { cancelled = true }
+  }, [scopeMode, selectedProject?.customerUuid, selectedCustomer?.uuid])
 
   const armadaOptionsFromApi = useMemo<ArmadaOption[]>(() => {
     return fleets
@@ -79,15 +115,15 @@ export default function CreateSuratJalanPage() {
 
   const summary = useMemo(() => ({
     noSJ: 'SJ-2026-090',
-    proyek: selectedProject?.name || '-',
-    customer: selectedProject?.customer || '-',
+    proyek: scopeMode === 'project' ? selectedProject?.name || '-' : 'Tanpa proyek',
+    customer: scopeMode === 'project' ? selectedProject?.customer || '-' : selectedCustomer?.name || '-',
     armada: selectedArmada?.name || '-',
     supir: driverMode === 'tbd' ? 'Belum ditentukan' : (selectedDriver?.name || '-'),
     rute: `${form.origin || '-'} → ${form.destination || '-'}`,
     tanggal: formatLongDate(form.sj_date),
     jumlahItem: form.items.length,
     totalNilai: form.items.reduce((s, i) => s + i.qty * i.unit_price, 0),
-  }), [form, selectedArmada, selectedDriver, selectedProject, driverMode])
+  }), [form, selectedArmada, selectedDriver, selectedProject, selectedCustomer, driverMode, scopeMode])
 
   const handleSubmit = async (publish: boolean) => {
     const valid = validate(publish)
@@ -96,7 +132,8 @@ export default function CreateSuratJalanPage() {
     setIsSubmitting(true)
     const result = await dispatch(createSuratJalan({
       ...form,
-      project_id: selectedProject?.id || 0,
+      project_id: scopeMode === 'project' ? selectedProject?.id || null : null,
+      customer_id: scopeMode === 'customer' ? selectedCustomer?.id || null : null,
       fleet_id: selectedArmada?.id || 0,
       driver_id: driverMode === 'master' ? selectedDriver?.id || null : null,
       driver_name_manual: driverMode === 'tbd' ? 'Belum Ditentukan' : null,
@@ -125,6 +162,21 @@ export default function CreateSuratJalanPage() {
     router.push('/surat-jalan')
   }
 
+  const clearStockItems = () => {
+    updateField('items', form.items.map(item => item.source_type === 'stock'
+      ? {
+          ...item,
+          source_type: 'manual',
+          stock_item_id: null,
+          stock_item_uuid: null,
+          stock_item_code: null,
+          stock_item_name: null,
+          stock_kategori_name: null,
+        }
+      : item
+    ))
+  }
+
   return (
     <DashboardLayout>
       <div className="flex items-center justify-between mb-6">
@@ -139,17 +191,76 @@ export default function CreateSuratJalanPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <div className="lg:col-span-3">
-          <SJFormProyekSection
-            value={selectedProject}
-            options={projectOptionsFromApi}
-            onSelect={(project) => {
-              setSelectedProject(project)
-              updateField('project_id', project.id)
-            }}
-            errors={errors}
-          />
+          <div className="rounded-xl bg-white p-6 border" style={{ borderColor: 'var(--border-card)' }}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-sm font-semibold">Informasi Dasar</div>
+              <div className="inline-flex rounded-lg border overflow-hidden" style={{ borderColor: 'var(--border-card)' }}>
+                {(['project', 'customer'] as const).map(mode => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => {
+                      if (scopeMode === mode) return
+                      setScopeMode(mode)
+                      setSelectedProject(null)
+                      setSelectedCustomer(null)
+                      updateField('project_id', null)
+                      updateField('customer_id', null)
+                      clearStockItems()
+                    }}
+                    className="px-3 py-1.5 text-xs font-semibold transition-colors"
+                    style={{
+                      backgroundColor: scopeMode === mode ? 'var(--green-primary)' : 'white',
+                      color: scopeMode === mode ? 'white' : '#374151',
+                    }}
+                  >
+                    {mode === 'project' ? 'Proyek' : 'Customer'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {scopeMode === 'project' ? (
+              <SJFormProyekSection
+                value={selectedProject}
+                options={projectOptionsFromApi}
+                onSelect={(project) => {
+                  const customerChanged = selectedProject?.customerUuid !== project.customerUuid
+                  setSelectedProject(project)
+                  setSelectedCustomer(null)
+                  updateField('project_id', project.id)
+                  updateField('customer_id', null)
+                  if (customerChanged) clearStockItems()
+                }}
+                errors={errors}
+              />
+            ) : (
+              <label className="text-xs font-medium block" style={{ color: '#374151' }}>
+                Customer *
+                <select
+                  className={`form-input w-full mt-1 ${errors?.project_id ? 'error' : ''}`}
+                  value={selectedCustomer?.id ?? ''}
+                  onChange={e => {
+                    const customer = customers.find(c => c.id === Number(e.target.value)) || null
+                    const customerChanged = selectedCustomer?.uuid !== customer?.uuid
+                    setSelectedCustomer(customer)
+                    setSelectedProject(null)
+                    updateField('project_id', null)
+                    updateField('customer_id', customer?.id ?? null)
+                    if (customerChanged) clearStockItems()
+                  }}
+                >
+                  <option value="">Pilih customer</option>
+                  {customers.map(customer => (
+                    <option key={customer.uuid} value={customer.id}>{customer.name}</option>
+                  ))}
+                </select>
+                {errors?.project_id && <div className="text-xs text-red-600 mt-1">{errors.project_id}</div>}
+              </label>
+            )}
+          </div>
 
           <div className="rounded-xl bg-white p-6 border mt-4" style={{ borderColor: 'var(--border-card)' }}>
             <div className="text-sm font-semibold mb-4">Tanggal SJ</div>
@@ -260,6 +371,10 @@ export default function CreateSuratJalanPage() {
           <SJFormItemsSection
             items={form.items}
             onChange={(items: SJItem[]) => updateField('items', items)}
+            availableStockItems={availableStockItems}
+            selectedCustomerName={selectedProject?.customer}
+            isLoadingStockItems={isLoadingStockItems}
+            error={errors.items}
           />
 
           <div className="rounded-xl bg-white p-6 border mt-4" style={{ borderColor: 'var(--border-card)' }}>
@@ -300,7 +415,7 @@ export default function CreateSuratJalanPage() {
           </div>
         </div>
 
-        <div className="lg:col-span-2 space-y-4">
+        <div className="lg:col-span-1 space-y-4">
           <div className="rounded-xl bg-white p-5 border sticky top-24" style={{ borderColor: 'var(--border-card)' }}>
             <div className="text-sm font-semibold mb-3">Ringkasan SJ</div>
             <div className="text-xs text-gray-500">No. SJ</div>

@@ -102,6 +102,7 @@ export default function CreateStockDisbursementPage() {
         disbursement_date: form.disbursement_date,
         stock_item_id: Number(row.stock_item_id),
         qty: Number(row.qty),
+        kategori_name: null,
         delivery_order_id: null,
         sj_number_manual: form.sj_number_manual || null,
         invoice_number_manual: form.invoice_number_manual || null,

@@ -75,38 +75,53 @@ function uniqueNonEmpty(values) {
   return [...new Set(values.map(v => String(v || '').trim()).filter(Boolean))]
 }
 
-function buildGroupedDescription(invoice, items) {
-  if (invoice.service_type === 'rental') {
-    const vehicleLines = items.map((item, idx) => {
-      const vehicle = item.fleet_label || item.description || '-'
-      const suffix = idx < items.length - 1 ? ',' : ''
-      return `${formatQty(item.qty || 1)} ${vehicle}${suffix}`
-    })
-    const periods = uniqueNonEmpty(items
-      .filter(item => item.period_start || item.period_end)
-      .map(item => `${formatDateNumeric(item.period_start)} - ${formatDateNumeric(item.period_end)}`))
-    const lines = ['Jenis Kendaraan :', ...vehicleLines]
-    if (periods.length > 0) {
-      lines.push('', 'Periode pakai :', periods.join(', '))
-    }
-    return lines.join('\n')
+function buildRentalDescription(item) {
+  const lines = [
+    'Jenis Kendaraan :',
+    item.fleet_label || item.description || '-',
+  ]
+  if (item.period_start || item.period_end) {
+    lines.push('', 'Periode pakai :', `${formatDateNumeric(item.period_start)} - ${formatDateNumeric(item.period_end)}`)
   }
+  return lines.join('\n')
+}
 
-  const cargo = uniqueNonEmpty(items.map(item => item.description)).join(', ') || '-'
+function buildDeliveryInfoRows(invoice, items) {
   const fleets = uniqueNonEmpty(items.map(item => item.fleet_label))
   const routes = uniqueNonEmpty(items.map(item => {
     const sj = findAttachedSjForItem(invoice, item)
     if (!sj?.origin && !sj?.destination) return ''
     return `${sj.origin || '-'} - ${sj.destination || '-'}`
   }))
-  const lines = ['Barang Kiriman :', cargo]
+  const rows = []
   if (fleets.length > 0) {
-    lines.push('', 'Armada :', fleets.join(', '))
+    rows.push({ noText: '', descText: `Armada :\n${fleets.join(', ')}` })
   }
   if (routes.length > 0) {
-    lines.push('', 'rute pengiriman :', routes.join(', '))
+    rows.push({ noText: '', descText: `Rute Pengiriman :\n${routes.join(', ')}` })
   }
-  return lines.join('\n')
+  return rows
+}
+
+function buildInvoiceTableRows(invoice, items) {
+  if (invoice.service_type === 'rental') {
+    return items.map((item, idx) => ({
+      noText:  String(idx + 1),
+      descText: buildRentalDescription(item),
+      qtyText: `${formatQty(item.qty || 1)} ${item.unit || 'Unit'}`,
+      hrgText: formatIDR(item.unit_price),
+      jmlText: formatIDR(item.subtotal),
+    }))
+  }
+
+  const itemRows = items.map((item, idx) => ({
+    noText:  String(idx + 1),
+    descText: item.description || '-',
+    qtyText: `${formatQty(item.qty || 1)} ${item.unit || 'Unit'}`,
+    hrgText: formatIDR(item.unit_price),
+    jmlText: formatIDR(item.subtotal),
+  }))
+  return [...itemRows, ...buildDeliveryInfoRows(invoice, items)]
 }
 
 // ── Draw logo (fallback: teks "PNJ" dalam kotak) ──────────────────────────
@@ -290,37 +305,28 @@ function drawItemTable(doc, invoice, startY) {
        .text('(tidak ada item)', L + 2, y + 7, { width: W - 4, align: 'center' })
     y += rowH
   } else {
-    const descText = buildGroupedDescription(invoice, items)
     const ketText  = serviceRemark(invoice)
     doc.font('Helvetica').fontSize(FONT_SZ)
-    const hDesc = doc.heightOfString(descText, { width: COL_DESC - PAD * 2 })
     const hKet  = doc.heightOfString(ketText,  { width: COL_KET  - PAD * 2, align: 'center' })
-    const itemRows = items.map((it) => {
-      const qtyText = `${Number(it.qty || 1)} ${it.unit || 'Unit'}`
-      const hrgText = formatIDR(it.unit_price)
-      const jmlText = formatIDR(it.subtotal)
-      const hQty = doc.heightOfString(qtyText, { width: COL_QTY - PAD * 2 })
-      const hHrg = doc.heightOfString(hrgText, { width: COL_HARGA - PAD * 2 })
-      const hJml = doc.heightOfString(jmlText, { width: COL_JML - PAD * 2 })
+    const itemRows = buildInvoiceTableRows(invoice, items).map((row) => {
+      const hNo   = doc.heightOfString(row.noText || '', { width: COL_NO - 4 })
+      const hDesc = doc.heightOfString(row.descText || '', { width: COL_DESC - PAD * 2 })
+      const hQty  = doc.heightOfString(row.qtyText || '', { width: COL_QTY - PAD * 2 })
+      const hHrg  = doc.heightOfString(row.hrgText || '', { width: COL_HARGA - PAD * 2 })
+      const hJml  = doc.heightOfString(row.jmlText || '', { width: COL_JML - PAD * 2 })
       return {
-        qtyText,
-        hrgText,
-        jmlText,
-        rowH: Math.max(MIN_ROW, hQty + PAD * 2, hHrg + PAD * 2, hJml + PAD * 2),
+        ...row,
+        heights: { no: hNo, desc: hDesc, qty: hQty, hrg: hHrg, jml: hJml },
+        rowH:    Math.max(MIN_ROW, hNo + PAD * 2, hDesc + PAD * 2, hQty + PAD * 2, hHrg + PAD * 2, hJml + PAD * 2),
       }
     })
     const detailRowsH = itemRows.reduce((sum, row) => sum + row.rowH, 0)
-    const blockH = Math.max(detailRowsH, hDesc + PAD * 2, hKet + PAD * 2)
+    const blockH = Math.max(detailRowsH, hKet + PAD * 2)
     const blockStartY = y
 
-    doc.rect(X_NO,   blockStartY, COL_NO,   blockH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
-    doc.rect(X_DESC, blockStartY, COL_DESC, blockH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
     doc.rect(X_KET,  blockStartY, COL_KET,  blockH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
 
     const centerY = (height) => blockStartY + Math.max(PAD, (blockH - height) / 2)
-    doc.font('Helvetica').fontSize(FONT_SZ).fillColor(C_DARK)
-       .text('1', X_NO + 2, centerY(doc.heightOfString('1', { width: COL_NO - 4 })), { width: COL_NO - 4, align: 'center', lineBreak: false })
-    doc.text(descText, X_DESC + PAD, blockStartY + PAD, { width: COL_DESC - PAD * 2 })
     doc.font('Helvetica-Bold').fontSize(FONT_SZ).fillColor(C_DARK)
        .text(ketText, X_KET + PAD, centerY(hKet), { width: COL_KET - PAD * 2, align: 'center' })
     doc.font('Helvetica').fillColor(C_DARK)
@@ -328,16 +334,22 @@ function drawItemTable(doc, invoice, startY) {
     let rowY = blockStartY
     itemRows.forEach((row) => {
       const textY = (height) => rowY + Math.max(PAD, (row.rowH - height) / 2)
+      doc.rect(X_NO, rowY, COL_NO, row.rowH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+      doc.rect(X_DESC, rowY, COL_DESC, row.rowH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
       doc.rect(X_QTY, rowY, COL_QTY, row.rowH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
       doc.rect(X_HRG, rowY, COL_HARGA, row.rowH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
       doc.rect(X_JML, rowY, COL_JML, row.rowH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
-      doc.text(row.qtyText, X_QTY + PAD, textY(doc.heightOfString(row.qtyText, { width: COL_QTY - PAD * 2 })), { width: COL_QTY - PAD * 2, align: 'center' })
-      doc.text(row.hrgText, X_HRG + PAD, textY(doc.heightOfString(row.hrgText, { width: COL_HARGA - PAD * 2 })), { width: COL_HARGA - PAD * 2, align: 'right' })
-      doc.text(row.jmlText, X_JML + PAD, textY(doc.heightOfString(row.jmlText, { width: COL_JML - PAD * 2 })), { width: COL_JML - PAD * 2, align: 'right' })
+      doc.text(row.noText || '', X_NO + 2, textY(row.heights.no), { width: COL_NO - 4, align: 'center', lineBreak: false })
+      doc.text(row.descText || '', X_DESC + PAD, textY(row.heights.desc), { width: COL_DESC - PAD * 2 })
+      doc.text(row.qtyText || '', X_QTY + PAD, textY(row.heights.qty), { width: COL_QTY - PAD * 2, align: 'center' })
+      doc.text(row.hrgText || '', X_HRG + PAD, textY(row.heights.hrg), { width: COL_HARGA - PAD * 2, align: 'right' })
+      doc.text(row.jmlText || '', X_JML + PAD, textY(row.heights.jml), { width: COL_JML - PAD * 2, align: 'right' })
       rowY += row.rowH
     })
     if (rowY < blockStartY + blockH) {
       const fillerH = blockStartY + blockH - rowY
+      doc.rect(X_NO, rowY, COL_NO, fillerH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+      doc.rect(X_DESC, rowY, COL_DESC, fillerH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
       doc.rect(X_QTY, rowY, COL_QTY, fillerH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
       doc.rect(X_HRG, rowY, COL_HARGA, fillerH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
       doc.rect(X_JML, rowY, COL_JML, fillerH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
@@ -377,18 +389,12 @@ function drawFooter(doc, invoice, company, startY) {
   doc.font('Helvetica-Bold').fontSize(9).fillColor(C_DARK)
      .text('Note :', L, leftY)
   leftY = doc.y + 2
+  const defaultNote = 'Setelah Pembayaran dilakukan, mohon kirimkan bukti transfer ke email kami atau hubungi admin kami melalui WhatsApp'
+  const invoiceNote = String(invoice.notes || '').trim()
+  const noteText = invoiceNote ? `${invoiceNote},\n${defaultNote}` : defaultNote
   doc.font('Helvetica').fontSize(8).fillColor(C_DARK)
-     .text('Setelah Pembayaran dilakukan, mohon kirimkan bukti transfer ke email kami atau hubungi admin kami melalui WhatsApp', L, leftY, { width: COL_LEFT_W - PAD })
+     .text(noteText, L, leftY, { width: COL_LEFT_W - PAD })
   leftY = doc.y + 6
-
-  if (invoice.notes) {
-    doc.font('Helvetica-Bold').fontSize(9).fillColor(C_DARK)
-       .text('Note :', L, leftY)
-    leftY = doc.y + 2
-    doc.font('Helvetica').fontSize(9).fillColor(C_DARK)
-       .text(invoice.notes, L, leftY, { width: COL_LEFT_W - PAD })
-    leftY = doc.y
-  }
 
   // ── Kanan: Totals ────────────────────────────────────────────────────
   const LABEL_W = 80

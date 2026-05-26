@@ -5,8 +5,9 @@ const router            = express.Router()
 
 const { authenticate }  = require('../middlewares/auth.middleware')
 const { isAnyRole, isOpsOrAbove } = require('../middlewares/rbac.middleware')
+const { upload, processLampiran } = require('../middlewares/upload.middleware')
 const { validate }      = require('../middlewares/validate.middleware')
-const { uuidParam }     = require('../validators/common.validator')
+const { uuidParam, uuidFilenameParam } = require('../validators/common.validator')
 const {
   createDriverSchema,
   updateDriverSchema,
@@ -46,6 +47,25 @@ router.patch('/:uuid/toggle-status',
   validate(uuidParam, 'params'),
   logActivity('update_driver', 'master'),
   controller.toggleStatus,
+)
+router.post('/:uuid/lampiran',
+  isOpsOrAbove,
+  validate(uuidParam, 'params'),
+  upload.single('file'),
+  processLampiran('driver-lampiran'),
+  logActivity('update_driver', 'master'),
+  controller.uploadLampiran,
+)
+router.delete('/:uuid/lampiran/:filename',
+  isOpsOrAbove,
+  validate(uuidFilenameParam, 'params'),
+  logActivity('update_driver', 'master'),
+  controller.deleteLampiran,
+)
+router.get('/:uuid/lampiran/:filename',
+  isAnyRole,
+  validate(uuidFilenameParam, 'params'),
+  controller.downloadLampiran,
 )
 router.delete('/:uuid',
   isOpsOrAbove,

@@ -4,6 +4,10 @@ const Joi = require('joi')
 
 const STATUSES = ['active', 'inactive']
 
+const lampiranPaths = Joi.array().items(
+  Joi.string().trim().max(255).pattern(/^[^/\\]+\/[^/\\]+$/),
+).max(3).allow(null)
+
 const createDriverSchema = Joi.object({
   name:           Joi.string().trim().min(2).max(100).required(),
   phone:          Joi.string().trim().max(20).allow('', null),
@@ -18,6 +22,7 @@ const updateDriverSchema = Joi.object({
   sim_number:     Joi.string().trim().max(30).allow('', null),
   sim_expired_at: Joi.date().iso().allow(null),
   status:         Joi.string().valid(...STATUSES),
+  lampiran_paths: lampiranPaths,
 }).min(1)
 
 const listDriversQuery = Joi.object({

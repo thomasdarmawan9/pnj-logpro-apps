@@ -6,6 +6,8 @@ export interface ProjectOption {
   name: string
   code: string
   customer: string
+  customerId?: number
+  customerUuid?: string
   contractNumber: string | null
 }
 
@@ -29,6 +31,8 @@ export const projectOptions: ProjectOption[] = MOCK_PROJECTS.map(p => ({
   name: p.name,
   code: p.code,
   customer: p.customer.name,
+  customerId: p.customer.id,
+  customerUuid: p.customer.uuid,
   contractNumber: p.contract_number,
 }))
 

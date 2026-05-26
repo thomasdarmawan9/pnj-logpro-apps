@@ -2,6 +2,7 @@ import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit'
 import { StockItem } from '@/features/stock/domain/entities/StockItem'
 import { StockReceipt } from '@/features/stock/domain/entities/StockReceipt'
 import { StockDisbursement } from '@/features/stock/domain/entities/StockDisbursement'
+import { CustomerStockSummary } from '@/features/stock/application/use-cases/GetCustomerStockDetail'
 import { StockFilters } from '@/features/stock/domain/value-objects/StockBalance'
 import { stockRepository } from '@/features/stock/infrastructure/repositories/MockStockRepository'
 import { CreateStockItemDto } from '@/features/stock/application/dto/CreateStockItemDto'
@@ -14,6 +15,8 @@ interface StockState {
   disbursements: StockDisbursement[]
   selectedReceipt: StockReceipt | null
   selectedDisbursement: StockDisbursement | null
+  customerSummaries: CustomerStockSummary[]
+  selectedCustomerStock: CustomerStockSummary | null
   filters: StockFilters
   isLoading: boolean
   isDetailLoading: boolean
@@ -41,6 +44,8 @@ const initialState: StockState = {
   disbursements: [],
   selectedReceipt: null,
   selectedDisbursement: null,
+  customerSummaries: [],
+  selectedCustomerStock: null,
   filters: defaultFilters,
   isLoading: false,
   isDetailLoading: false,
@@ -105,6 +110,14 @@ export const deleteStockDisbursement = createAsyncThunk('stock/deleteDisbursemen
   try { await stockRepository.deleteDisbursement(uuid); return uuid } catch { return rejectWithValue('Gagal menghapus stok keluar') }
 })
 
+export const fetchCustomerStockSummaries = createAsyncThunk('stock/fetchCustomerStockSummaries', async (_, { rejectWithValue }) => {
+  try { return await stockRepository.getCustomerStockSummaries() } catch { return rejectWithValue('Gagal memuat rekap stok customer') }
+})
+
+export const fetchCustomerStockDetail = createAsyncThunk('stock/fetchCustomerStockDetail', async (uuid: string, { rejectWithValue }) => {
+  try { return await stockRepository.getCustomerStockDetail(uuid) } catch { return rejectWithValue('Gagal memuat detail stok customer') }
+})
+
 const stockSlice = createSlice({
   name: 'stock',
   initialState,
@@ -126,6 +139,7 @@ const stockSlice = createSlice({
     clearError(state) { state.error = null },
     clearSelectedReceipt(state) { state.selectedReceipt = null },
     clearSelectedDisbursement(state) { state.selectedDisbursement = null },
+    clearSelectedCustomerStock(state) { state.selectedCustomerStock = null },
   },
   extraReducers: builder => {
     builder
@@ -202,6 +216,18 @@ const stockSlice = createSlice({
         state.disbursements = state.disbursements.filter(d => d.uuid !== action.payload)
         state.modals.deleteConfirm = { open: false, type: null, uuid: null }
       })
+      .addCase(fetchCustomerStockSummaries.pending, state => { state.isLoading = true })
+      .addCase(fetchCustomerStockSummaries.fulfilled, (state, action) => {
+        state.isLoading = false
+        state.customerSummaries = action.payload
+      })
+      .addCase(fetchCustomerStockSummaries.rejected, (state, action) => { state.isLoading = false; state.error = action.payload as string })
+      .addCase(fetchCustomerStockDetail.pending, state => { state.isDetailLoading = true; state.selectedCustomerStock = null })
+      .addCase(fetchCustomerStockDetail.fulfilled, (state, action) => {
+        state.isDetailLoading = false
+        state.selectedCustomerStock = action.payload
+      })
+      .addCase(fetchCustomerStockDetail.rejected, (state, action) => { state.isDetailLoading = false; state.error = action.payload as string })
   },
 })
 
@@ -210,7 +236,7 @@ export const {
   openAddItemModal, closeAddItemModal,
   openEditItemModal, closeEditItemModal,
   openDeleteConfirm, closeDeleteConfirm,
-  clearError, clearSelectedReceipt, clearSelectedDisbursement,
+  clearError, clearSelectedReceipt, clearSelectedDisbursement, clearSelectedCustomerStock,
 } = stockSlice.actions
 
 export default stockSlice.reducer

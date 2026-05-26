@@ -88,13 +88,13 @@ export interface Invoice {
   id?: number
   uuid: string
   invoice_number: string
-  project_id?: number
+  project_id?: number | null
   project: {
     id?: number
     name: string
     code: string
     contract_number: string
-  }
+  } | null
   customer_id?: number
   customer: {
     id?: number

@@ -44,6 +44,7 @@ interface ApiFleetOption {
   id: number | string
   name: string
   plate_number: string
+  rental_status?: 'rented' | null
 }
 
 function parseRupiah(val: string): number {
@@ -79,7 +80,7 @@ export default function InvoiceItemRow({ item, index, onChange, onRemove, onDrag
       .then(response => {
         if (!alive) return
         setFleetOptions(response.data
-          .filter(fleet => fleet.plate_number !== 'TBD')
+          .filter(fleet => fleet.plate_number !== 'TBD' && fleet.rental_status !== 'rented')
           .map(fleet => ({
             id: Number(fleet.id),
             label: `${fleet.name} ${fleet.plate_number}`,
@@ -116,7 +117,7 @@ export default function InvoiceItemRow({ item, index, onChange, onRemove, onDrag
       <div className="mb-3">
         <label className="text-xs font-medium text-gray-600 mb-1 block">Armada</label>
         <select
-          className="form-input w-full text-sm mb-2"
+          className={`form-input w-full text-sm mb-2 ${errors[`${errPrefix}.fleet_id`] ? 'border-red-400' : ''}`}
           value={item.fleet_id ?? 0}
           onChange={e => {
             const fleetId = Number(e.target.value)
@@ -140,6 +141,7 @@ export default function InvoiceItemRow({ item, index, onChange, onRemove, onDrag
           onChange={e => onChange(item.uuid, 'fleet_label', e.target.value)}
           placeholder="Contoh: Toyota Zenix KB 1561 HX"
         />
+        {errors[`${errPrefix}.fleet_id`] && <p className="text-xs text-red-500 mt-1">{errors[`${errPrefix}.fleet_id`]}</p>}
         {errors[`${errPrefix}.fleet_label`] && <p className="text-xs text-red-500 mt-1">{errors[`${errPrefix}.fleet_label`]}</p>}
       </div>
 

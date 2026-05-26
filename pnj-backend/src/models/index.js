@@ -20,6 +20,7 @@ const StockReceipt       = require('./StockReceipt')(sequelize)
 const StockReceiptItem   = require('./StockReceiptItem')(sequelize)
 const StockDisbursement  = require('./StockDisbursement')(sequelize)
 const BankAccount        = require('./BankAccount')(sequelize)
+const FleetRentalCompletion = require('./FleetRentalCompletion')(sequelize)
 
 // ── User associations ──────────────────────────────────────────────────────
 User.hasMany(RefreshToken,  { foreignKey: 'user_id',    as: 'refreshTokens' })
@@ -40,6 +41,7 @@ Customer.hasMany(StockDisbursement, { foreignKey: 'customer_id', as: 'stockDisbu
 // ── Fleet associations ─────────────────────────────────────────────────────
 Fleet.hasMany(DeliveryOrder, { foreignKey: 'fleet_id', as: 'deliveryOrders' })
 Fleet.hasMany(InvoiceItem,   { foreignKey: 'fleet_id', as: 'invoiceItems' })
+Fleet.hasMany(FleetRentalCompletion, { foreignKey: 'fleet_id', as: 'rentalCompletions' })
 
 // ── Driver associations ────────────────────────────────────────────────────
 Driver.hasMany(DeliveryOrder, { foreignKey: 'driver_id', as: 'deliveryOrders' })
@@ -70,6 +72,10 @@ Invoice.hasMany(DeliveryOrder, { foreignKey: 'invoice_id', as: 'attachedSJs' })
 // ── InvoiceItem associations ───────────────────────────────────────────────
 InvoiceItem.belongsTo(Invoice, { foreignKey: 'invoice_id', as: 'invoice' })
 InvoiceItem.belongsTo(Fleet,   { foreignKey: 'fleet_id',   as: 'fleet' })
+InvoiceItem.hasMany(FleetRentalCompletion, { foreignKey: 'invoice_item_id', as: 'rentalCompletions' })
+FleetRentalCompletion.belongsTo(Fleet,       { foreignKey: 'fleet_id',         as: 'fleet' })
+FleetRentalCompletion.belongsTo(InvoiceItem, { foreignKey: 'invoice_item_id',  as: 'invoiceItem' })
+FleetRentalCompletion.belongsTo(User,        { foreignKey: 'completed_by',     as: 'completedBy' })
 
 // ── Payment associations ───────────────────────────────────────────────────
 Payment.belongsTo(Invoice, { foreignKey: 'invoice_id', as: 'invoice' })
@@ -112,4 +118,5 @@ module.exports = {
   StockReceiptItem,
   StockDisbursement,
   BankAccount,
+  FleetRentalCompletion,
 }

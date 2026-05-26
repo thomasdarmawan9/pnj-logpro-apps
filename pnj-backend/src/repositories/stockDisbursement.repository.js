@@ -6,6 +6,7 @@ const {
   StockItem,
   Customer,
   DeliveryOrder,
+  Invoice,
   Fleet,
   Driver,
   User,
@@ -39,6 +40,7 @@ const DELIVERY_ORDER_INCLUDE = {
     'origin', 'destination', 'status', 'driver_name_manual',
   ],
   include: [
+    { model: Invoice, as: 'invoice', attributes: ['id', 'uuid', 'invoice_number', 'status'], required: false },
     { model: Fleet,  as: 'fleet',  attributes: ['id', 'uuid', 'name', 'plate_number'], required: false },
     { model: Driver, as: 'driver', attributes: ['id', 'uuid', 'name'], required: false },
   ],

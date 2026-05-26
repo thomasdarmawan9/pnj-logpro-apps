@@ -92,7 +92,7 @@ export default function SuratJalanListPage() {
       const sj = list.find(s => s.uuid === uuid)
       if (!sj) return
       dispatch(openAttachInvoiceModal(uuid))
-      dispatch(fetchAvailableInvoices({ projectId: sj.project_id, sjUuid: uuid }))
+      dispatch(fetchAvailableInvoices({ projectId: sj.project_id, customerId: sj.customer_id, sjUuid: uuid }))
       return
     }
   }

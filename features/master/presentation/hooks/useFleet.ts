@@ -5,6 +5,7 @@ import { useDispatch, useSelector } from 'react-redux'
 import { AppDispatch, RootState } from '@/store'
 import {
   fetchFleets, createFleet, updateFleet, toggleFleetStatus,
+  completeFleetRental,
   openFleetForm, closeFleetForm,
 } from '@/store/slices/masterSlice'
 import { Fleet } from '@/features/master/domain/entities/Fleet'
@@ -14,8 +15,8 @@ export function useFleet() {
   const { fleets, isLoading, error, modals } = useSelector((s: RootState) => s.master)
 
   useEffect(() => {
-    if (fleets.length === 0) dispatch(fetchFleets())
-  }, [dispatch, fleets.length])
+    dispatch(fetchFleets())
+  }, [dispatch])
 
   return {
     fleets,
@@ -27,6 +28,7 @@ export function useFleet() {
     create: (data: Parameters<typeof createFleet>[0]) => dispatch(createFleet(data)),
     update: (uuid: string, data: Partial<Fleet>) => dispatch(updateFleet({ uuid, data })),
     toggle: (uuid: string) => dispatch(toggleFleetStatus(uuid)),
+    completeRental: (uuid: string) => dispatch(completeFleetRental(uuid)),
     refresh: () => dispatch(fetchFleets()),
   }
 }

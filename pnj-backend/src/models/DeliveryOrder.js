@@ -22,7 +22,7 @@ module.exports = (sequelize) => {
     },
     project_id: {
       type:      DataTypes.BIGINT,
-      allowNull: false,
+      allowNull: true,
     },
     customer_id: {
       type:      DataTypes.BIGINT,

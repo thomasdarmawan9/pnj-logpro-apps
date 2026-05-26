@@ -1,6 +1,7 @@
 import { StockItem } from '../../domain/entities/StockItem'
 import { StockReceipt } from '../../domain/entities/StockReceipt'
 import { StockDisbursement } from '../../domain/entities/StockDisbursement'
+import { CustomerStockAvailableItem, CustomerStockSummary } from '../../application/use-cases/GetCustomerStockDetail'
 import { CreateStockItemDto } from '../../application/dto/CreateStockItemDto'
 import { CreateStockReceiptDto } from '../../application/dto/CreateStockReceiptDto'
 import { CreateStockDisbursementDto } from '../../application/dto/CreateStockDisbursementDto'
@@ -22,4 +23,9 @@ export interface IStockRepository {
   getDisbursementByUuid(uuid: string): Promise<StockDisbursement | null>
   createDisbursement(dto: CreateStockDisbursementDto): Promise<StockDisbursement>
   deleteDisbursement(uuid: string): Promise<void>
+
+  // Customer stock
+  getCustomerStockSummaries(): Promise<CustomerStockSummary[]>
+  getCustomerStockDetail(uuid: string): Promise<CustomerStockSummary>
+  getCustomerAvailableItems(uuid: string): Promise<CustomerStockAvailableItem[]>
 }

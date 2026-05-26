@@ -4,6 +4,9 @@ const asyncHandler = require('../utils/asyncHandler')
 const service      = require('../services/stockReport.service')
 const { success } = require('../utils/response')
 const ExcelJS      = require('exceljs')
+const PDFDocument  = require('pdfkit')
+const stockRecapTemplate = require('../pdf/stockRecap.template')
+const customerStockRecapTemplate = require('../pdf/customerStockRecap.template')
 
 const recap = asyncHandler(async (req, res) => {
   const data = await service.recap(req.query)
@@ -12,6 +15,46 @@ const recap = asyncHandler(async (req, res) => {
 
 const summary = asyncHandler(async (req, res) => {
   const data = await service.summary(req.query)
+  res.json(success(data))
+})
+
+function formatDateLabel(value) {
+  if (!value) return null
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  return date.toISOString().slice(0, 10)
+}
+
+function periodLabel(query) {
+  if (query.from || query.to) {
+    return `Periode ${formatDateLabel(query.from) || 'awal'} s/d ${formatDateLabel(query.to) || 'akhir'}`
+  }
+  if (!query.period || query.period === 'all') return 'Semua waktu'
+  if (query.period === 'this_month') return 'Bulan ini'
+  if (query.period === 'last_month') return 'Bulan lalu'
+  return `Periode ${query.period}`
+}
+
+function stockRecapTitle(data) {
+  const itemName = data.stock_item?.name || 'Stok'
+  const customerName = data.customer?.name
+  return customerName
+    ? `Rekapan Muat ${itemName}, ${customerName}`
+    : `Rekapan Muat ${itemName}`
+}
+
+const customerSummary = asyncHandler(async (_req, res) => {
+  const data = await service.customerSummary()
+  res.json(success(data))
+})
+
+const customerDetail = asyncHandler(async (req, res) => {
+  const data = await service.customerDetail(req.params.uuid)
+  res.json(success(data))
+})
+
+const customerAvailableItems = asyncHandler(async (req, res) => {
+  const data = await service.customerAvailableItems(req.params.uuid)
   res.json(success(data))
 })
 
@@ -69,4 +112,57 @@ const exportXlsx = asyncHandler(async (req, res) => {
   res.end()
 })
 
-module.exports = { recap, summary, exportXlsx }
+const exportPdf = asyncHandler(async (req, res) => {
+  const data = await service.recap(req.query)
+  const date = new Date().toISOString().slice(0, 10)
+  const itemCode = String(data.stock_item?.code || 'stock').replace(/[^a-zA-Z0-9_-]/g, '_')
+  const title = stockRecapTitle(data)
+
+  res.setHeader('Content-Type', 'application/pdf')
+  res.setHeader('Content-Disposition', `attachment; filename="stock-recap-${itemCode}-${date}.pdf"`)
+
+  const doc = new PDFDocument({
+    size:    'A4',
+    layout:  'landscape',
+    margins: { top: 28, bottom: 28, left: 28, right: 28 },
+    info: {
+      Title:    title,
+      Subject:  'Rekap Stok',
+      Producer: 'pnj-backend',
+    },
+  })
+
+  doc.pipe(res)
+  stockRecapTemplate.render(doc, data, {
+    title,
+    periodLabel: periodLabel(req.query),
+  })
+  doc.end()
+})
+
+const exportCustomerPdf = asyncHandler(async (req, res) => {
+  const data = await service.customerDetail(req.params.uuid)
+  const date = new Date().toISOString().slice(0, 10)
+  const customerCode = String(data.customerName || 'customer').replace(/[^a-zA-Z0-9_-]/g, '_')
+  const title = `Rekap Stok Customer - ${data.customerName}`
+
+  res.setHeader('Content-Type', 'application/pdf')
+  res.setHeader('Content-Disposition', `attachment; filename="stock-customer-${customerCode}-${date}.pdf"`)
+
+  const doc = new PDFDocument({
+    size:    'A4',
+    layout:  'landscape',
+    margins: { top: 28, bottom: 28, left: 28, right: 28 },
+    info: {
+      Title:    title,
+      Subject:  'Rekap Stok Customer',
+      Producer: 'pnj-backend',
+    },
+  })
+
+  doc.pipe(res)
+  customerStockRecapTemplate.render(doc, data, { title })
+  doc.end()
+})
+
+module.exports = { recap, summary, customerSummary, customerDetail, customerAvailableItems, exportXlsx, exportPdf, exportCustomerPdf }

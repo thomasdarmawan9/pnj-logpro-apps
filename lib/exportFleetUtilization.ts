@@ -126,7 +126,7 @@ export async function exportFleetUtilizationExcel(
       f.unique_projects,
       f.unique_customers,
       f.drivers_used.join(', ') || '—',
-      f.status === 'active' ? 'Aktif' : f.status === 'inactive' ? 'Tidak Aktif' : 'Terjual',
+      f.status === 'active' ? 'Aktif' : f.status === 'inactive' ? 'Tidak Aktif' : f.status === 'repair' ? 'Perbaikan' : 'Terjual',
     ])
     row.height = 18
     const isIdle = f.total_trips === 0

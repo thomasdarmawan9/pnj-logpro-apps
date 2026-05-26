@@ -42,7 +42,7 @@ export default function DetailDrawer({ open, sj, onClose, onViewDetail, onPrint 
           <div className="rounded-xl bg-gray-50 p-4 text-sm">
             <div className="font-semibold">Informasi Ringkas</div>
             <div className="mt-2 text-xs text-gray-500">Proyek</div>
-            <div className="text-sm">{sj.project.name}</div>
+            <div className="text-sm">{sj.project?.name || 'Tanpa proyek'}</div>
             <div className="mt-2 text-xs text-gray-500">Customer</div>
             <div className="text-sm">{sj.customer.name}</div>
             <div className="mt-2 text-xs text-gray-500">Tanggal SJ</div>

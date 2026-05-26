@@ -5,9 +5,9 @@ const router            = express.Router()
 
 const { authenticate }  = require('../middlewares/auth.middleware')
 const { isAnyRole, isOpsOrAbove } = require('../middlewares/rbac.middleware')
-const { upload, compressImage }   = require('../middlewares/upload.middleware')
+const { upload, compressImage, processLampiran } = require('../middlewares/upload.middleware')
 const { validate }      = require('../middlewares/validate.middleware')
-const { uuidParam }     = require('../validators/common.validator')
+const { uuidParam, uuidFilenameParam } = require('../validators/common.validator')
 const {
   createFleetSchema,
   updateFleetSchema,
@@ -48,6 +48,12 @@ router.patch('/:uuid/toggle-status',
   logActivity('update_fleet', 'master'),
   controller.toggleStatus,
 )
+router.post('/:uuid/complete-rental',
+  isOpsOrAbove,
+  validate(uuidParam, 'params'),
+  logActivity('update_fleet', 'master'),
+  controller.completeRental,
+)
 router.post('/:uuid/photo',
   isOpsOrAbove,
   validate(uuidParam, 'params'),
@@ -55,6 +61,25 @@ router.post('/:uuid/photo',
   compressImage('fleets'),
   logActivity('update_fleet', 'master'),
   controller.uploadPhoto,
+)
+router.post('/:uuid/lampiran',
+  isOpsOrAbove,
+  validate(uuidParam, 'params'),
+  upload.single('file'),
+  processLampiran('fleet-lampiran'),
+  logActivity('update_fleet', 'master'),
+  controller.uploadLampiran,
+)
+router.delete('/:uuid/lampiran/:filename',
+  isOpsOrAbove,
+  validate(uuidFilenameParam, 'params'),
+  logActivity('update_fleet', 'master'),
+  controller.deleteLampiran,
+)
+router.get('/:uuid/lampiran/:filename',
+  isAnyRole,
+  validate(uuidFilenameParam, 'params'),
+  controller.downloadLampiran,
 )
 router.delete('/:uuid',
   isOpsOrAbove,

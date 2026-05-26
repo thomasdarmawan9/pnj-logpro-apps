@@ -32,6 +32,16 @@ module.exports = (sequelize) => {
       type:      DataTypes.DECIMAL(12, 2),
       allowNull: false,
     },
+    kategori_name: {
+      type:      DataTypes.STRING(50),
+      allowNull: true,
+    },
+    source_type: {
+      type:         DataTypes.STRING(30),
+      allowNull:    false,
+      defaultValue: 'manual',
+      validate:     { isIn: [['manual', 'sj_auto']] },
+    },
     delivery_order_id: {
       type:      DataTypes.BIGINT,
       allowNull: true,

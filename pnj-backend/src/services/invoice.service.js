@@ -99,6 +99,15 @@ function round2(n) {
   return Math.round(Number(n) * 100) / 100
 }
 
+function fleetStatusLabel(status) {
+  return {
+    active:   'aktif',
+    inactive: 'tidak aktif',
+    repair:   'perbaikan',
+    sold:     'terjual',
+  }[status] || status
+}
+
 /**
  * Decorate Invoice response — pisahkan DP dari payments biasa supaya FE
  * gampang render section terpisah. Tambah field turunan:
@@ -128,13 +137,45 @@ function decorate(row) {
   return plain
 }
 
-async function resolveProjectRef(payload, t) {
-  const where = payload.project_uuid
-    ? { uuid: payload.project_uuid }
-    : { id: payload.project_id }
-  const project = await Project.findOne({ where, transaction: t })
-  if (!project) throw new NotFoundError('Project tidak ditemukan.')
-  return project
+async function resolveBillingScope(payload, t) {
+  const [project, customer] = await Promise.all([
+    payload.project_uuid || payload.project_id
+      ? Project.findOne({
+          where: payload.project_uuid ? { uuid: payload.project_uuid } : { id: payload.project_id },
+          transaction: t,
+        })
+      : null,
+    payload.customer_uuid || payload.customer_id
+      ? Customer.findOne({
+          where: payload.customer_uuid ? { uuid: payload.customer_uuid } : { id: payload.customer_id },
+          transaction: t,
+        })
+      : null,
+  ])
+
+  if ((payload.project_uuid || payload.project_id) && !project) throw new NotFoundError('Project tidak ditemukan.')
+  if ((payload.customer_uuid || payload.customer_id) && !customer) throw new NotFoundError('Customer tidak ditemukan.')
+  if (project && customer && Number(project.customer_id) !== Number(customer.id)) {
+    throw new BadRequestError('Customer tidak sesuai dengan project yang dipilih.')
+  }
+
+  const customerId = project ? project.customer_id : customer?.id
+  if (!customerId) throw new BadRequestError('Pilih project atau customer untuk invoice.')
+
+  return {
+    projectId:  project?.id || null,
+    customerId,
+  }
+}
+
+function assertRentalItemsUseFleet(items, serviceType) {
+  if (serviceType !== 'rental') return
+
+  items.forEach((item, idx) => {
+    if (!item.fleet_uuid && !item.fleet_id) {
+      throw new BadRequestError(`Item penyewaan baris ${idx + 1} wajib memilih armada aktif dari master.`)
+    }
+  })
 }
 
 /**
@@ -157,7 +198,7 @@ async function resolveItemFleets(items, t) {
 
   const fleets = await Fleet.findAll({
     where,
-    attributes: ['id', 'uuid'],
+    attributes: ['id', 'uuid', 'status', 'plate_number', 'name'],
     transaction: t,
   })
   const byUuid = new Map(fleets.map(f => [f.uuid, f.id]))
@@ -170,6 +211,12 @@ async function resolveItemFleets(items, t) {
   for (const id of ids) {
     if (!byId.has(Number(id))) {
       throw new NotFoundError(`Fleet dengan id ${id} tidak ditemukan.`)
+    }
+  }
+  for (const fleet of fleets) {
+    if (fleet.status !== 'active') {
+      const label = `${fleet.name || 'Fleet'} ${fleet.plate_number || ''}`.trim()
+      throw new BadRequestError(`Armada ${label} berstatus ${fleetStatusLabel(fleet.status)} dan tidak dapat dipakai pada invoice.`)
     }
   }
   return { byUuid, byId }
@@ -197,6 +244,14 @@ function buildItemRows(items, invoiceId, fleetMap) {
       sort_order:    it.sort_order ?? 0,
     }
   })
+}
+
+function sameBillingScope(invoice, sj) {
+  if (invoice.project_id) {
+    return Number(sj.project_id) === Number(invoice.project_id)
+  }
+
+  return !sj.project_id && Number(sj.customer_id) === Number(invoice.customer_id)
 }
 
 /**
@@ -394,8 +449,9 @@ async function upsertDownPayment(invoice, dp, actor, t) {
 // ── CREATE ────────────────────────────────────────────────────────────────
 async function create(payload, actor) {
   return sequelize.transaction(async (t) => {
-    const project = await resolveProjectRef(payload, t)
+    const scope = await resolveBillingScope(payload, t)
 
+    assertRentalItemsUseFleet(payload.items, payload.service_type || 'delivery')
     const fleetMap = await resolveItemFleets(payload.items, t)
     const invoiceNumber = await generateInvoiceNumber(t)
 
@@ -408,8 +464,8 @@ async function create(payload, actor) {
 
     const invoice = await Invoice.create({
       invoice_number:   invoiceNumber,
-      project_id:       project.id,
-      customer_id:      project.customer_id,
+      project_id:       scope.projectId,
+      customer_id:      scope.customerId,
       invoice_date:     payload.invoice_date,
       due_date:         payload.due_date,
       service_type:     payload.service_type || 'delivery',
@@ -510,6 +566,7 @@ async function update(uuid, payload, actor) {
     let itemRowsForRecalc = null
 
     if (payload.items) {
+      assertRentalItemsUseFleet(payload.items, invoice.service_type)
       const fleetMap = await resolveItemFleets(payload.items, t)
       // Replace seluruh items
       await InvoiceItem.destroy({ where: { invoice_id: invoice.id }, transaction: t })
@@ -685,7 +742,8 @@ async function recordPayment(invoiceUuid, payload, actor) {
 // ── ATTACH / DETACH SJ ────────────────────────────────────────────────────
 /**
  * Attach beberapa SJ ke invoice. Validasi:
- *  - SJ project_id harus sama dengan invoice.project_id
+ *  - Invoice project: SJ project_id harus sama
+ *  - Invoice customer-only: SJ juga customer-only dan customer_id harus sama
  *  - SJ status harus assigned atau delivered (draft dan void tidak bisa)
  *  - SJ belum punya invoice_id (belum attached ke invoice lain)
  */
@@ -714,8 +772,8 @@ async function attachSJ(invoiceUuid, sjUuids, actor) {
     }
 
     for (const sj of sjList) {
-      if (sj.project_id !== invoice.project_id) {
-        throw new BadRequestError(`SJ ${sj.sj_number} bukan dari project yang sama dengan invoice.`)
+      if (!sameBillingScope(invoice, sj)) {
+        throw new BadRequestError(`SJ ${sj.sj_number} tidak sesuai dengan scope invoice.`)
       }
       if (!['assigned', 'delivered'].includes(sj.status)) {
         throw new BadRequestError(`SJ ${sj.sj_number} status ${sj.status} — hanya SJ berstatus Terbit atau Terkirim yang bisa dilampirkan.`)
@@ -793,7 +851,8 @@ async function detachSJ(invoiceUuid, sjUuid, actor) {
 
 /**
  * List SJ yang bisa di-attach ke invoice tertentu:
- *  - project_id sama dengan invoice
+ *  - Invoice project: project_id sama dengan invoice
+ *  - Invoice customer-only: customer_id sama dan project_id null
  *  - status = assigned atau delivered
  *  - belum punya invoice_id
  */
@@ -804,7 +863,9 @@ async function getAttachableSJ(invoiceUuid) {
 
   const rows = await DeliveryOrder.findAll({
     where: {
-      project_id: invoice.project_id,
+      ...(invoice.project_id
+        ? { project_id: invoice.project_id }
+        : { project_id: null, customer_id: invoice.customer_id }),
       status:     { [require('sequelize').Op.in]: ['assigned', 'delivered'] },
       invoice_id: null,
     },

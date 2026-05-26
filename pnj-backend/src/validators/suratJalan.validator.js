@@ -7,17 +7,32 @@ const INV_STATES = ['no_invoice', 'attached']
 const PERIODS    = ['today', 'week', 'month', 'last_month', 'all']
 
 const sjItemSchema = Joi.object({
-  id:          Joi.string().trim().max(36).allow('', null),
-  description: Joi.string().trim().max(255).allow('', null).default(''),
-  qty:         Joi.number().min(0).default(1),
-  unit:        Joi.string().trim().max(30).default('pcs'),
-  unit_price:  Joi.number().min(0).default(0),
-  notes:       Joi.string().trim().max(500).allow('', null).default(''),
+  id:              Joi.string().trim().max(36).allow('', null),
+  description:     Joi.string().trim().max(255).allow('', null).default(''),
+  qty:             Joi.number().min(0).default(1),
+  unit:            Joi.string().trim().max(30).default('pcs'),
+  unit_price:      Joi.number().min(0).default(0),
+  notes:           Joi.string().trim().max(500).allow('', null).default(''),
+  source_type:     Joi.string().valid('manual', 'stock').default('manual'),
+  stock_item_id:   Joi.number().integer().min(1).allow(null),
+  stock_item_uuid: Joi.string().uuid({ version: ['uuidv4'] }).allow(null),
+  stock_item_code: Joi.string().trim().max(50).allow('', null),
+  stock_item_name: Joi.string().trim().max(120).allow('', null),
+  stock_kategori_name: Joi.string().trim().max(50).allow('', null),
+}).custom((val, helpers) => {
+  if (val.source_type === 'stock' && !val.stock_item_id && !val.stock_item_uuid) {
+    return helpers.error('any.custom', { message: 'Item stok wajib dipilih untuk baris yang bersumber dari manajemen stok.' })
+  }
+  return val
+}).messages({
+  'any.custom': '{{#message}}',
 })
 
 const createSJSchema = Joi.object({
   project_uuid:        Joi.string().uuid({ version: ['uuidv4'] }),
-  project_id:          Joi.number().integer().min(1),
+  project_id:          Joi.number().integer().min(1).allow(null),
+  customer_uuid:       Joi.string().uuid({ version: ['uuidv4'] }),
+  customer_id:         Joi.number().integer().min(1).allow(null),
   fleet_uuid:          Joi.string().uuid({ version: ['uuidv4'] }),
   fleet_id:            Joi.number().integer().min(0),
   driver_uuid:         Joi.string().uuid({ version: ['uuidv4'] }).allow(null),
@@ -31,9 +46,13 @@ const createSJSchema = Joi.object({
   operational_cost:    Joi.number().precision(2).min(0).default(0),
   internal_notes:      Joi.string().trim().allow('', null),
   publish:             Joi.boolean().default(false),
-}).custom((val, helpers) => {
-  if (!val.project_uuid && !val.project_id) {
-    return helpers.error('any.custom', { message: 'Project wajib dipilih.' })
+}).oxor('project_uuid', 'project_id')
+  .oxor('customer_uuid', 'customer_id')
+  .custom((val, helpers) => {
+  const hasProject = !!val.project_uuid || !!val.project_id
+  const hasCustomer = !!val.customer_uuid || !!val.customer_id
+  if (!hasProject && !hasCustomer) {
+    return helpers.error('any.custom', { message: 'Pilih project atau customer.' })
   }
   if (val.publish) {
     if (!val.fleet_uuid && !val.fleet_id) {
@@ -46,6 +65,7 @@ const createSJSchema = Joi.object({
   return val
 }).messages({
   'any.custom': '{{#message}}',
+  'object.oxor': 'Pilih salah satu identifier untuk project/customer.',
 })
 
 const updateSJSchema = Joi.object({

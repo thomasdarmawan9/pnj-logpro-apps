@@ -9,10 +9,13 @@ export interface ValidationResult {
 export function validateCreateSJ(dto: CreateSJDto): ValidationResult {
   const errors: Record<string, string> = {}
 
-  if (!dto.project_id) errors.project_id = 'Proyek wajib dipilih'
+  if (!dto.project_id && !dto.customer_id) errors.project_id = 'Pilih proyek atau customer'
   if (!dto.sj_date) errors.sj_date = 'Tanggal SJ wajib diisi'
   if (!dto.origin?.trim()) errors.origin = 'Lokasi asal wajib diisi'
   if (!dto.destination?.trim()) errors.destination = 'Lokasi tujuan wajib diisi'
+  if (dto.items.some(item => item.source_type === 'stock' && !item.stock_item_uuid && !item.stock_item_id)) {
+    errors.items = 'Pilih barang stok untuk setiap item yang bersumber dari manajemen stok'
+  }
 
   if (dto.publish) {
     if (!dto.fleet_id || dto.fleet_id === 0) {
@@ -30,5 +33,8 @@ export function validateUpdateSJ(dto: UpdateSJDto): ValidationResult {
   const errors: Record<string, string> = {}
   if (dto.origin !== undefined && !dto.origin.trim()) errors.origin = 'Lokasi asal tidak boleh kosong'
   if (dto.destination !== undefined && !dto.destination.trim()) errors.destination = 'Lokasi tujuan tidak boleh kosong'
+  if (dto.items?.some(item => item.source_type === 'stock' && !item.stock_item_uuid && !item.stock_item_id)) {
+    errors.items = 'Pilih barang stok untuk setiap item yang bersumber dari manajemen stok'
+  }
   return { valid: Object.keys(errors).length === 0, errors }
 }

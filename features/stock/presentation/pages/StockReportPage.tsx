@@ -3,12 +3,13 @@
 import { useEffect, useState, useMemo, Fragment } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { useSearchParams } from 'next/navigation'
-import { FileBarChart2 } from 'lucide-react'
+import { FileBarChart2, Printer } from 'lucide-react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { RootState, AppDispatch } from '@/store'
 import { fetchStockItems, fetchStockReceipts, fetchStockDisbursements } from '@/store/slices/stockSlice'
 import { fetchCustomers } from '@/store/slices/masterSlice'
 import { calculateRunningBalance } from '@/features/stock/application/use-cases/GetStockRecap'
+import { apiDownload } from '@/lib/apiClient'
 import RunningBalanceTable from '../components/RunningBalanceTable'
 
 type Period = 'all' | 'this_month' | 'last_month' | 'custom'
@@ -45,6 +46,7 @@ export default function StockReportPage() {
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null)
+  const [isPrintingPdf, setIsPrintingPdf] = useState(false)
 
   useEffect(() => {
     dispatch(fetchStockItems())
@@ -180,16 +182,49 @@ export default function StockReportPage() {
       if (!d.customer_id) continue
       if (d.stock_item_id !== selectedItemId) continue
       const custName = d.customer?.name ?? `Customer #${d.customer_id}`
-      const existing = rows.find(row => row.customer_name === custName && row.kategori_name === null)
+      const kategoriName = d.kategori_name ?? null
+      const existing = rows.find(row => row.customer_name === custName && row.kategori_name === kategoriName)
       if (existing) {
         existing.qty_out += d.qty
       } else {
-        rows.push({ customer_name: custName, barang_name: selectedItem.name, kategori_name: null, qty_in: 0, qty_out: d.qty })
+        rows.push({ customer_name: custName, barang_name: selectedItem.name, kategori_name: kategoriName, qty_in: 0, qty_out: d.qty })
       }
     }
 
     return rows.sort((a, b) => a.customer_name.localeCompare(b.customer_name))
   }, [receipts, disbursements, selectedItemId, selectedItem, selectedCustomerId])
+
+  const handlePrintPdf = async () => {
+    if (!selectedItem) return
+
+    setIsPrintingPdf(true)
+    try {
+      const params = new URLSearchParams({
+        stock_item_uuid: selectedItem.uuid,
+        period,
+      })
+      const selectedCustomer = selectedCustomerId
+        ? customers.find(customer => customer.id === selectedCustomerId)
+        : null
+      if (selectedCustomer?.uuid) params.set('customer_uuid', selectedCustomer.uuid)
+      if (period === 'custom') {
+        if (customFrom) params.set('from', customFrom)
+        if (customTo) params.set('to', customTo)
+      }
+
+      const blob = await apiDownload(`/stock/report/export/pdf?${params.toString()}`)
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `rekap-stok-${selectedItem.code}-${new Date().toISOString().slice(0, 10)}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+    } finally {
+      setIsPrintingPdf(false)
+    }
+  }
 
   return (
     <DashboardLayout>
@@ -199,6 +234,16 @@ export default function StockReportPage() {
           <div className="text-xs text-gray-500">Dashboard / Manajemen Stok / Laporan Rekap</div>
           <h1 className="text-2xl font-bold">Laporan Rekap Stok</h1>
         </div>
+        <button
+          type="button"
+          onClick={handlePrintPdf}
+          disabled={!selectedItem || isPrintingPdf}
+          className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+          style={{ borderColor: 'var(--border-card)' }}
+        >
+          <Printer size={16} />
+          {isPrintingPdf ? 'Mencetak...' : 'Cetak PDF'}
+        </button>
       </div>
 
       {/* Filters */}
@@ -262,6 +307,19 @@ export default function StockReportPage() {
               </div>
             </>
           )}
+
+          <div className="flex items-end">
+            <button
+              type="button"
+              onClick={handlePrintPdf}
+              disabled={!selectedItem || isPrintingPdf}
+              className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+              style={{ backgroundColor: 'var(--green-primary)' }}
+            >
+              <Printer size={16} />
+              {isPrintingPdf ? 'Mencetak...' : 'Cetak PDF'}
+            </button>
+          </div>
         </div>
       </div>
 

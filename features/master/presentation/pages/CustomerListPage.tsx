@@ -9,6 +9,9 @@ import CustomerFormModal from '../components/CustomerFormModal'
 import { useToast } from '@/components/toast/useToast'
 import { formatRupiah } from '@/lib/formatters'
 import { Customer } from '@/features/master/domain/entities/Customer'
+import TablePagination from '../components/TablePagination'
+
+const ROWS_PER_PAGE = 10
 
 export default function CustomerListPage() {
   const { customers, isLoading, modal, openForm, closeForm, create, update, remove } = useCustomer()
@@ -19,8 +22,9 @@ export default function CustomerListPage() {
   const [search, setSearch] = useState('')
   const [filterPKP, setFilterPKP] = useState<'all' | 'pkp' | 'non_pkp'>('all')
   const [filterPiutang, setFilterPiutang] = useState<'all' | 'ada' | 'tidak'>('all')
+  const [page, setPage] = useState(1)
 
-  const resetFilters = () => { setSearch(''); setFilterPKP('all'); setFilterPiutang('all') }
+  const resetFilters = () => { setSearch(''); setFilterPKP('all'); setFilterPiutang('all'); setPage(1) }
 
   const filtered = useMemo(() => customers.filter(c => {
     const q = search.toLowerCase()
@@ -33,6 +37,10 @@ export default function CustomerListPage() {
       (filterPiutang === 'ada' ? c.total_invoice_outstanding > 0 : c.total_invoice_outstanding === 0)
     return matchSearch && matchPKP && matchPiutang
   }), [customers, search, filterPKP, filterPiutang])
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ROWS_PER_PAGE))
+  const currentPage = Math.min(page, totalPages)
+  const paginated = filtered.slice((currentPage - 1) * ROWS_PER_PAGE, currentPage * ROWS_PER_PAGE)
 
   const handleSubmit = async (data: Parameters<typeof create>[0]) => {
     const action = modal.data
@@ -90,7 +98,7 @@ export default function CustomerListPage() {
               className="form-input w-full"
               placeholder="Cari nama, PIC, email, NPWP..."
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={e => { setSearch(e.target.value); setPage(1) }}
               style={{ paddingLeft: '38px' }}
             />
           </div>
@@ -113,7 +121,7 @@ export default function CustomerListPage() {
           <div>
             <div className="text-xs text-gray-600">Status PKP</div>
             <div className="relative mt-1">
-              <select className="form-input text-sm w-full pr-8" value={filterPKP} onChange={e => setFilterPKP(e.target.value as typeof filterPKP)}>
+              <select className="form-input text-sm w-full pr-8" value={filterPKP} onChange={e => { setFilterPKP(e.target.value as typeof filterPKP); setPage(1) }}>
                 <option value="all">Semua</option>
                 <option value="pkp">PKP</option>
                 <option value="non_pkp">Non-PKP</option>
@@ -124,7 +132,7 @@ export default function CustomerListPage() {
           <div>
             <div className="text-xs text-gray-600">Piutang</div>
             <div className="relative mt-1">
-              <select className="form-input text-sm w-full pr-8" value={filterPiutang} onChange={e => setFilterPiutang(e.target.value as typeof filterPiutang)}>
+              <select className="form-input text-sm w-full pr-8" value={filterPiutang} onChange={e => { setFilterPiutang(e.target.value as typeof filterPiutang); setPage(1) }}>
                 <option value="all">Semua</option>
                 <option value="ada">Ada Piutang</option>
                 <option value="tidak">Tidak Ada Piutang</option>
@@ -146,23 +154,24 @@ export default function CustomerListPage() {
             <p className="text-sm">Tidak ada customer ditemukan</p>
           </div>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border-card)', backgroundColor: 'var(--bg-page)' }}>
-                {['Nama & PIC', 'Kontak', 'NPWP', 'PKP', 'Proyek Aktif', 'Piutang', 'Aksi'].map(h => (
-                  <th key={h} className="text-left px-4 py-3 text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((c, i) => (
-                <tr
-                  key={c.uuid}
-                  style={{
-                    borderBottom: i < filtered.length - 1 ? '1px solid var(--border-card)' : 'none',
-                  }}
-                  className="hover:bg-gray-50 transition-colors"
-                >
+          <>
+            <table className="w-full text-sm">
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border-card)', backgroundColor: 'var(--bg-page)' }}>
+                  {['Nama & PIC', 'Kontak', 'NPWP', 'PKP', 'Proyek Aktif', 'Piutang', 'Aksi'].map(h => (
+                    <th key={h} className="text-left px-4 py-3 text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {paginated.map((c, i) => (
+                  <tr
+                    key={c.uuid}
+                    style={{
+                      borderBottom: i < paginated.length - 1 ? '1px solid var(--border-card)' : 'none',
+                    }}
+                    className="hover:bg-gray-50 transition-colors"
+                  >
                   <td className="px-4 py-3">
                     <div className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>{c.name}</div>
                     <div className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>{c.pic_name ?? '—'}</div>
@@ -223,10 +232,12 @@ export default function CustomerListPage() {
                       </button>
                     </div>
                   </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <TablePagination page={currentPage} perPage={ROWS_PER_PAGE} total={filtered.length} label="customer" onPageChange={setPage} />
+          </>
         )}
       </div>
 

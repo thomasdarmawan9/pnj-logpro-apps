@@ -4,21 +4,30 @@ import { useState, useMemo } from 'react'
 import { Plus, Search, Pencil, ToggleLeft, X, Filter, RotateCcw, ChevronDown } from 'lucide-react'
 import { useDriver } from '../hooks/useDriver'
 import DriverFormModal from '../components/DriverFormModal'
+import FleetLampiranModal from '../components/FleetLampiranModal'
 import SIMStatusBadge from '@/components/ui/SIMStatusBadge'
 import { useToast } from '@/components/toast/useToast'
 import { Driver, SIMStatus } from '@/features/master/domain/entities/Driver'
 import { formatDate } from '@/lib/formatters'
+import { PendingFleetLampiran } from '../components/FleetLampiranUploadZone'
+import { downloadDriverLampiran, uploadDriverLampiran } from '../../infrastructure/repositories/MockMasterRepository'
+import TablePagination from '../components/TablePagination'
+
+const ROWS_PER_PAGE = 10
 
 export default function DriverListPage() {
-  const { drivers, isLoading, modal, openForm, closeForm, create, update, toggle } = useDriver()
+  const { drivers, isLoading, modal, openForm, closeForm, create, update, toggle, refresh } = useDriver()
   const { push: pushToast } = useToast()
 
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all')
   const [filterSIM, setFilterSIM] = useState<SIMStatus | 'all'>('all')
   const [alertDismissed, setAlertDismissed] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [lampiranDriver, setLampiranDriver] = useState<Driver | null>(null)
+  const [page, setPage] = useState(1)
 
-  const resetFilters = () => { setSearch(''); setFilterStatus('all'); setFilterSIM('all') }
+  const resetFilters = () => { setSearch(''); setFilterStatus('all'); setFilterSIM('all'); setPage(1) }
 
   const attentionDrivers = useMemo(() =>
     drivers.filter(d => d.status === 'active' && (d.sim_status === 'expired' || d.sim_status === 'expiring_soon')),
@@ -33,14 +42,37 @@ export default function DriverListPage() {
     return matchSearch && matchStatus && matchSIM
   }), [drivers, search, filterStatus, filterSIM])
 
-  const handleSubmit = async (data: Parameters<typeof create>[0]) => {
-    const action = modal.data
-      ? await update(modal.data.uuid, data as Partial<Driver>)
-      : await create(data)
-    if ((action as { meta?: { requestStatus?: string } }).meta?.requestStatus === 'rejected') {
-      pushToast({ title: 'Gagal menyimpan data supir', variant: 'error' })
-    } else {
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ROWS_PER_PAGE))
+  const currentPage = Math.min(page, totalPages)
+  const paginated = filtered.slice((currentPage - 1) * ROWS_PER_PAGE, currentPage * ROWS_PER_PAGE)
+
+  const handleSubmit = async (data: Parameters<typeof create>[0], pendingLampiran: PendingFleetLampiran[]) => {
+    setSubmitting(true)
+    try {
+      const action = modal.data
+        ? await update(modal.data.uuid, data as Partial<Driver>)
+        : await create(data)
+      if ((action as { meta?: { requestStatus?: string } }).meta?.requestStatus === 'rejected') {
+        pushToast({ title: 'Gagal menyimpan data supir', variant: 'error' })
+        return
+      }
+
+      const savedDriver = (action as { payload?: Driver }).payload
+      if (!savedDriver) {
+        pushToast({ title: 'Gagal menyimpan data supir', variant: 'error' })
+        return
+      }
+
+      for (const item of pendingLampiran) {
+        await uploadDriverLampiran(savedDriver.uuid, item.file)
+      }
+      if (pendingLampiran.length > 0) await refresh()
+      closeForm()
       pushToast({ title: modal.data ? 'Data supir diperbarui' : 'Supir berhasil ditambahkan', variant: 'success' })
+    } catch {
+      pushToast({ title: 'Gagal menyimpan data supir', variant: 'error' })
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -118,7 +150,7 @@ export default function DriverListPage() {
               className="form-input w-full"
               placeholder="Cari nama supir, no. SIM..."
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={e => { setSearch(e.target.value); setPage(1) }}
               style={{ paddingLeft: '38px' }}
             />
           </div>
@@ -141,7 +173,7 @@ export default function DriverListPage() {
           <div>
             <div className="text-xs text-gray-600">Status</div>
             <div className="relative mt-1">
-              <select className="form-input text-sm w-full pr-8" value={filterStatus} onChange={e => setFilterStatus(e.target.value as typeof filterStatus)}>
+              <select className="form-input text-sm w-full pr-8" value={filterStatus} onChange={e => { setFilterStatus(e.target.value as typeof filterStatus); setPage(1) }}>
                 <option value="all">Semua</option>
                 <option value="active">Aktif</option>
                 <option value="inactive">Tidak Aktif</option>
@@ -152,7 +184,7 @@ export default function DriverListPage() {
           <div>
             <div className="text-xs text-gray-600">Status SIM</div>
             <div className="relative mt-1">
-              <select className="form-input text-sm w-full pr-8" value={filterSIM} onChange={e => setFilterSIM(e.target.value as typeof filterSIM)}>
+              <select className="form-input text-sm w-full pr-8" value={filterSIM} onChange={e => { setFilterSIM(e.target.value as typeof filterSIM); setPage(1) }}>
                 <option value="all">Semua</option>
                 <option value="valid">Valid</option>
                 <option value="expiring_soon">Akan Kadaluarsa</option>
@@ -171,21 +203,26 @@ export default function DriverListPage() {
           <div className="flex items-center justify-center py-16">
             <div className="w-6 h-6 rounded-full border-2 animate-spin" style={{ borderColor: 'var(--green-primary)', borderTopColor: 'transparent' }} />
           </div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-16" style={{ color: 'var(--text-secondary)' }}>
+            <p className="text-sm">Tidak ada supir ditemukan</p>
+          </div>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border-card)', backgroundColor: 'var(--bg-page)' }}>
-                {['Nama Supir', 'Telepon', 'No. SIM', 'Status SIM', 'Status', 'Trip Bulan Ini', 'Aksi'].map(h => (
-                  <th key={h} className="text-left px-4 py-3 text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((d, i) => (
+          <>
+            <table className="w-full text-sm">
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border-card)', backgroundColor: 'var(--bg-page)' }}>
+                  {['Nama Supir', 'Telepon', 'No. SIM', 'Status SIM', 'Status', 'Trip Bulan Ini', 'Lampiran', 'Aksi'].map(h => (
+                    <th key={h} className="text-left px-4 py-3 text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {paginated.map((d, i) => (
                 <tr
                   key={d.uuid}
                   style={{
-                    borderBottom: i < filtered.length - 1 ? '1px solid var(--border-card)' : 'none',
+                    borderBottom: i < paginated.length - 1 ? '1px solid var(--border-card)' : 'none',
                     backgroundColor: rowBg(d),
                     opacity: d.status === 'inactive' ? 0.7 : 1,
                   }}
@@ -222,6 +259,20 @@ export default function DriverListPage() {
                   <td className="px-4 py-3 text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
                     {d.total_trips}
                   </td>
+                  <td className="px-4 py-3 text-sm">
+                    {(d.lampiran_paths ?? []).length > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => setLampiranDriver(d)}
+                        className="font-medium underline underline-offset-2"
+                        style={{ color: '#2563EB' }}
+                      >
+                        lihat
+                      </button>
+                    ) : (
+                      <span style={{ color: 'var(--text-secondary)' }}>-</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
                       <button onClick={() => openForm(d)} className="p-1.5 rounded-lg hover:bg-blue-50" title="Edit">
@@ -233,18 +284,29 @@ export default function DriverListPage() {
                     </div>
                   </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+                ))}
+              </tbody>
+            </table>
+            <TablePagination page={currentPage} perPage={ROWS_PER_PAGE} total={filtered.length} label="supir" onPageChange={setPage} />
+          </>
         )}
       </div>
 
       <DriverFormModal
         open={modal.open}
         data={modal.data}
-        isLoading={isLoading}
+        isLoading={isLoading || submitting}
         onClose={closeForm}
         onSubmit={handleSubmit}
+      />
+      <FleetLampiranModal
+        open={!!lampiranDriver}
+        title="Lampiran Supir"
+        subtitle={lampiranDriver?.name}
+        recordUuid={lampiranDriver?.uuid ?? null}
+        paths={lampiranDriver?.lampiran_paths ?? []}
+        downloadLampiran={downloadDriverLampiran}
+        onClose={() => setLampiranDriver(null)}
       />
     </div>
   )

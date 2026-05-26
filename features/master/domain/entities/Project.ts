@@ -7,7 +7,7 @@ export interface Project {
   name: string
   contract_number: string | null
   customer_id: number
-  customer: { id: number; name: string; is_pkp: boolean }
+  customer: { id: number; uuid?: string; name: string; is_pkp: boolean }
   description: string | null
   start_date: string
   end_date: string | null

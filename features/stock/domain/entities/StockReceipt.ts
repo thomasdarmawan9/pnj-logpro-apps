@@ -19,7 +19,7 @@ export interface StockReceipt {
   supplier_name: string | null
   document_number: string | null
   customer_id: number | null
-  customer?: { id: number; name: string } | null
+  customer?: { id: number; uuid?: string; name: string } | null
   notes: string | null
   items: StockReceiptItem[]
   created_by: number

@@ -3,6 +3,7 @@ import { IStockRepository } from './IStockRepository'
 import { StockItem } from '../../domain/entities/StockItem'
 import { StockReceipt, StockReceiptItem } from '../../domain/entities/StockReceipt'
 import { StockDisbursement } from '../../domain/entities/StockDisbursement'
+import { CustomerStockAvailableItem, CustomerStockSummary } from '../../application/use-cases/GetCustomerStockDetail'
 import { CreateStockItemDto } from '../../application/dto/CreateStockItemDto'
 import { CreateStockReceiptDto, CreateStockReceiptItemDto } from '../../application/dto/CreateStockReceiptDto'
 import { CreateStockDisbursementDto } from '../../application/dto/CreateStockDisbursementDto'
@@ -43,6 +44,8 @@ type ApiDisbursement = Omit<
   customer?: ApiCustomer
   created_by: ApiId
 }
+type ApiCustomerStockSummary = CustomerStockSummary
+type ApiCustomerStockAvailableItem = CustomerStockAvailableItem
 
 function toNumber(value: ApiId | undefined): number {
   return Number(value || 0)
@@ -53,9 +56,9 @@ function toNullableNumber(value: ApiId | undefined): number | null {
   return Number(value)
 }
 
-function normalizeCustomer(customer: ApiCustomer): { id: number; name: string } | null {
+function normalizeCustomer(customer: ApiCustomer): { id: number; uuid?: string; name: string } | null {
   if (!customer) return null
-  return { id: toNumber(customer.id), name: customer.name }
+  return { id: toNumber(customer.id), uuid: customer.uuid, name: customer.name }
 }
 
 function normalizeItem(item: ApiStockItem): StockItem {
@@ -112,6 +115,41 @@ function receiptItemPayload(item: CreateStockReceiptItemDto) {
     qty: item.qty,
     kategori_name: item.kategori_name ?? null,
     notes: item.notes ?? null,
+  }
+}
+
+function normalizeCustomerStockSummary(summary: ApiCustomerStockSummary): CustomerStockSummary {
+  return {
+    ...summary,
+    customerId: Number(summary.customerId || 0),
+    totalAsset: Number(summary.totalAsset || 0),
+    totalItemTypes: Number(summary.totalItemTypes || 0),
+    totalIn: Number(summary.totalIn || 0),
+    totalOut: Number(summary.totalOut || 0),
+    itemRows: (summary.itemRows || []).map(row => ({
+      ...row,
+      stockItemId: Number(row.stockItemId || 0),
+      totalIn: Number(row.totalIn || 0),
+      totalOut: Number(row.totalOut || 0),
+      balance: Number(row.balance || 0),
+      categories: row.categories || [],
+    })),
+    transactions: (summary.transactions || []).map(row => ({
+      ...row,
+      qty: Number(row.qty || 0),
+      sjNumber: row.sjNumber || null,
+      invoiceNumber: row.invoiceNumber || null,
+    })),
+  }
+}
+
+function normalizeAvailableItem(item: ApiCustomerStockAvailableItem): CustomerStockAvailableItem {
+  return {
+    ...item,
+    stockItemId: Number(item.stockItemId || 0),
+    categoryName: item.categoryName || null,
+    categories: item.categories || [],
+    availableQty: Number(item.availableQty || 0),
   }
 }
 
@@ -183,6 +221,7 @@ class MockStockRepository implements IStockRepository {
         disbursement_date: dto.disbursement_date,
         stock_item_id: dto.stock_item_id,
         qty: dto.qty,
+        kategori_name: dto.kategori_name,
         delivery_order_id: dto.delivery_order_id,
         sj_number_manual: dto.sj_number_manual,
         invoice_number_manual: dto.invoice_number_manual,
@@ -198,6 +237,21 @@ class MockStockRepository implements IStockRepository {
 
   async deleteDisbursement(uuid: string): Promise<void> {
     await apiRequest<null>(`/stock/disbursements/${uuid}`, { method: 'DELETE' })
+  }
+
+  async getCustomerStockSummaries(): Promise<CustomerStockSummary[]> {
+    const response = await apiRequest<ApiCustomerStockSummary[]>('/stock/customers/summary', { method: 'GET' })
+    return response.data.map(normalizeCustomerStockSummary)
+  }
+
+  async getCustomerStockDetail(uuid: string): Promise<CustomerStockSummary> {
+    const response = await apiRequest<ApiCustomerStockSummary>(`/stock/customers/${uuid}/detail`, { method: 'GET' })
+    return normalizeCustomerStockSummary(response.data)
+  }
+
+  async getCustomerAvailableItems(uuid: string): Promise<CustomerStockAvailableItem[]> {
+    const response = await apiRequest<ApiCustomerStockAvailableItem[]>(`/stock/customers/${uuid}/available-items`, { method: 'GET' })
+    return response.data.map(normalizeAvailableItem)
   }
 }
 

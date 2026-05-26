@@ -58,6 +58,7 @@ const HEADER_INCLUDES = [
     model:      Project,
     as:         'project',
     attributes: ['id', 'uuid', 'code', 'name', 'contract_number'],
+    required:   false,
   },
   {
     model:      Customer,

@@ -59,7 +59,7 @@ async function fetchOutstandingInvoices({ asOfDate, periodFrom, periodTo }) {
         model:      Project,
         as:         'project',
         attributes: ['id', 'uuid', 'code', 'name', 'contract_number'],
-        required:   true,
+        required:   false,
       },
       {
         model:      Customer,
@@ -113,10 +113,10 @@ async function getSummary(filters = {}) {
       remaining_amount: remaining,
       days_overdue:     daysOverdue,
       aging_bucket:     bucket,
-      project_id:       inv.project.id,
-      project_code:     inv.project.code,
-      project_name:     inv.project.name,
-      contract_number:  inv.project.contract_number || '',
+      project_id:       inv.project?.id || null,
+      project_code:     inv.project?.code || null,
+      project_name:     inv.project?.name || 'Tanpa proyek',
+      contract_number:  inv.project?.contract_number || '',
       sent_at:          inv.sent_at ? new Date(inv.sent_at).toISOString() : null,
     }
 
@@ -209,7 +209,7 @@ async function getCustomerDetail(customerId) {
       model:      Project,
       as:         'project',
       attributes: ['id', 'uuid', 'code', 'name', 'contract_number', 'start_date', 'end_date', 'status'],
-      required:   true,
+      required:   false,
     }],
     order: [['invoice_date', 'DESC']],
   })
@@ -224,7 +224,7 @@ async function getCustomerDetail(customerId) {
   const asOf = new Date()
   for (const inv of invoices) {
     if (inv.status === 'void') continue
-    projectIds.add(inv.project.id)
+    if (inv.project?.id) projectIds.add(inv.project.id)
     totalInvoiced    = round2(totalInvoiced    + Number(inv.total_amount))
     totalPaid        = round2(totalPaid        + Number(inv.paid_amount))
     totalOutstanding = round2(totalOutstanding + Math.max(0, Number(inv.total_amount) - Number(inv.paid_amount)))

@@ -177,6 +177,17 @@ export async function apiDownload(path: string, options: RequestInit = {}) {
     headers,
   })
 
+  if (response.status === 401 && isBrowser()) {
+    const newToken = await tryRefreshToken()
+    if (newToken) {
+      headers.set('Authorization', `Bearer ${newToken}`)
+      const retry = await fetch(`${API_BASE_URL}${path}`, { ...options, headers })
+      if (retry.ok) return retry.blob()
+    }
+    forceLogout()
+    throw new ApiError('Sesi berakhir. Silakan login kembali.', 401)
+  }
+
   if (!response.ok) {
     throw new ApiError('Gagal mengunduh file.', response.status)
   }

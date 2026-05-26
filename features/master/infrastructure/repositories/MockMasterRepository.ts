@@ -1,4 +1,4 @@
-import { apiRequest } from '@/lib/apiClient'
+import { apiDownload, apiRequest } from '@/lib/apiClient'
 import { IMasterRepository } from './IMasterRepository'
 import { Customer } from '../../domain/entities/Customer'
 import { Fleet } from '../../domain/entities/Fleet'
@@ -13,11 +13,12 @@ type ApiCustomer = Omit<Customer, 'id' | 'active_project_count' | 'total_invoice
   total_invoice_outstanding?: number | string
 }
 
-type ApiFleet = Omit<Fleet, 'id' | 'capacity_ton' | 'total_trips' | 'active_days_this_month'> & {
+type ApiFleet = Omit<Fleet, 'id' | 'capacity_ton' | 'total_trips' | 'active_days_this_month' | 'rentals_this_month'> & {
   id: ApiId
   capacity_ton: number | string | null
   total_trips?: number | string
   active_days_this_month?: number | string
+  rentals_this_month?: number | string
 }
 
 type ApiDriver = Omit<Driver, 'id' | 'sim_status' | 'days_until_sim_expiry' | 'total_trips'> & {
@@ -102,6 +103,14 @@ function normalizeFleet(fleet: ApiFleet, extras?: Partial<Fleet>): Fleet {
     id: toNumber(fleet.id),
     capacity_ton: toNullableNumber(fleet.capacity_ton),
     is_tbd: Boolean(fleet.is_tbd),
+    lampiran_paths: fleet.lampiran_paths ?? null,
+    rental_status: fleet.rental_status ?? null,
+    rental_invoice_item_id: toNullableNumber(fleet.rental_invoice_item_id),
+    rental_invoice_id: toNullableNumber(fleet.rental_invoice_id),
+    rental_invoice_number: fleet.rental_invoice_number ?? null,
+    rental_period_start: fleet.rental_period_start ?? null,
+    rental_period_end: fleet.rental_period_end ?? null,
+    rentals_this_month: Number(fleet.rentals_this_month ?? 0),
     total_trips: Number(extras?.total_trips ?? fleet.total_trips ?? 0),
     active_days_this_month: Number(extras?.active_days_this_month ?? fleet.active_days_this_month ?? 0),
     last_used_date: extras?.last_used_date ?? fleet.last_used_date ?? null,
@@ -120,6 +129,7 @@ function normalizeDriver(driver: ApiDriver, extras?: Partial<Driver>): Driver {
     ...driver,
     id: toNumber(driver.id),
     ...sim,
+    lampiran_paths: driver.lampiran_paths ?? null,
     total_trips: Number(extras?.total_trips ?? driver.total_trips ?? 0),
     last_trip_date: extras?.last_trip_date ?? driver.last_trip_date ?? null,
   }
@@ -132,6 +142,7 @@ function normalizeProject(project: ApiProject, extras?: Partial<Project>): Proje
     customer_id: toNumber(project.customer_id ?? project.customer?.id),
     customer: {
       id: toNumber(project.customer?.id),
+      uuid: project.customer?.uuid,
       name: project.customer?.name || '-',
       is_pkp: Boolean(project.customer?.is_pkp),
     },
@@ -282,7 +293,7 @@ class MockMasterRepository implements IMasterRepository {
     return fleets.map(fleet => normalizeFleet(fleet, stats.get(toNumber(fleet.id))))
   }
 
-  async createFleet(data: Omit<Fleet, 'id' | 'uuid' | 'created_at' | 'total_trips' | 'active_days_this_month' | 'last_used_date'>): Promise<Fleet> {
+  async createFleet(data: Omit<Fleet, 'id' | 'uuid' | 'created_at' | 'total_trips' | 'active_days_this_month' | 'last_used_date' | 'rental_status' | 'rental_invoice_item_id' | 'rental_invoice_id' | 'rental_invoice_number' | 'rental_period_start' | 'rental_period_end' | 'rentals_this_month'>): Promise<Fleet> {
     const response = await apiRequest<ApiFleet>('/fleets', { method: 'POST', body: data })
     return normalizeFleet(response.data)
   }
@@ -294,6 +305,29 @@ class MockMasterRepository implements IMasterRepository {
 
   async toggleFleetStatus(uuid: string): Promise<Fleet> {
     const response = await apiRequest<ApiFleet>(`/fleets/${uuid}/toggle-status`, { method: 'PATCH' })
+    return normalizeFleet(response.data)
+  }
+
+  async completeFleetRental(uuid: string): Promise<Fleet> {
+    const response = await apiRequest<ApiFleet>(`/fleets/${uuid}/complete-rental`, { method: 'POST' })
+    return normalizeFleet(response.data)
+  }
+
+  async uploadFleetLampiran(uuid: string, file: File): Promise<Fleet> {
+    const formData = new FormData()
+    formData.append('file', file)
+    const response = await apiRequest<ApiFleet>(`/fleets/${uuid}/lampiran`, {
+      method: 'POST',
+      body: formData,
+    })
+    return normalizeFleet(response.data)
+  }
+
+  async deleteFleetLampiran(uuid: string, filePath: string): Promise<Fleet> {
+    const filename = filePath.split('/').pop()!
+    const response = await apiRequest<ApiFleet>(`/fleets/${uuid}/lampiran/${filename}`, {
+      method: 'DELETE',
+    })
     return normalizeFleet(response.data)
   }
 
@@ -318,6 +352,24 @@ class MockMasterRepository implements IMasterRepository {
 
   async toggleDriverStatus(uuid: string): Promise<Driver> {
     const response = await apiRequest<ApiDriver>(`/drivers/${uuid}/toggle-status`, { method: 'PATCH' })
+    return normalizeDriver(response.data)
+  }
+
+  async uploadDriverLampiran(uuid: string, file: File): Promise<Driver> {
+    const formData = new FormData()
+    formData.append('file', file)
+    const response = await apiRequest<ApiDriver>(`/drivers/${uuid}/lampiran`, {
+      method: 'POST',
+      body: formData,
+    })
+    return normalizeDriver(response.data)
+  }
+
+  async deleteDriverLampiran(uuid: string, filePath: string): Promise<Driver> {
+    const filename = filePath.split('/').pop()!
+    const response = await apiRequest<ApiDriver>(`/drivers/${uuid}/lampiran/${filename}`, {
+      method: 'DELETE',
+    })
     return normalizeDriver(response.data)
   }
 
@@ -391,3 +443,29 @@ class MockMasterRepository implements IMasterRepository {
 }
 
 export const masterRepository = new MockMasterRepository()
+
+export async function uploadFleetLampiran(uuid: string, file: File): Promise<Fleet> {
+  return masterRepository.uploadFleetLampiran(uuid, file)
+}
+
+export async function deleteFleetLampiran(uuid: string, filePath: string): Promise<Fleet> {
+  return masterRepository.deleteFleetLampiran(uuid, filePath)
+}
+
+export async function downloadFleetLampiran(uuid: string, filePath: string): Promise<Blob> {
+  const filename = filePath.split('/').pop()!
+  return apiDownload(`/fleets/${uuid}/lampiran/${filename}`)
+}
+
+export async function uploadDriverLampiran(uuid: string, file: File): Promise<Driver> {
+  return masterRepository.uploadDriverLampiran(uuid, file)
+}
+
+export async function deleteDriverLampiran(uuid: string, filePath: string): Promise<Driver> {
+  return masterRepository.deleteDriverLampiran(uuid, filePath)
+}
+
+export async function downloadDriverLampiran(uuid: string, filePath: string): Promise<Blob> {
+  const filename = filePath.split('/').pop()!
+  return apiDownload(`/drivers/${uuid}/lampiran/${filename}`)
+}

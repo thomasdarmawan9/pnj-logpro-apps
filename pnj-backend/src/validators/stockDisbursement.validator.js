@@ -13,6 +13,7 @@ const createDisbursementSchema = Joi.object({
   qty:                   Joi.number().precision(2).min(0.01).required().messages({
     'number.min':   'Qty harus lebih dari 0.',
   }),
+  kategori_name:         Joi.string().trim().max(50).allow('', null),
   delivery_order_uuid:   Joi.string().uuid({ version: ['uuidv4'] }).allow(null),
   delivery_order_id:     Joi.number().integer().min(1).allow(null),
   sj_number_manual:      Joi.string().trim().max(50).allow('', null),
@@ -37,6 +38,7 @@ const updateDisbursementSchema = Joi.object({
   stock_item_uuid:       Joi.string().uuid({ version: ['uuidv4'] }),
   stock_item_id:         Joi.number().integer().min(1),
   qty:                   Joi.number().precision(2).min(0.01),
+  kategori_name:         Joi.string().trim().max(50).allow('', null),
   delivery_order_uuid:   Joi.string().uuid({ version: ['uuidv4'] }).allow(null),
   delivery_order_id:     Joi.number().integer().min(1).allow(null),
   sj_number_manual:      Joi.string().trim().max(50).allow('', null),

@@ -8,7 +8,7 @@ import { DeliverSJInput } from '../../application/use-cases/DeliverSuratJalan'
 
 type ApiSJ = Omit<SuratJalan, 'id' | 'project_id' | 'customer_id' | 'fleet_id' | 'driver_id' | 'invoice_id' | 'created_by' | 'operational_cost' | 'project' | 'customer' | 'fleet'> & {
   id: number | string
-  project_id: number | string
+  project_id: number | string | null
   project?: SuratJalan['project'] | null
   customer_id: number | string
   customer?: SuratJalan['customer'] | null
@@ -26,7 +26,7 @@ function toNumber(value: number | string | null | undefined) {
 }
 
 function normalizeSJ(sj: ApiSJ): SuratJalan {
-  const projectId = Number(sj.project_id || sj.project?.id || 0)
+  const projectId = toNumber(sj.project_id ?? sj.project?.id)
   const customerId = Number(sj.customer_id || sj.customer?.id || 0)
   const fleetId = Number(sj.fleet_id || sj.fleet?.id || 0)
 
@@ -34,15 +34,16 @@ function normalizeSJ(sj: ApiSJ): SuratJalan {
     ...sj,
     id: Number(sj.id),
     project_id: projectId,
-    project: {
-      id: Number(sj.project?.id || projectId),
-      name: sj.project?.name || 'Data proyek tidak tersedia',
-      code: sj.project?.code || '-',
-      contract_number: sj.project?.contract_number || '',
-    },
+    project: sj.project ? {
+      id: Number(sj.project.id || projectId || 0),
+      name: sj.project.name || 'Data proyek tidak tersedia',
+      code: sj.project.code || '-',
+      contract_number: sj.project.contract_number || '',
+    } : null,
     customer_id: customerId,
     customer: {
       id: Number(sj.customer?.id || customerId),
+      uuid: sj.customer?.uuid,
       name: sj.customer?.name || 'Data customer tidak tersedia',
     },
     fleet_id: fleetId,
@@ -70,13 +71,13 @@ function applyFrontendFilters(list: SuratJalan[], filters: SJFilterState) {
       const match =
         sj.sj_number.toLowerCase().includes(q) ||
         sj.customer.name.toLowerCase().includes(q) ||
-        sj.project.name.toLowerCase().includes(q) ||
+        (sj.project?.name || '').toLowerCase().includes(q) ||
         sj.fleet.plate_number.toLowerCase().includes(q)
       if (!match) return false
     }
     if (filters.statusOps !== 'all' && sj.status !== filters.statusOps) return false
     if (filters.statusLampiran !== 'all' && sj.invoice_attachment_status !== filters.statusLampiran) return false
-    if (filters.proyek && filters.proyek !== 'all' && sj.project.code !== filters.proyek) return false
+    if (filters.proyek && filters.proyek !== 'all' && sj.project?.code !== filters.proyek) return false
     if (filters.customer && filters.customer !== 'all' && sj.customer.name !== filters.customer) return false
     return true
   })
@@ -85,6 +86,7 @@ function applyFrontendFilters(list: SuratJalan[], filters: SJFilterState) {
 function toCreatePayload(dto: CreateSJDto) {
   return {
     project_id: dto.project_id,
+    customer_id: dto.customer_id,
     fleet_id: dto.fleet_id,
     driver_id: dto.driver_id,
     driver_name_manual: dto.driver_name_manual,

@@ -17,6 +17,8 @@ import SJFormItemsSection from '../components/SJFormItemsSection'
 import SJLampiranUploadZone from '../components/SJLampiranUploadZone'
 import type { ArmadaOption, DriverOption } from '../utils/mockOptions'
 import { StatusOperasional, SJItem } from '../../domain/entities/SuratJalan'
+import { stockRepository } from '@/features/stock/infrastructure/repositories/MockStockRepository'
+import type { CustomerStockAvailableItem } from '@/features/stock/application/use-cases/GetCustomerStockDetail'
 
 interface EditSuratJalanPageProps {
   uuid: string
@@ -34,6 +36,8 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
   const [selectedArmada, setSelectedArmada] = useState<ArmadaOption | null>(null)
   const [selectedDriver, setSelectedDriver] = useState<DriverOption | null>(null)
   const [lampiranPaths, setLampiranPaths] = useState<string[]>([])
+  const [availableStockItems, setAvailableStockItems] = useState<CustomerStockAvailableItem[]>([])
+  const [isLoadingStockItems, setIsLoadingStockItems] = useState(false)
 
   useEffect(() => {
     if (!fleets.length) dispatch(fetchFleets())
@@ -67,6 +71,7 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
       }
       setForm({
         project_id: selectedSJ.project_id,
+        customer_id: selectedSJ.customer_id,
         fleet_id: selectedSJ.fleet_id,
         driver_id: selectedSJ.driver_id,
         driver_name_manual: selectedSJ.driver_name_manual || '',
@@ -86,6 +91,31 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
       else setDriverMode('tbd')
     }
   }, [selectedSJ, router, setForm, armadaOptions, driverOptions])
+
+  useEffect(() => {
+    let cancelled = false
+    const customerUuid = selectedSJ?.customer.uuid
+
+    if (!customerUuid) {
+      setAvailableStockItems([])
+      setIsLoadingStockItems(false)
+      return
+    }
+
+    setIsLoadingStockItems(true)
+    stockRepository.getCustomerAvailableItems(customerUuid)
+      .then(rows => {
+        if (!cancelled) setAvailableStockItems(rows)
+      })
+      .catch(() => {
+        if (!cancelled) setAvailableStockItems([])
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingStockItems(false)
+      })
+
+    return () => { cancelled = true }
+  }, [selectedSJ?.customer.uuid])
 
   const handleSubmit = () => {
     const valid = validate()
@@ -148,7 +178,7 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
             <div className="text-sm font-semibold mb-4">Informasi Dasar</div>
             <label className="text-xs font-medium" style={{ color: '#374151' }}>
               Proyek
-              <input className="form-input w-full mt-1 disabled" value={selectedSJ.project.name} disabled readOnly />
+              <input className="form-input w-full mt-1 disabled" value={selectedSJ.project?.name || 'Tanpa proyek'} disabled readOnly />
             </label>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
               <label className="text-xs font-medium" style={{ color: '#374151' }}>
@@ -157,7 +187,7 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
               </label>
               <label className="text-xs font-medium" style={{ color: '#374151' }}>
                 No. Kontrak
-                <input className="form-input w-full mt-1 disabled" value={selectedSJ.project.contract_number} disabled readOnly />
+                <input className="form-input w-full mt-1 disabled" value={selectedSJ.project?.contract_number || '-'} disabled readOnly />
               </label>
             </div>
             <label className="text-xs font-medium mt-4 block" style={{ color: '#374151' }}>
@@ -257,6 +287,11 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
           <SJFormItemsSection
             items={form.items}
             onChange={(items: SJItem[]) => updateField('items', items)}
+            availableStockItems={availableStockItems}
+            selectedCustomerName={selectedSJ.customer.name}
+            isLoadingStockItems={isLoadingStockItems}
+            restoreSelectedStockQty={isAssigned}
+            error={errors.items}
           />
 
           <div className="rounded-xl bg-white p-6 border" style={{ borderColor: 'var(--border-card)' }}>

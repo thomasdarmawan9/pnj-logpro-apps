@@ -216,13 +216,13 @@ export default function DetailSuratJalanPage({ uuid }: DetailSuratJalanPageProps
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                 <div className="rounded-xl bg-gray-50 p-4">
                   <div className="text-xs text-gray-500">Proyek</div>
-                  <div className="text-sm font-semibold">{selectedSJ.project.name}</div>
+                  <div className="text-sm font-semibold">{selectedSJ.project?.name || 'Tanpa proyek'}</div>
                   <div className="text-xs text-gray-500 mt-2">Customer</div>
                   <div className="text-sm">{selectedSJ.customer.name}</div>
                   <div className="text-xs text-gray-500 mt-2">No. Kontrak</div>
-                  <div className="text-sm">{selectedSJ.project.contract_number}</div>
+                  <div className="text-sm">{selectedSJ.project?.contract_number || '-'}</div>
                   <div className="text-xs text-gray-500 mt-2">Kode Proyek</div>
-                  <div className="text-sm">{selectedSJ.project.code}</div>
+                  <div className="text-sm">{selectedSJ.project?.code || '-'}</div>
                 </div>
 
                 <div className="rounded-xl bg-gray-50 p-4">
@@ -366,7 +366,7 @@ export default function DetailSuratJalanPage({ uuid }: DetailSuratJalanPageProps
                     style={{ borderColor: 'var(--border-card)' }}
                     onClick={() => {
                       dispatch(openAttachInvoiceModal(selectedSJ.uuid))
-                      dispatch(fetchAvailableInvoices({ projectId: selectedSJ.project_id, sjUuid: selectedSJ.uuid }))
+                      dispatch(fetchAvailableInvoices({ projectId: selectedSJ.project_id, customerId: selectedSJ.customer_id, sjUuid: selectedSJ.uuid }))
                     }}
                   >
                     Lampirkan ke Invoice
@@ -407,7 +407,7 @@ export default function DetailSuratJalanPage({ uuid }: DetailSuratJalanPageProps
                     style={{ borderColor: 'var(--border-card)' }}
                     onClick={() => {
                       dispatch(openAttachInvoiceModal(selectedSJ.uuid))
-                      dispatch(fetchAvailableInvoices({ projectId: selectedSJ.project_id, sjUuid: selectedSJ.uuid }))
+                      dispatch(fetchAvailableInvoices({ projectId: selectedSJ.project_id, customerId: selectedSJ.customer_id, sjUuid: selectedSJ.uuid }))
                     }}
                   >
                     Lampirkan ke Invoice

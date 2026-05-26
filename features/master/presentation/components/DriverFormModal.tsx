@@ -3,27 +3,45 @@
 import { useState, useEffect, useMemo } from 'react'
 import { X, CheckCircle, AlertTriangle, XCircle } from 'lucide-react'
 import { Driver, DriverStatus, computeSIMStatus } from '@/features/master/domain/entities/Driver'
+import FleetLampiranUploadZone, { PendingFleetLampiran } from './FleetLampiranUploadZone'
 
 interface Props {
   open: boolean
   data: Driver | null
   isLoading: boolean
   onClose: () => void
-  onSubmit: (data: Omit<Driver, 'id' | 'uuid' | 'created_at' | 'sim_status' | 'days_until_sim_expiry' | 'total_trips' | 'last_trip_date'>) => void
+  onSubmit: (
+    data: Omit<Driver, 'id' | 'uuid' | 'created_at' | 'sim_status' | 'days_until_sim_expiry' | 'total_trips' | 'last_trip_date'>,
+    pendingLampiran: PendingFleetLampiran[],
+  ) => void
 }
 
-const empty = { name: '', phone: '', sim_number: '', sim_expired_at: '', status: 'active' as DriverStatus }
+const empty = {
+  name: '',
+  phone: '',
+  sim_number: '',
+  sim_expired_at: '',
+  status: 'active' as DriverStatus,
+  lampiran_paths: [] as string[],
+}
 
 export default function DriverFormModal({ open, data, isLoading, onClose, onSubmit }: Props) {
   const [form, setForm] = useState(empty)
+  const [pendingLampiran, setPendingLampiran] = useState<PendingFleetLampiran[]>([])
 
   useEffect(() => {
+    setPendingLampiran(prev => {
+      prev.forEach(item => URL.revokeObjectURL(item.preview))
+      return []
+    })
+
     if (open) {
       setForm(data ? {
         name: data.name, phone: data.phone ?? '',
         sim_number: data.sim_number ?? '',
         sim_expired_at: data.sim_expired_at ?? '',
         status: data.status,
+        lampiran_paths: data.lampiran_paths ?? [],
       } : empty)
     }
   }, [open, data])
@@ -43,10 +61,11 @@ export default function DriverFormModal({ open, data, isLoading, onClose, onSubm
       sim_number: form.sim_number.trim() || null,
       sim_expired_at: form.sim_expired_at || null,
       status: form.status,
-    })
+      lampiran_paths: form.lampiran_paths.length > 0 ? form.lampiran_paths : null,
+    }, pendingLampiran)
   }
 
-  const F = (k: keyof typeof form, v: string) => setForm(p => ({ ...p, [k]: v }))
+  const F = (k: keyof typeof form, v: string | string[]) => setForm(p => ({ ...p, [k]: v }))
 
   const simPreviewNode = simPreview && (
     simPreview.sim_status === 'valid' ? (
@@ -67,7 +86,7 @@ export default function DriverFormModal({ open, data, isLoading, onClose, onSubm
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative w-full max-w-md rounded-2xl shadow-2xl animate-modalEnter" style={{ backgroundColor: 'var(--bg-card)' }}>
+      <div className="relative w-full max-w-lg rounded-2xl shadow-2xl animate-modalEnter overflow-y-auto max-h-[90vh]" style={{ backgroundColor: 'var(--bg-card)' }}>
         <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: 'var(--border-card)' }}>
           <h2 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
             {data ? 'Edit Supir' : 'Tambah Supir'}
@@ -111,6 +130,16 @@ export default function DriverFormModal({ open, data, isLoading, onClose, onSubm
                 )}
               </div>
             </div>
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: 'var(--text-secondary)' }}>Lampiran Supir</p>
+            <FleetLampiranUploadZone
+              existingPaths={form.lampiran_paths}
+              pendingFiles={pendingLampiran}
+              onExistingChange={paths => F('lampiran_paths', paths)}
+              onPendingChange={setPendingLampiran}
+            />
           </div>
 
           <div className="flex justify-end gap-3 pt-2">

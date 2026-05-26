@@ -144,7 +144,7 @@ function normalizeInvoice(inv: ApiInvoice): Invoice {
   const total = Number(inv.total_amount || 0)
   const paid = Number(inv.paid_amount || 0)
   const attached = inv.attached_sj || inv.attachedSJs || []
-  const projectId = toNumber(inv.project_id ?? inv.project?.id)
+  const projectId = toNullableNumber(inv.project_id ?? inv.project?.id)
   const customerId = toNumber(inv.customer_id ?? inv.customer?.id)
   const downPayment = normalizeDownPayment(inv.down_payment)
   const downPaymentAmount = Number(inv.down_payment_amount ?? downPayment?.amount ?? 0)
@@ -155,12 +155,12 @@ function normalizeInvoice(inv: ApiInvoice): Invoice {
     service_type: inv.service_type ?? 'delivery',
     id: toNumber(inv.id),
     project_id: projectId,
-    project: {
-      id: toNumber(inv.project?.id ?? projectId),
-      name: inv.project?.name || 'Data proyek tidak tersedia',
-      code: inv.project?.code || '-',
-      contract_number: inv.project?.contract_number || '',
-    },
+    project: inv.project ? {
+      id: toNumber(inv.project.id ?? projectId),
+      name: inv.project.name || 'Data proyek tidak tersedia',
+      code: inv.project.code || '-',
+      contract_number: inv.project.contract_number || '',
+    } : null,
     customer_id: customerId,
     customer: {
       id: toNumber(inv.customer?.id ?? customerId),
@@ -196,13 +196,13 @@ function applyFrontendFilters(list: Invoice[], filters: InvoiceFilterState): Inv
       const match =
         inv.invoice_number.toLowerCase().includes(q) ||
         inv.customer.name.toLowerCase().includes(q) ||
-        inv.project.name.toLowerCase().includes(q) ||
-        inv.project.contract_number.toLowerCase().includes(q)
+        (inv.project?.name || '').toLowerCase().includes(q) ||
+        (inv.project?.contract_number || '').toLowerCase().includes(q)
       if (!match) return false
     }
     if (filters.status && filters.status !== 'all' && inv.status !== filters.status) return false
     if (filters.customer && filters.customer !== 'all' && inv.customer.name !== filters.customer) return false
-    if (filters.proyek && filters.proyek !== 'all' && inv.project.code !== filters.proyek) return false
+    if (filters.proyek && filters.proyek !== 'all' && inv.project?.code !== filters.proyek) return false
     if (filters.periode && filters.periode !== 'all') {
       const invDate = new Date(inv.invoice_date)
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
@@ -253,7 +253,8 @@ export class MockInvoiceRepository implements IInvoiceRepository {
     const response = await apiRequest<ApiInvoice>('/invoices', {
       method: 'POST',
       body: {
-        project_id: dto.project_id,
+        project_id: dto.project_id ?? null,
+        customer_id: dto.customer_id ?? null,
         invoice_date: dto.invoice_date,
         due_date: dto.due_date,
         service_type: dto.service_type,
@@ -325,14 +326,16 @@ export class MockInvoiceRepository implements IInvoiceRepository {
     return response.data.map(normalizeAttachedSJ)
   }
 
-  async getAvailableForAttachment(projectId: number, sjUuid: string): Promise<AvailableInvoice[]> {
+  async getAvailableForAttachment(projectId: number | null, customerId: number, sjUuid: string): Promise<AvailableInvoice[]> {
     const response = await apiRequest<ApiInvoice[]>('/invoices?status=all&period=all&page=1&limit=100', {
       method: 'GET',
     })
     return response.data
       .map(normalizeInvoice)
       .filter(inv =>
-        Number(inv.project_id) === projectId &&
+        (projectId
+          ? Number(inv.project_id) === projectId
+          : !inv.project_id && Number(inv.customer_id) === customerId) &&
         inv.service_type !== 'rental' &&
         [InvoiceStatus.DRAFT, InvoiceStatus.SENT, InvoiceStatus.OUTSTANDING].includes(inv.status) &&
         !inv.attached_sj.some(s => s.uuid === sjUuid)

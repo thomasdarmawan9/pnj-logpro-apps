@@ -3,103 +3,34 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { useRouter } from 'next/navigation'
-import { PackagePlus, PackageMinus, Search } from 'lucide-react'
+import { ArrowRight, Download, Eye, FileBarChart2, PackagePlus, PackageMinus, Search, X } from 'lucide-react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { RootState, AppDispatch } from '@/store'
-import { fetchStockItems, fetchStockReceipts, fetchStockDisbursements } from '@/store/slices/stockSlice'
+import { fetchCustomerStockSummaries, fetchStockItems, fetchStockReceipts, fetchStockDisbursements } from '@/store/slices/stockSlice'
+import { apiDownload } from '@/lib/apiClient'
 
 export default function StockDashboardPage() {
   const router = useRouter()
   const dispatch = useDispatch<AppDispatch>()
-  const { items, receipts, disbursements, isLoading } = useSelector((state: RootState) => state.stock)
+  const { items, receipts, disbursements, customerSummaries, isLoading } = useSelector((state: RootState) => state.stock)
 
   useEffect(() => {
     dispatch(fetchStockItems())
     dispatch(fetchStockReceipts())
     dispatch(fetchStockDisbursements())
+    dispatch(fetchCustomerStockSummaries())
   }, [dispatch])
 
   const GROUPS_PER_PAGE = 2
   const [customerPage, setCustomerPage] = useState(0)
   const [customerSearch, setCustomerSearch] = useState('')
+  const [isPdfModalOpen, setIsPdfModalOpen] = useState(false)
+  const [selectedPdfCustomerUuid, setSelectedPdfCustomerUuid] = useState('')
+  const [isPrintingPdf, setIsPrintingPdf] = useState(false)
 
-  // Stock per customer — gabungan receipts (ada kategori) + disbursements (fallback)
-  const customerGroups = useMemo(() => {
-    type ItemRow = { itemName: string; unit: string; kategori: string | null; qty: number }
-
-    // Bangun peta kategorisasi global per stock_item_id dari semua receipts
-    // Dipakai saat fallback disbursement agar kategori tetap muncul walau receipt tidak punya customer
-    const globalKat = new Map<number, { kategori: string; qty: number }[]>()
-    receipts.forEach(r => {
-      r.items.forEach(item => {
-        if (!item.kategori_name) return
-        if (!globalKat.has(item.stock_item_id)) globalKat.set(item.stock_item_id, [])
-        const list = globalKat.get(item.stock_item_id)!
-        const found = list.find(k => k.kategori === item.kategori_name)
-        if (found) found.qty += item.qty
-        else list.push({ kategori: item.kategori_name!, qty: item.qty })
-      })
-    })
-
-    const map = new Map<string, { customerName: string; itemRows: ItemRow[] }>()
-
-    // 1. Dari receipts yang punya customer (kategori sudah tersedia langsung)
-    receipts.forEach(r => {
-      if (!r.customer_id || !r.customer) return
-      const custKey = String(r.customer.id)
-      if (!map.has(custKey)) map.set(custKey, { customerName: r.customer.name, itemRows: [] })
-      const entry = map.get(custKey)!
-      r.items.forEach(item => {
-        const existing = entry.itemRows.find(
-          row => row.itemName === item.stock_item.name && row.kategori === (item.kategori_name ?? null)
-        )
-        if (existing) existing.qty += item.qty
-        else entry.itemRows.push({
-          itemName: item.stock_item.name,
-          unit: item.stock_item.unit,
-          kategori: item.kategori_name ?? null,
-          qty: item.qty,
-        })
-      })
-    })
-
-    // 2. Dari disbursements — hanya untuk item yang belum masuk via receipt customer
-    //    Jika item punya kategorisasi global → distribusikan qty secara proporsional
-    //    Jika tidak ada kategorisasi → tampilkan satu baris tanpa kategori
-    disbursements.forEach(d => {
-      if (!d.customer_id || !d.customer) return
-      const custKey = String(d.customer.id)
-      if (!map.has(custKey)) map.set(custKey, { customerName: d.customer.name, itemRows: [] })
-      const entry = map.get(custKey)!
-
-      const itemName = d.stock_item.name
-      if (entry.itemRows.some(row => row.itemName === itemName)) return // sudah ada dari receipt
-
-      const kats = globalKat.get(d.stock_item_id)
-      if (kats && kats.length > 0) {
-        // Distribusi proporsional berdasarkan rasio global penerimaan
-        const totalKat = kats.reduce((s, k) => s + k.qty, 0)
-        kats.forEach(kat => {
-          const proportional = Math.round((kat.qty / totalKat) * d.qty)
-          const existing = entry.itemRows.find(row => row.itemName === itemName && row.kategori === kat.kategori)
-          if (existing) existing.qty += proportional
-          else entry.itemRows.push({ itemName, unit: d.stock_item.unit, kategori: kat.kategori, qty: proportional })
-        })
-      } else {
-        const existing = entry.itemRows.find(row => row.itemName === itemName && row.kategori === null)
-        if (existing) existing.qty += d.qty
-        else entry.itemRows.push({ itemName, unit: d.stock_item.unit, kategori: null, qty: d.qty })
-      }
-    })
-
-    return Array.from(map.values())
-      .sort((a, b) => a.customerName.localeCompare(b.customerName))
-      .map((cust, idx) => ({
-        no: idx + 1,
-        customerName: cust.customerName,
-        rows: cust.itemRows,
-      }))
-  }, [receipts, disbursements])
+  const customerGroups = useMemo(() => customerSummaries
+    .map((customer, idx) => ({ ...customer, no: idx + 1 })),
+  [customerSummaries])
 
   // Recent transactions (last 10, mix of receipts + disbursements)
   const recentTransactions = useMemo(() => {
@@ -107,26 +38,36 @@ export default function StockDashboardPage() {
       r.items.map(item => ({
         id: `r-${r.uuid}-${item.uuid}`,
         date: r.receipt_date,
+        updatedAt: r.updated_at || r.created_at || r.receipt_date,
         type: 'masuk' as const,
         number: r.receipt_number,
         itemName: item.stock_item.name,
         qty: item.qty,
         unit: item.stock_item.unit,
         reference: r.document_number ?? r.receipt_number,
+        sjNumber: null as string | null,
+        invoiceNumber: null as string | null,
       }))
     )
     const disbTxns = disbursements.map(d => ({
       id: `d-${d.uuid}`,
       date: d.disbursement_date,
+      updatedAt: d.updated_at || d.created_at || d.disbursement_date,
       type: 'keluar' as const,
       number: d.disbursement_number,
       itemName: d.stock_item.name,
       qty: d.qty,
       unit: d.stock_item.unit,
-      reference: d.sj_number_manual ? `SJ ${d.sj_number_manual}` : d.disbursement_number,
+      reference: d.sj_number_manual ? `SJ ${d.sj_number_manual}` : d.delivery_order?.sj_number || d.disbursement_number,
+      sjNumber: d.delivery_order?.sj_number || d.sj_number_manual || null,
+      invoiceNumber: d.delivery_order?.invoice?.invoice_number || d.invoice_number_manual || null,
     }))
     return [...receiptTxns, ...disbTxns]
-      .sort((a, b) => b.date.localeCompare(a.date))
+      .sort((a, b) => {
+        const byUpdated = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+        if (byUpdated !== 0) return byUpdated
+        return b.date.localeCompare(a.date)
+      })
       .slice(0, 10)
   }, [receipts, disbursements])
 
@@ -135,6 +76,34 @@ export default function StockDashboardPage() {
   const totalOut = disbursements.reduce((s, d) => s + d.qty, 0)
   const activeItems = items.filter(i => i.is_active).length
   const lowStockItems = items.filter(i => i.peak_stock > 0 && i.current_stock / i.peak_stock < 0.2).length
+
+  const selectedPdfCustomer = customerSummaries.find(customer => customer.customerUuid === selectedPdfCustomerUuid)
+
+  const openPdfModal = () => {
+    setSelectedPdfCustomerUuid(customerSummaries[0]?.customerUuid || '')
+    setIsPdfModalOpen(true)
+  }
+
+  const handlePrintCustomerPdf = async () => {
+    if (!selectedPdfCustomerUuid) return
+
+    setIsPrintingPdf(true)
+    try {
+      const blob = await apiDownload(`/stock/customers/${selectedPdfCustomerUuid}/export/pdf`)
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      const filenameCustomer = (selectedPdfCustomer?.customerName || selectedPdfCustomerUuid).replace(/[^a-zA-Z0-9_-]/g, '_')
+      a.href = url
+      a.download = `rekap-stok-customer-${filenameCustomer}-${new Date().toISOString().slice(0, 10)}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+      setIsPdfModalOpen(false)
+    } finally {
+      setIsPrintingPdf(false)
+    }
+  }
 
   return (
     <DashboardLayout>
@@ -145,6 +114,15 @@ export default function StockDashboardPage() {
           <h1 className="text-2xl font-bold">Manajemen Stok</h1>
         </div>
         <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={openPdfModal}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl border bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"
+            style={{ borderColor: 'var(--border-card)' }}
+          >
+            <FileBarChart2 size={16} />
+            Rekap / Cetak PDF
+          </button>
           <button
             onClick={() => router.push('/stok/masuk/create')}
             className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-medium"
@@ -174,13 +152,35 @@ export default function StockDashboardPage() {
         <div className="bg-white rounded-xl border shadow-sm p-4" style={{ borderColor: 'var(--border-card)' }}>
           <div className="text-xs text-gray-500 mb-1">Total Masuk</div>
           {isLoading ? <div className="h-8 bg-gray-100 rounded animate-pulse" /> : (
-            <div className="text-2xl font-bold text-green-700">+{totalIn.toLocaleString('id-ID')}</div>
+            <div className="flex items-end justify-between gap-3">
+              <div className="text-2xl font-bold text-green-700">+{totalIn.toLocaleString('id-ID')}</div>
+              <button
+                type="button"
+                onClick={() => router.push('/stok/masuk')}
+                className="inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-semibold text-green-700 hover:bg-green-50 transition-colors"
+                style={{ borderColor: '#BBF7D0' }}
+              >
+                List
+                <ArrowRight size={12} />
+              </button>
+            </div>
           )}
         </div>
         <div className="bg-white rounded-xl border shadow-sm p-4" style={{ borderColor: 'var(--border-card)' }}>
           <div className="text-xs text-gray-500 mb-1">Total Keluar</div>
           {isLoading ? <div className="h-8 bg-gray-100 rounded animate-pulse" /> : (
-            <div className="text-2xl font-bold text-red-600">-{totalOut.toLocaleString('id-ID')}</div>
+            <div className="flex items-end justify-between gap-3">
+              <div className="text-2xl font-bold text-red-600">-{totalOut.toLocaleString('id-ID')}</div>
+              <button
+                type="button"
+                onClick={() => router.push('/stok/keluar')}
+                className="inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-semibold text-red-600 hover:bg-red-50 transition-colors"
+                style={{ borderColor: '#FECACA' }}
+              >
+                List
+                <ArrowRight size={12} />
+              </button>
+            </div>
           )}
         </div>
         <div className="bg-white rounded-xl border shadow-sm p-4" style={{ borderColor: 'var(--border-card)' }}>
@@ -222,9 +222,10 @@ export default function StockDashboardPage() {
           const filtered = customerSearch.trim()
             ? customerGroups.filter(g =>
                 g.customerName.toLowerCase().includes(customerSearch.toLowerCase()) ||
-                g.rows.some(r =>
-                  r.itemName.toLowerCase().includes(customerSearch.toLowerCase()) ||
-                  (r.kategori ?? '').toLowerCase().includes(customerSearch.toLowerCase())
+                g.itemRows.some(r =>
+                  r.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
+                  r.code.toLowerCase().includes(customerSearch.toLowerCase()) ||
+                  r.categories.some(category => category.toLowerCase().includes(customerSearch.toLowerCase()))
                 )
               )
             : customerGroups
@@ -236,47 +237,73 @@ export default function StockDashboardPage() {
               <table className="min-w-full text-sm">
                 <thead className="bg-gray-50 text-xs text-gray-500 border-b" style={{ borderColor: 'var(--border-card)' }}>
                   <tr>
+                    <th className="px-4 py-3 text-left font-semibold w-16">No</th>
+                    <th className="px-4 py-3 text-left font-semibold">Customer</th>
                     <th className="px-4 py-3 text-left font-semibold">Barang</th>
                     <th className="px-4 py-3 text-left font-semibold">Kategori</th>
-                    <th className="px-4 py-3 text-right font-semibold">Total Qty</th>
+                    <th className="px-4 py-3 text-right font-semibold">Saldo</th>
+                    <th className="px-4 py-3 text-right font-semibold w-24">Aksi</th>
                   </tr>
                 </thead>
                 <tbody>
                   {pageGroups.map(group => (
-                    <Fragment key={group.customerName}>
+                    <Fragment key={group.customerUuid}>
                       <tr className="border-t" style={{ borderColor: 'var(--border-card)', backgroundColor: 'var(--bg-card)' }}>
-                        <td colSpan={3} className="px-4 py-2.5">
+                        <td className="px-4 py-2.5 text-[11px] font-semibold text-gray-400 text-center">
+                          {group.no}
+                        </td>
+                        <td className="px-4 py-2.5">
                           <div className="flex items-center gap-2">
-                            <span className="text-[11px] font-semibold text-gray-400 w-5 text-center">{group.no}</span>
                             <span className="font-semibold text-gray-800 text-sm">{group.customerName}</span>
-                            <span className="text-[11px] text-gray-400">{group.rows.length} baris</span>
                           </div>
                         </td>
-                      </tr>
-                      {group.rows.map((row, i) => {
-                        const showName = i === 0 || group.rows[i - 1].itemName !== row.itemName
-                        return (
-                          <tr
-                            key={`${group.customerName}-${row.itemName}-${row.kategori ?? 'null'}-${i}`}
-                            className="border-t"
-                            style={{ borderColor: 'var(--border-light)' }}
+                        <td className="px-4 py-2.5 text-xs text-gray-400">{group.itemRows.length} barang</td>
+                        <td className="px-4 py-2.5 text-xs text-gray-300">—</td>
+                        <td className={`px-4 py-2.5 text-right font-bold whitespace-nowrap font-mono ${group.totalAsset < 0 ? 'text-red-600' : 'text-gray-900'}`} style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                          {group.totalAsset.toLocaleString('id-ID')}
+                        </td>
+                        <td className="px-4 py-2.5 text-right">
+                          <button
+                            type="button"
+                            onClick={() => router.push(`/stok/customer/${group.customerUuid}`)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium hover:bg-gray-50 transition-colors"
+                            style={{ borderColor: 'var(--border-card)', color: 'var(--text-primary)' }}
                           >
-                            <td className="pl-10 pr-4 py-2.5 text-gray-700">
-                              {showName && <span className="font-medium">{row.itemName}</span>}
-                            </td>
-                            <td className="px-4 py-2.5">
-                              {row.kategori
-                                ? <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">{row.kategori}</span>
-                                : <span className="text-xs text-gray-300">—</span>
-                              }
-                            </td>
-                            <td className="px-4 py-2.5 text-right font-bold text-gray-800 whitespace-nowrap font-mono" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                              {row.qty.toLocaleString('id-ID')}
-                              <span className="text-xs font-normal text-gray-400 ml-1">{row.unit}</span>
-                            </td>
-                          </tr>
-                        )
-                      })}
+                            <Eye size={13} />
+                            Detail
+                          </button>
+                        </td>
+                      </tr>
+                      {group.itemRows.map(row => (
+                        <tr
+                          key={`${group.customerUuid}-${row.stockItemId}`}
+                          className="border-t"
+                          style={{ borderColor: 'var(--border-light)' }}
+                        >
+                          <td className="px-4 py-2.5" />
+                          <td className="px-4 py-2.5" />
+                          <td className="pl-10 pr-4 py-2.5 text-gray-700">
+                            <span className="font-medium">{row.name}</span>
+                            <span className="text-xs text-gray-400 ml-2">{row.code}</span>
+                          </td>
+                          <td className="px-4 py-2.5">
+                            {row.categories.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {row.categories.map(category => (
+                                  <span key={category} className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">{category}</span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-gray-300">—</span>
+                            )}
+                          </td>
+                          <td className={`px-4 py-2.5 text-right font-bold whitespace-nowrap font-mono ${row.balance < 0 ? 'text-red-600' : 'text-gray-800'}`} style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                            {row.balance.toLocaleString('id-ID')}
+                            <span className="text-xs font-normal text-gray-400 ml-1">{row.unit}</span>
+                          </td>
+                          <td className="px-4 py-2.5" />
+                        </tr>
+                      ))}
                     </Fragment>
                   ))}
                 </tbody>
@@ -284,12 +311,12 @@ export default function StockDashboardPage() {
               {totalPages > 1 && (
                 <div className="px-5 py-3 border-t flex items-center justify-between" style={{ borderColor: 'var(--border-card)' }}>
                   <span className="text-xs text-gray-500">
-                    Customer {customerPage * GROUPS_PER_PAGE + 1}–{Math.min((customerPage + 1) * GROUPS_PER_PAGE, customerGroups.length)} dari {customerGroups.length}
+                    Customer {safePage * GROUPS_PER_PAGE + 1}–{Math.min((safePage + 1) * GROUPS_PER_PAGE, filtered.length)} dari {filtered.length}
                   </span>
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => setCustomerPage(p => p - 1)}
-                      disabled={customerPage === 0}
+                      disabled={safePage === 0}
                       className="px-3 py-1.5 text-xs rounded-lg border disabled:opacity-40 transition-opacity"
                       style={{ borderColor: 'var(--border-card)' }}
                     >
@@ -301,9 +328,9 @@ export default function StockDashboardPage() {
                         onClick={() => setCustomerPage(i)}
                         className="w-7 h-7 text-xs rounded-lg border font-medium"
                         style={{
-                          borderColor: customerPage === i ? 'var(--green-primary)' : 'var(--border-card)',
-                          backgroundColor: customerPage === i ? 'var(--green-primary)' : undefined,
-                          color: customerPage === i ? 'white' : undefined,
+                          borderColor: safePage === i ? 'var(--green-primary)' : 'var(--border-card)',
+                          backgroundColor: safePage === i ? 'var(--green-primary)' : undefined,
+                          color: safePage === i ? 'white' : undefined,
                         }}
                       >
                         {i + 1}
@@ -311,7 +338,7 @@ export default function StockDashboardPage() {
                     ))}
                     <button
                       onClick={() => setCustomerPage(p => p + 1)}
-                      disabled={customerPage === totalPages - 1}
+                      disabled={safePage === totalPages - 1}
                       className="px-3 py-1.5 text-xs rounded-lg border disabled:opacity-40 transition-opacity"
                       style={{ borderColor: 'var(--border-card)' }}
                     >
@@ -348,6 +375,8 @@ export default function StockDashboardPage() {
                 <th className="px-4 py-3 text-left">Barang</th>
                 <th className="px-4 py-3 text-right">Qty</th>
                 <th className="px-4 py-3 text-left">Referensi</th>
+                <th className="px-4 py-3 text-left">SJ</th>
+                <th className="px-4 py-3 text-left">Invoice</th>
               </tr>
             </thead>
             <tbody>
@@ -371,12 +400,82 @@ export default function StockDashboardPage() {
                     {txn.type === 'masuk' ? '+' : '-'}{txn.qty} {txn.unit}
                   </td>
                   <td className="px-4 py-3 text-gray-500 text-xs">{txn.reference}</td>
+                  <td className="px-4 py-3 text-gray-600 text-xs font-mono" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{txn.sjNumber || '-'}</td>
+                  <td className="px-4 py-3 text-gray-600 text-xs font-mono" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{txn.invoiceNumber || '-'}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
       </div>
+
+      {isPdfModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-md rounded-xl bg-white shadow-xl border" style={{ borderColor: 'var(--border-card)' }}>
+            <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: 'var(--border-card)' }}>
+              <div>
+                <h2 className="text-base font-bold text-gray-900">Cetak PDF Stok Customer</h2>
+                <p className="mt-0.5 text-xs text-gray-500">Pilih customer untuk mencetak rekap stoknya</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPdfModalOpen(false)}
+                className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                disabled={isPrintingPdf}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="px-5 py-4">
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                Nama Customer <span className="text-red-500">*</span>
+              </label>
+              <select
+                className="form-input w-full"
+                value={selectedPdfCustomerUuid}
+                onChange={e => setSelectedPdfCustomerUuid(e.target.value)}
+                disabled={isPrintingPdf}
+              >
+                <option value="">— Pilih Customer —</option>
+                {customerSummaries.map(customer => (
+                  <option key={customer.customerUuid} value={customer.customerUuid}>
+                    {customer.customerName}
+                  </option>
+                ))}
+              </select>
+
+              {selectedPdfCustomer && (
+                <div className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600">
+                  {selectedPdfCustomer.totalItemTypes} barang, saldo total {selectedPdfCustomer.totalAsset.toLocaleString('id-ID')}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t px-5 py-4" style={{ borderColor: 'var(--border-card)' }}>
+              <button
+                type="button"
+                onClick={() => setIsPdfModalOpen(false)}
+                className="rounded-lg border px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                style={{ borderColor: 'var(--border-card)' }}
+                disabled={isPrintingPdf}
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handlePrintCustomerPdf}
+                disabled={!selectedPdfCustomerUuid || isPrintingPdf}
+                className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                style={{ backgroundColor: 'var(--green-primary)' }}
+              >
+                <Download size={16} />
+                {isPrintingPdf ? 'Mencetak...' : 'Cetak PDF'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   )
 }

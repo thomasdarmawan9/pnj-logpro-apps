@@ -10,7 +10,7 @@ export interface UtilizationFilters {
   periodFrom: string
   periodTo: string
   category: FleetCategory | 'all'
-  statusFilter: 'all' | 'active' | 'inactive' | 'sold'
+  statusFilter: 'all' | 'active' | 'inactive' | 'repair' | 'sold'
 }
 
 function getToday() { return new Date().toISOString().split('T')[0] }

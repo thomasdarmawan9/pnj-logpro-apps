@@ -14,6 +14,9 @@ import { formatRupiah, formatDate } from '@/lib/formatters'
 import { Project, ProjectStatus } from '@/features/master/domain/entities/Project'
 import { StatusLampiran, StatusOperasional } from '@/features/surat-jalan/domain/entities/SuratJalan'
 import { apiRequest } from '@/lib/apiClient'
+import TablePagination from '../components/TablePagination'
+
+const OPERATIONAL_COST_ROWS_PER_PAGE = 5
 
 const STATUS_CONFIG: Record<ProjectStatus, { label: string; bg: string; text: string }> = {
   active:    { label: 'Aktif',   bg: '#D1FAE5', text: '#065F46' },
@@ -49,6 +52,7 @@ export default function ProjectDetailPage({ uuid }: Props) {
   const [costDrafts, setCostDrafts] = useState<Record<string, string>>({})
   const [isLoadingSjs, setIsLoadingSjs] = useState(false)
   const [savingCostUuid, setSavingCostUuid] = useState<string | null>(null)
+  const [sjPage, setSjPage] = useState(1)
 
   useEffect(() => { loadDetail(uuid) }, [uuid, loadDetail])
 
@@ -69,6 +73,7 @@ export default function ProjectDetailPage({ uuid }: Props) {
       }))
       setProjectSjs(rows)
       setCostDrafts(Object.fromEntries(rows.map(sj => [sj.uuid, String(sj.operational_cost)])))
+      setSjPage(1)
     } catch (err) {
       pushToast({
         title: 'Gagal memuat biaya operasional',
@@ -145,6 +150,12 @@ export default function ProjectDetailPage({ uuid }: Props) {
   const statusCfg = STATUS_CONFIG[project.status]
   const isProfit = project.gross_profit >= 0
   const profitColor = isProfit ? '#16A34A' : '#DC2626'
+  const sjTotalPages = Math.max(1, Math.ceil(projectSjs.length / OPERATIONAL_COST_ROWS_PER_PAGE))
+  const currentSjPage = Math.min(sjPage, sjTotalPages)
+  const paginatedProjectSjs = projectSjs.slice(
+    (currentSjPage - 1) * OPERATIONAL_COST_ROWS_PER_PAGE,
+    currentSjPage * OPERATIONAL_COST_ROWS_PER_PAGE
+  )
 
   return (
     <div className="animate-fadeIn space-y-5">
@@ -256,7 +267,7 @@ export default function ProjectDetailPage({ uuid }: Props) {
                     <div className="text-sm py-4" style={{ color: 'var(--text-secondary)' }}>Belum ada Surat Jalan untuk proyek ini.</div>
                   ) : (
                     <div className="space-y-2">
-                      {projectSjs.map(sj => {
+                      {paginatedProjectSjs.map(sj => {
                         const draftValue = costDrafts[sj.uuid] ?? '0'
                         const isChanged = Number(draftValue || 0) !== sj.operational_cost
                         const isSaving = savingCostUuid === sj.uuid
@@ -289,6 +300,15 @@ export default function ProjectDetailPage({ uuid }: Props) {
                           </div>
                         )
                       })}
+                      {projectSjs.length > OPERATIONAL_COST_ROWS_PER_PAGE && (
+                        <TablePagination
+                          page={currentSjPage}
+                          perPage={OPERATIONAL_COST_ROWS_PER_PAGE}
+                          total={projectSjs.length}
+                          label="surat jalan"
+                          onPageChange={setSjPage}
+                        />
+                      )}
                     </div>
                   )}
                 </div>

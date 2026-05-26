@@ -12,15 +12,20 @@ export interface IMasterRepository {
 
   // Fleet
   getFleets(): Promise<Fleet[]>
-  createFleet(data: Omit<Fleet, 'id' | 'uuid' | 'created_at' | 'total_trips' | 'active_days_this_month' | 'last_used_date'>): Promise<Fleet>
+  createFleet(data: Omit<Fleet, 'id' | 'uuid' | 'created_at' | 'total_trips' | 'active_days_this_month' | 'last_used_date' | 'rental_status' | 'rental_invoice_item_id' | 'rental_invoice_id' | 'rental_invoice_number' | 'rental_period_start' | 'rental_period_end' | 'rentals_this_month'>): Promise<Fleet>
   updateFleet(uuid: string, data: Partial<Fleet>): Promise<Fleet>
   toggleFleetStatus(uuid: string): Promise<Fleet>
+  completeFleetRental(uuid: string): Promise<Fleet>
+  uploadFleetLampiran(uuid: string, file: File): Promise<Fleet>
+  deleteFleetLampiran(uuid: string, filePath: string): Promise<Fleet>
 
   // Driver
   getDrivers(): Promise<Driver[]>
   createDriver(data: Omit<Driver, 'id' | 'uuid' | 'created_at' | 'sim_status' | 'days_until_sim_expiry' | 'total_trips' | 'last_trip_date'>): Promise<Driver>
   updateDriver(uuid: string, data: Partial<Driver>): Promise<Driver>
   toggleDriverStatus(uuid: string): Promise<Driver>
+  uploadDriverLampiran(uuid: string, file: File): Promise<Driver>
+  deleteDriverLampiran(uuid: string, filePath: string): Promise<Driver>
 
   // Project
   getProjects(): Promise<Project[]>

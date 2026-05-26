@@ -44,7 +44,7 @@ module.exports = (sequelize) => {
     status: {
       type:         DataTypes.STRING(10),
       defaultValue: 'active',
-      validate:     { isIn: [['active', 'inactive', 'sold']] },
+      validate:     { isIn: [['active', 'inactive', 'repair', 'sold']] },
     },
     is_tbd: {
       type:         DataTypes.BOOLEAN,
@@ -53,6 +53,10 @@ module.exports = (sequelize) => {
     },
     photo_path: {
       type:      DataTypes.STRING(255),
+      allowNull: true,
+    },
+    lampiran_paths: {
+      type:      DataTypes.ARRAY(DataTypes.STRING(255)),
       allowNull: true,
     },
     notes: {

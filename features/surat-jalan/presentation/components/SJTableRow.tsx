@@ -100,7 +100,7 @@ export default function SJTableRow({ sj, checked, onToggle, onAction, role }: SJ
       </td>
       <td className="px-4 py-3 text-sm text-gray-600">{formatShortDate(sj.sj_date)}</td>
       <td className="px-4 py-3">
-        <div className="text-sm font-semibold">{sj.project.name}</div>
+        <div className="text-sm font-semibold">{sj.project?.name || 'Tanpa proyek'}</div>
         <div className="text-xs text-gray-500">{sj.customer.name}</div>
       </td>
       <td className="px-4 py-3">

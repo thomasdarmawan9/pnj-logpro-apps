@@ -7,6 +7,7 @@ import { Plus, ArrowLeft, Info, Truck, KeyRound } from 'lucide-react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { AppDispatch, RootState } from '@/store'
 import { createInvoice } from '@/store/slices/invoiceSlice'
+import { fetchCustomers } from '@/store/slices/masterSlice'
 import { fetchBankAccounts } from '@/store/slices/settingsSlice'
 import { useToast } from '@/components/toast/useToast'
 import { validateCreateInvoice } from '../../application/validators/InvoiceValidator'
@@ -17,6 +18,7 @@ import InvoiceTaxCalculator from '../components/InvoiceTaxCalculator'
 import DownPaymentForm from '../components/DownPaymentForm'
 import type { CreateDownPaymentDto } from '../../application/dto/CreateInvoiceDto'
 import type { InvoiceServiceType } from '../../domain/entities/Invoice'
+import type { Customer } from '@/features/master/domain/entities/Customer'
 
 function formatRupiah(amount: number): string {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(amount)
@@ -37,6 +39,9 @@ export default function CreateInvoicePage() {
   const [serviceType, setServiceType] = useState<InvoiceServiceType>('delivery')
   const formRef = useRef<HTMLDivElement>(null)
   const bankAccounts = useSelector((state: RootState) => state.settings.bankAccounts).filter(b => b.is_active)
+  const customers = useSelector((state: RootState) => state.master.customers)
+  const [scopeMode, setScopeMode] = useState<'project' | 'customer'>('project')
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
 
   const {
     header, taxPercent, taxEnabled, pphPercent, pphEnabled,
@@ -59,6 +64,9 @@ export default function CreateInvoicePage() {
   }, [role, router, pushToast])
 
   useEffect(() => { dispatch(fetchBankAccounts()) }, [dispatch])
+  useEffect(() => {
+    if (!customers.length) dispatch(fetchCustomers())
+  }, [dispatch, customers.length])
 
   useEffect(() => {
     if (bankAccounts.length > 0 && bankAccountId === null) {
@@ -73,7 +81,8 @@ export default function CreateInvoicePage() {
   const nettoAmount = totalAmount(subtotalAmount, taxAmount) - pphAmount + (insuranceEnabled ? insuranceAmount : 0)
 
   const getDto = (sendImmediately = false) => ({
-    project_id: header.project_id!,
+    project_id: scopeMode === 'project' ? header.project_id : null,
+    customer_id: scopeMode === 'customer' ? selectedCustomer?.id ?? null : null,
     invoice_date: header.invoice_date,
     due_date: header.due_date,
     service_type: serviceType,
@@ -144,6 +153,17 @@ export default function CreateInvoicePage() {
     pushToast({ title: 'Gagal membuat invoice', description: (result.payload as string) || 'Invoice tidak tersimpan.', variant: 'error' })
   }
 
+  const selectCustomer = (customerId: number) => {
+    const customer = customers.find(c => c.id === customerId) || null
+    setSelectedCustomer(customer)
+    updateHeader('project_id', null)
+    if (customer?.is_pkp) {
+      toggleTax(true)
+    } else {
+      toggleTax(false)
+    }
+  }
+
   return (
     <DashboardLayout>
       <div className="mb-6">
@@ -160,25 +180,65 @@ export default function CreateInvoicePage() {
         <div className="lg:col-span-3 space-y-4">
           {/* Section A: Header */}
           <div className="bg-white rounded-xl border p-6" style={{ borderColor: 'var(--border-card)' }}>
-            <h2 className="text-base font-semibold mb-4">Header Invoice</h2>
-            <div className="space-y-4">
-              {/* Pilih Proyek */}
-              <div>
-                <label className="text-xs font-medium text-gray-600 block mb-1">Pilih Proyek *</label>
-                <select
-                  className={`form-input w-full ${errors.project_id ? 'border-red-400' : ''}`}
-                  value={header.project_id ?? ''}
-                  onChange={e => { selectProject(Number(e.target.value)); setErrors(prev => ({ ...prev, project_id: '' })) }}
-                >
-                  <option value="">-- Pilih proyek --</option>
-                  {projects.map(p => (
-                    <option key={p.id} value={p.id}>{p.code} — {p.name} — {p.customer.name}</option>
-                  ))}
-                </select>
-                {errors.project_id && <p className="text-xs text-red-500 mt-1">{errors.project_id}</p>}
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <h2 className="text-base font-semibold">Header Invoice</h2>
+              <div className="inline-flex rounded-lg border overflow-hidden" style={{ borderColor: 'var(--border-card)' }}>
+                {(['project', 'customer'] as const).map(mode => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => {
+                      if (scopeMode === mode) return
+                      setScopeMode(mode)
+                      setSelectedCustomer(null)
+                      updateHeader('project_id', null)
+                      setErrors(prev => ({ ...prev, project_id: '' }))
+                    }}
+                    className="px-3 py-1.5 text-xs font-semibold transition-colors"
+                    style={{
+                      backgroundColor: scopeMode === mode ? 'var(--green-primary)' : 'white',
+                      color: scopeMode === mode ? 'white' : '#374151',
+                    }}
+                  >
+                    {mode === 'project' ? 'Proyek' : 'Customer'}
+                  </button>
+                ))}
               </div>
+            </div>
+            <div className="space-y-4">
+              {scopeMode === 'project' ? (
+                <div>
+                  <label className="text-xs font-medium text-gray-600 block mb-1">Pilih Proyek *</label>
+                  <select
+                    className={`form-input w-full ${errors.project_id ? 'border-red-400' : ''}`}
+                    value={header.project_id ?? ''}
+                    onChange={e => { selectProject(Number(e.target.value)); setSelectedCustomer(null); setErrors(prev => ({ ...prev, project_id: '' })) }}
+                  >
+                    <option value="">-- Pilih proyek --</option>
+                    {projects.map(p => (
+                      <option key={p.id} value={p.id}>{p.code} — {p.name} — {p.customer.name}</option>
+                    ))}
+                  </select>
+                  {errors.project_id && <p className="text-xs text-red-500 mt-1">{errors.project_id}</p>}
+                </div>
+              ) : (
+                <div>
+                  <label className="text-xs font-medium text-gray-600 block mb-1">Pilih Customer *</label>
+                  <select
+                    className={`form-input w-full ${errors.project_id ? 'border-red-400' : ''}`}
+                    value={selectedCustomer?.id ?? ''}
+                    onChange={e => { selectCustomer(Number(e.target.value)); setErrors(prev => ({ ...prev, project_id: '' })) }}
+                  >
+                    <option value="">-- Pilih customer --</option>
+                    {customers.map(customer => (
+                      <option key={customer.uuid} value={customer.id}>{customer.name}</option>
+                    ))}
+                  </select>
+                  {errors.project_id && <p className="text-xs text-red-500 mt-1">{errors.project_id}</p>}
+                </div>
+              )}
 
-              {selectedProject && (
+              {scopeMode === 'project' && selectedProject && (
                 <>
                   {/* Customer (readonly) */}
                   <div>
@@ -198,6 +258,19 @@ export default function CreateInvoicePage() {
                     <div className="form-input bg-gray-50 text-gray-500 italic">{selectedProject.contract_number}</div>
                   </div>
                 </>
+              )}
+
+              {scopeMode === 'customer' && selectedCustomer && (
+                <div>
+                  <label className="text-xs font-medium text-gray-600 block mb-1">Customer</label>
+                  <div className="form-input bg-gray-50 flex items-center gap-2">
+                    <span>{selectedCustomer.name}</span>
+                    <span className="text-xs px-2 py-0.5 rounded-full font-semibold ml-auto" style={{ backgroundColor: selectedCustomer.is_pkp ? '#DCFCE7' : '#F3F4F6', color: selectedCustomer.is_pkp ? '#166534' : '#6B7280' }}>
+                      {selectedCustomer.is_pkp ? 'PKP' : 'Non-PKP'}
+                    </span>
+                  </div>
+                  {selectedCustomer.npwp && <p className="text-xs text-gray-500 mt-1">NPWP: {selectedCustomer.npwp}</p>}
+                </div>
               )}
 
               <div className="grid grid-cols-2 gap-4">
@@ -324,7 +397,7 @@ export default function CreateInvoicePage() {
               taxEnabled={taxEnabled}
               pphPercent={pphPercent}
               pphEnabled={pphEnabled}
-              isPkp={selectedProject?.customer.is_pkp}
+              isPkp={scopeMode === 'project' ? selectedProject?.customer.is_pkp : selectedCustomer?.is_pkp}
               onToggleTax={toggleTax}
               onChangeTaxPercent={setTaxPercent}
               onTogglePph={togglePph}
@@ -423,8 +496,8 @@ export default function CreateInvoicePage() {
             <div className="text-xs space-y-1.5 font-mono border rounded-lg p-4" style={{ fontFamily: 'var(--font-mono)', borderColor: 'var(--border-card)', backgroundColor: '#FAFAFA' }}>
               <div className="text-center font-bold text-gray-700 mb-2">── PT. PELANGI NUANSA JAYA ──</div>
               <div><span className="text-gray-400">Invoice # :</span> (auto)</div>
-              <div><span className="text-gray-400">Kepada    :</span> {selectedProject?.customer.name ?? '—'}</div>
-              <div><span className="text-gray-400">Kontrak   :</span> {selectedProject?.contract_number ?? '—'}</div>
+              <div><span className="text-gray-400">Kepada    :</span> {(scopeMode === 'project' ? selectedProject?.customer.name : selectedCustomer?.name) ?? '—'}</div>
+              <div><span className="text-gray-400">Kontrak   :</span> {scopeMode === 'project' ? selectedProject?.contract_number ?? '—' : 'Tanpa proyek'}</div>
               <div><span className="text-gray-400">Tgl       :</span> {header.invoice_date}</div>
               <div><span className="text-gray-400">Jasa      :</span> {serviceType === 'delivery' ? 'Pengiriman' : 'Penyewaan'}</div>
               <div><span className="text-gray-400">Jth Tempo :</span> {header.due_date}</div>
@@ -445,31 +518,39 @@ export default function CreateInvoicePage() {
           </div>
 
           {/* Customer info */}
-          {selectedProject && (
+          {(scopeMode === 'project' ? selectedProject?.customer : selectedCustomer) && (
             <div className="bg-white rounded-xl border p-5" style={{ borderColor: 'var(--border-card)' }}>
               <h3 className="text-sm font-semibold mb-3 text-gray-700">Info Customer</h3>
-              <div className="text-sm font-semibold">{selectedProject.customer.name}</div>
-              {selectedProject.customer.address && <div className="text-xs text-gray-500 mt-0.5">{selectedProject.customer.address}</div>}
-              {selectedProject.customer.npwp && <div className="text-xs text-gray-500 mt-0.5">NPWP: {selectedProject.customer.npwp}</div>}
-              <span className="inline-block mt-2 text-xs px-2 py-0.5 rounded-full font-semibold" style={{ backgroundColor: selectedProject.customer.is_pkp ? '#DCFCE7' : '#F3F4F6', color: selectedProject.customer.is_pkp ? '#166534' : '#6B7280' }}>
-                {selectedProject.customer.is_pkp ? 'PKP' : 'Non-PKP'}
-              </span>
+              {(() => {
+                const customer = scopeMode === 'project' ? selectedProject?.customer : selectedCustomer
+                if (!customer) return null
+                return (
+                  <>
+                    <div className="text-sm font-semibold">{customer.name}</div>
+                    {customer.address && <div className="text-xs text-gray-500 mt-0.5">{customer.address}</div>}
+                    {customer.npwp && <div className="text-xs text-gray-500 mt-0.5">NPWP: {customer.npwp}</div>}
+                    <span className="inline-block mt-2 text-xs px-2 py-0.5 rounded-full font-semibold" style={{ backgroundColor: customer.is_pkp ? '#DCFCE7' : '#F3F4F6', color: customer.is_pkp ? '#166534' : '#6B7280' }}>
+                      {customer.is_pkp ? 'PKP' : 'Non-PKP'}
+                    </span>
+                  </>
+                )
+              })()}
             </div>
           )}
 
           {/* SJ info */}
-          {selectedProject && serviceType === 'delivery' && (
+          {(selectedProject || selectedCustomer) && serviceType === 'delivery' && (
             <div className="rounded-xl border p-4" style={{ borderColor: '#BFDBFE', backgroundColor: '#EFF6FF' }}>
               <div className="flex items-start gap-2">
                 <Info size={16} className="text-blue-500 mt-0.5 shrink-0" />
                 <div>
-                  <p className="text-sm text-blue-800">Ada SJ di proyek ini yang bisa dilampirkan ke invoice setelah disimpan.</p>
+                  <p className="text-sm text-blue-800">SJ dengan scope yang sama bisa dilampirkan ke invoice setelah disimpan.</p>
                   <p className="text-xs text-blue-600 mt-1">Lampirkan SJ dilakukan setelah invoice dibuat.</p>
                 </div>
               </div>
             </div>
           )}
-          {selectedProject && serviceType === 'rental' && (
+          {(selectedProject || selectedCustomer) && serviceType === 'rental' && (
             <div className="rounded-xl border p-4" style={{ borderColor: '#FED7AA', backgroundColor: '#FFF7ED' }}>
               <div className="flex items-start gap-2">
                 <Info size={16} className="text-orange-500 mt-0.5 shrink-0" />

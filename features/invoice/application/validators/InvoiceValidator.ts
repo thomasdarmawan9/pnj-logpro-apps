@@ -30,7 +30,7 @@ function validateDownPayment(
 export function validateCreateInvoice(dto: CreateInvoiceDto): ValidationResult {
   const errors: Record<string, string> = {}
 
-  if (!dto.project_id) errors.project_id = 'Proyek wajib dipilih'
+  if (!dto.project_id && !dto.customer_id) errors.project_id = 'Pilih proyek atau customer'
   if (!dto.service_type || !VALID_SERVICE_TYPES.includes(dto.service_type)) {
     errors.service_type = 'Jenis jasa wajib dipilih'
   }
@@ -43,6 +43,9 @@ export function validateCreateInvoice(dto: CreateInvoiceDto): ValidationResult {
     errors.bank_account_id = 'Rekening tujuan wajib dipilih untuk metode Transfer Bank'
   }
   dto.items?.forEach((item, idx) => {
+    if (dto.service_type === 'rental' && !item.fleet_id) {
+      errors[`items.${idx}.fleet_id`] = 'Pilih armada aktif dari master untuk invoice penyewaan'
+    }
     if (!item.fleet_label?.trim()) errors[`items.${idx}.fleet_label`] = 'Label armada wajib diisi'
     if (!item.unit_price || item.unit_price <= 0) errors[`items.${idx}.unit_price`] = 'Harga per unit wajib diisi'
     if (!item.qty || item.qty <= 0) errors[`items.${idx}.qty`] = 'Qty wajib diisi'
@@ -56,7 +59,7 @@ export function validateCreateInvoice(dto: CreateInvoiceDto): ValidationResult {
   return { valid: Object.keys(errors).length === 0, errors }
 }
 
-export function validateUpdateInvoice(dto: UpdateInvoiceDto): ValidationResult {
+export function validateUpdateInvoice(dto: UpdateInvoiceDto, serviceType?: 'delivery' | 'rental'): ValidationResult {
   const errors: Record<string, string> = {}
 
   if (dto.due_date !== undefined && !dto.due_date) {
@@ -65,6 +68,9 @@ export function validateUpdateInvoice(dto: UpdateInvoiceDto): ValidationResult {
 
   if (dto.items !== undefined && dto.items.length > 0) {
     dto.items?.forEach((item, idx) => {
+      if (serviceType === 'rental' && !item.fleet_id) {
+        errors[`items.${idx}.fleet_id`] = 'Pilih armada aktif dari master untuk invoice penyewaan'
+      }
       if (!item.fleet_label?.trim()) errors[`items.${idx}.fleet_label`] = 'Label armada wajib diisi'
       if (!item.unit_price || item.unit_price <= 0) errors[`items.${idx}.unit_price`] = 'Harga per unit wajib diisi'
       if (!item.qty || item.qty <= 0) errors[`items.${idx}.qty`] = 'Qty wajib diisi'

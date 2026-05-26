@@ -164,7 +164,7 @@ export default function EditInvoicePage({ uuid }: Props) {
         })),
         down_payment: dpPayload,
       }
-      const result = validateUpdateInvoice(dto as Parameters<typeof validateUpdateInvoice>[0])
+      const result = validateUpdateInvoice(dto as Parameters<typeof validateUpdateInvoice>[0], invoice?.service_type)
       setErrors(result.errors)
       if (!result.valid) return
     } else {
@@ -230,7 +230,7 @@ export default function EditInvoicePage({ uuid }: Props) {
               {/* Readonly */}
               <div>
                 <label className="text-xs font-medium text-gray-600 block mb-1">Proyek</label>
-                <div className="form-input bg-gray-50 text-gray-500">{invoice?.project.code} — {invoice?.project.name}</div>
+                <div className="form-input bg-gray-50 text-gray-500">{invoice?.project ? `${invoice.project.code} — ${invoice.project.name}` : 'Tanpa proyek'}</div>
               </div>
               <div>
                 <label className="text-xs font-medium text-gray-600 block mb-1">Customer</label>

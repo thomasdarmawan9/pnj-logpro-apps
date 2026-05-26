@@ -46,7 +46,9 @@ const itemSchema = Joi.object({
 
 const createInvoiceSchema = Joi.object({
   project_uuid:     Joi.string().uuid({ version: ['uuidv4'] }),
-  project_id:       Joi.number().integer().min(1),
+  project_id:       Joi.number().integer().min(1).allow(null),
+  customer_uuid:    Joi.string().uuid({ version: ['uuidv4'] }),
+  customer_id:      Joi.number().integer().min(1).allow(null),
   invoice_date:     Joi.date().iso().required(),
   due_date:         Joi.date().iso().min(Joi.ref('invoice_date')).required().messages({
     'date.min': 'Tanggal jatuh tempo tidak boleh lebih kecil dari tanggal invoice.',
@@ -63,9 +65,18 @@ const createInvoiceSchema = Joi.object({
   // DP opsional saat create. Kalau dikirim → otomatis dibuat sebagai
   // Payment(is_down_payment=true) di transaksi yang sama dgn invoice.
   down_payment:     downPaymentSchema.optional(),
-}).xor('project_uuid', 'project_id').messages({
-  'object.missing': 'project_uuid atau project_id wajib diisi.',
-  'object.xor':     'Pilih salah satu: project_uuid atau project_id.',
+}).oxor('project_uuid', 'project_id')
+  .oxor('customer_uuid', 'customer_id')
+  .custom((val, helpers) => {
+    const hasProject = !!val.project_uuid || !!val.project_id
+    const hasCustomer = !!val.customer_uuid || !!val.customer_id
+    if (!hasProject && !hasCustomer) {
+      return helpers.error('any.custom', { message: 'Pilih project atau customer.' })
+    }
+    return val
+  }).messages({
+  'any.custom': '{{#message}}',
+  'object.oxor': 'Pilih salah satu identifier untuk project/customer.',
 })
 
 const updateInvoiceSchema = Joi.object({

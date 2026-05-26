@@ -23,7 +23,8 @@ export interface CreateDownPaymentDto {
 }
 
 export interface CreateInvoiceDto {
-  project_id: number
+  project_id?: number | null
+  customer_id?: number | null
   invoice_date: string
   due_date: string
   service_type: 'delivery' | 'rental'

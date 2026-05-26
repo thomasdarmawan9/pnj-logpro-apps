@@ -52,7 +52,7 @@ export default function AttachSJModal({ open, invoice, attachableSJ, onClose, on
     <ModalShell open={open} onClose={onClose} title="Lampirkan Surat Jalan" subtitle={`ke Invoice #${invoice?.invoice_number} · ${invoice?.customer.name}`} widthClass="max-w-[640px]">
       <div className="space-y-4">
         <div className="rounded-lg px-3 py-2.5 text-xs" style={{ backgroundColor: '#EFF6FF', border: '1px solid #BFDBFE', color: '#1E40AF' }}>
-          Hanya SJ dari proyek &ldquo;{invoice?.project.name}&rdquo; yang belum dilampirkan ke invoice lain yang ditampilkan.
+          Hanya SJ dari {invoice?.project ? <>proyek &ldquo;{invoice.project.name}&rdquo;</> : <>customer ini tanpa proyek</>} yang belum dilampirkan ke invoice lain yang ditampilkan.
         </div>
         <div className="flex items-center gap-2.5 rounded-xl border px-3 py-2.5" style={{ borderColor: 'var(--border-card)' }}>
           <Search size={14} className="shrink-0 text-gray-400" />

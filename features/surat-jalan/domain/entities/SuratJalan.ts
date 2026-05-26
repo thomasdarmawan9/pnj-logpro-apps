@@ -5,6 +5,12 @@ export interface SJItem {
   unit: string
   unit_price: number
   notes: string
+  source_type?: 'manual' | 'stock'
+  stock_item_id?: number | null
+  stock_item_uuid?: string | null
+  stock_item_code?: string | null
+  stock_item_name?: string | null
+  stock_kategori_name?: string | null
 }
 
 export enum StatusOperasional {
@@ -23,16 +29,17 @@ export interface SuratJalan {
   id: number
   uuid: string
   sj_number: string
-  project_id: number
+  project_id: number | null
   project: {
     id: number
     name: string
     contract_number: string
     code: string
-  }
+  } | null
   customer_id: number
   customer: {
     id: number
+    uuid?: string
     name: string
   }
   fleet_id: number

@@ -1,5 +1,6 @@
 'use strict'
 
+const { Op } = require('sequelize')
 const {
   sequelize,
   DeliveryOrder,
@@ -8,6 +9,10 @@ const {
   Fleet,
   Driver,
   Invoice,
+  StockItem,
+  StockReceipt,
+  StockReceiptItem,
+  StockDisbursement,
 } = require('../models')
 const repo              = require('../repositories/deliveryOrder.repository')
 const {
@@ -17,6 +22,8 @@ const {
   ForbiddenError,
 } = require('../utils/AppError')
 const { generateSJNumber } = require('../utils/numberGenerator')
+const { generateStockDisbursementNumber } = require('../utils/numberGenerator')
+const { applyStockDelta, round2 } = require('../utils/stockBalance')
 const lampiranSvc = require('./lampiran.service')
 
 const STATUS = {
@@ -35,6 +42,15 @@ const ALLOWED_TRANSITIONS = {
 
 function canTransition(current, next) {
   return (ALLOWED_TRANSITIONS[current] || []).includes(next)
+}
+
+function fleetStatusLabel(status) {
+  return {
+    active:   'aktif',
+    inactive: 'tidak aktif',
+    repair:   'perbaikan',
+    sold:     'terjual',
+  }[status] || status
 }
 
 function periodToRange(period) {
@@ -71,10 +87,151 @@ function periodToRange(period) {
   }
 }
 
-async function resolveMasters({ project_uuid, project_id, fleet_uuid, fleet_id, driver_uuid, driver_id }, t) {
-  const [project, fleet, driver] = await Promise.all([
+function getSJStockLines(items) {
+  const aggregate = new Map()
+  if (!Array.isArray(items)) return []
+
+  for (const item of items) {
+    if (item?.source_type !== 'stock') continue
+    const qty = round2(item.qty || 0)
+    if (qty <= 0) continue
+    const kategoriName = item.stock_kategori_name || null
+    const stockKey = item.stock_item_uuid || String(item.stock_item_id || '')
+    if (!stockKey) continue
+    const key = `${stockKey}::${kategoriName || ''}`
+
+    const existing = aggregate.get(key) || {
+      stockItemId: item.stock_item_id || null,
+      stockItemUuid: item.stock_item_uuid || null,
+      kategoriName,
+      description: item.description || item.stock_item_name || '',
+      unit: item.unit || 'pcs',
+      qty: 0,
+      notes: item.notes || null,
+    }
+    existing.qty = round2(existing.qty + qty)
+    aggregate.set(key, existing)
+  }
+
+  return Array.from(aggregate.values())
+}
+
+async function resolveStockLineItems(lines, t) {
+  const rows = []
+  for (const line of lines) {
+    const stockItem = await StockItem.findOne({
+      where:       line.stockItemUuid ? { uuid: line.stockItemUuid } : { id: line.stockItemId },
+      transaction: t,
+      lock:        t.LOCK.UPDATE,
+    })
+    if (!stockItem) throw new NotFoundError('Stock item tidak ditemukan.')
+    if (!stockItem.is_active) {
+      throw new ConflictError(`Stock item ${stockItem.code} tidak aktif. Tidak bisa digunakan di SJ.`)
+    }
+    rows.push({ ...line, stockItem })
+  }
+  return rows
+}
+
+async function getCustomerStockBalance(customerId, stockItemId, kategoriName, t, excludeAutoForDeliveryOrderId = null) {
+  const receiptQty = await StockReceiptItem.sum('qty', {
+    include: [{
+      model:      StockReceipt,
+      as:         'receipt',
+      where:      { customer_id: customerId },
+      attributes: [],
+      required:   true,
+    }],
+    where:       { stock_item_id: stockItemId, kategori_name: kategoriName || null },
+    transaction: t,
+  })
+
+  const disbWhere = {
+    customer_id:    customerId,
+    stock_item_id:  stockItemId,
+    kategori_name:  kategoriName || null,
+  }
+  if (excludeAutoForDeliveryOrderId) {
+    disbWhere[Op.or] = [
+      { delivery_order_id: { [Op.ne]: excludeAutoForDeliveryOrderId } },
+      { delivery_order_id: null },
+      { source_type: { [Op.ne]: 'sj_auto' } },
+    ]
+  }
+
+  const disbQty = await StockDisbursement.sum('qty', {
+    where:       disbWhere,
+    transaction: t,
+  })
+
+  return round2(Number(receiptQty || 0) - Number(disbQty || 0))
+}
+
+async function clearAutoStockDisbursementsForSJ(sj, t) {
+  const rows = await StockDisbursement.findAll({
+    where:       { delivery_order_id: sj.id, source_type: 'sj_auto' },
+    transaction: t,
+    lock:        t.LOCK.UPDATE,
+  })
+
+  for (const row of rows) {
+    const stockItem = await StockItem.findByPk(row.stock_item_id, {
+      transaction: t,
+      lock:        t.LOCK.UPDATE,
+    })
+    if (!stockItem) throw new ConflictError('Stock item lama tidak dapat di-load untuk rollback stok SJ.')
+    await applyStockDelta(stockItem, Number(row.qty), t)
+    await row.destroy({ transaction: t })
+  }
+}
+
+async function syncAutoStockDisbursementsForSJ(sj, actor, t, context = {}) {
+  await clearAutoStockDisbursementsForSJ(sj, t)
+
+  if (sj.status !== STATUS.ASSIGNED) return
+  const lines = await resolveStockLineItems(getSJStockLines(sj.items), t)
+  if (lines.length === 0) return
+
+  for (const line of lines) {
+    const available = await getCustomerStockBalance(sj.customer_id, line.stockItem.id, line.kategoriName, t, sj.id)
+    if (line.qty > available) {
+      const categoryLabel = line.kategoriName ? ` kategori ${line.kategoriName}` : ''
+      throw new ConflictError(
+        `Stok customer untuk ${line.stockItem.code} (${line.stockItem.name})${categoryLabel} tidak mencukupi. ` +
+        `Tersedia: ${available} ${line.stockItem.unit}, diminta: ${line.qty} ${line.stockItem.unit}.`,
+        { code: 'INSUFFICIENT_CUSTOMER_STOCK' },
+      )
+    }
+  }
+
+  for (const line of lines) {
+    await applyStockDelta(line.stockItem, -line.qty, t)
+    const disbNumber = await generateStockDisbursementNumber(t)
+    await StockDisbursement.create({
+      disbursement_number: disbNumber,
+      disbursement_date:   sj.sj_date,
+      source_type:         'sj_auto',
+      stock_item_id:       line.stockItem.id,
+      qty:                 line.qty,
+      kategori_name:       line.kategoriName || null,
+      delivery_order_id:   sj.id,
+      driver_name:         context.driver?.name || sj.driver_name_manual || null,
+      vehicle_plate:       context.fleet?.plate_number || null,
+      destination:         sj.destination || null,
+      customer_id:         sj.customer_id,
+      notes:               line.notes || `Otomatis dari SJ ${sj.sj_number}`,
+      created_by:          actor?.id || null,
+    }, { transaction: t })
+  }
+}
+
+async function resolveMasters({ project_uuid, project_id, customer_uuid, customer_id, fleet_uuid, fleet_id, driver_uuid, driver_id }, t) {
+  const [project, customer, fleet, driver] = await Promise.all([
     project_uuid || project_id
       ? Project.findOne({ where: project_uuid ? { uuid: project_uuid } : { id: project_id }, transaction: t })
+      : null,
+    customer_uuid || customer_id
+      ? Customer.findOne({ where: customer_uuid ? { uuid: customer_uuid } : { id: customer_id }, transaction: t })
       : null,
     fleet_uuid || fleet_id !== undefined
       ? Fleet.findOne({ where: fleet_uuid ? { uuid: fleet_uuid } : fleet_id === 0 ? { is_tbd: true } : { id: fleet_id }, transaction: t })
@@ -85,17 +242,21 @@ async function resolveMasters({ project_uuid, project_id, fleet_uuid, fleet_id, 
   ])
 
   if ((project_uuid || project_id) && !project) throw new NotFoundError('Project tidak ditemukan.')
+  if ((customer_uuid || customer_id) && !customer) throw new NotFoundError('Customer tidak ditemukan.')
+  if (project && customer && Number(project.customer_id) !== Number(customer.id)) {
+    throw new BadRequestError('Customer tidak sesuai dengan project yang dipilih.')
+  }
   if ((fleet_uuid || fleet_id !== undefined) && !fleet) throw new NotFoundError('Fleet tidak ditemukan.')
   if ((driver_uuid || driver_id) && !driver)    throw new NotFoundError('Driver tidak ditemukan.')
 
-  if (fleet && fleet.status === 'sold') {
-    throw new BadRequestError('Fleet sudah sold dan tidak bisa digunakan.')
+  if (fleet && !fleet.is_tbd && fleet.status !== 'active') {
+    throw new BadRequestError(`Fleet berstatus ${fleetStatusLabel(fleet.status)} dan tidak bisa digunakan.`)
   }
   if (driver && driver.status !== 'active') {
     throw new BadRequestError('Driver berstatus inactive.')
   }
 
-  return { project, fleet, driver }
+  return { project, customer: project ? null : customer, fleet, driver }
 }
 
 // ── LIST & DETAIL ─────────────────────────────────────────────────────────
@@ -148,22 +309,29 @@ async function getByUuid(uuid) {
 // ── CREATE ────────────────────────────────────────────────────────────────
 async function create(payload, actor) {
   return sequelize.transaction(async (t) => {
-    const { project, fleet, driver } = await resolveMasters({
+    const { project, customer, fleet, driver } = await resolveMasters({
       project_uuid: payload.project_uuid,
       project_id:   payload.project_id,
+      customer_uuid: payload.customer_uuid,
+      customer_id:   payload.customer_id,
       fleet_uuid:   payload.fleet_uuid,
       fleet_id:     payload.fleet_id,
       driver_uuid:  payload.driver_uuid,
       driver_id:    payload.driver_id,
     }, t)
+    const customerId = project ? project.customer_id : customer?.id
+
+    if (!project && !customerId) {
+      throw new BadRequestError('Customer wajib dipilih untuk SJ tanpa project.')
+    }
 
     const sjNumber = await generateSJNumber(t)
     const status   = payload.publish ? STATUS.ASSIGNED : STATUS.DRAFT
 
     const sj = await DeliveryOrder.create({
       sj_number:                 sjNumber,
-      project_id:                project.id,
-      customer_id:               project.customer_id,
+      project_id:                project?.id || null,
+      customer_id:               project?.customer_id || customerId,
       fleet_id:                  fleet.id,
       driver_id:                 driver ? driver.id : null,
       driver_name_manual:        payload.driver_name_manual || null,
@@ -179,6 +347,10 @@ async function create(payload, actor) {
       created_by:                actor?.id || null,
       updated_by:                actor?.id || null,
     }, { transaction: t })
+
+    if (status === STATUS.ASSIGNED) {
+      await syncAutoStockDisbursementsForSJ(sj, actor, t, { fleet, driver })
+    }
 
     return repo.findByUuid(sj.uuid, { transaction: t })
   })
@@ -202,6 +374,10 @@ async function update(uuid, payload, actor) {
         transaction: t,
       })
       if (!f) throw new NotFoundError('Fleet tidak ditemukan.')
+      const fleetUnchanged = Number(f.id) === Number(sj.fleet_id)
+      if (!fleetUnchanged && !f.is_tbd && f.status !== 'active') {
+        throw new BadRequestError(`Fleet berstatus ${fleetStatusLabel(f.status)} dan tidak bisa digunakan.`)
+      }
       updates.fleet_id = f.id
     }
 
@@ -250,6 +426,18 @@ async function update(uuid, payload, actor) {
     updates.updated_by = actor?.id || null
     await sj.update(updates, { transaction: t })
 
+    const stockRelevantFields = [
+      'items', 'sj_date', 'destination', 'fleet_id', 'fleet_uuid',
+      'driver_id', 'driver_uuid', 'driver_name_manual',
+    ]
+    if (sj.status === STATUS.ASSIGNED && stockRelevantFields.some(k => k in payload)) {
+      const [fleet, driver] = await Promise.all([
+        Fleet.findByPk(sj.fleet_id, { transaction: t }),
+        sj.driver_id ? Driver.findByPk(sj.driver_id, { transaction: t }) : null,
+      ])
+      await syncAutoStockDisbursementsForSJ(sj, actor, t, { fleet, driver })
+    }
+
     return repo.findByUuid(sj.uuid, { transaction: t })
   })
   // Hapus file orphan hanya setelah transaction berhasil commit.
@@ -280,6 +468,8 @@ async function assign(uuid, payload, actor) {
       status:             STATUS.ASSIGNED,
       updated_by:         actor?.id || null,
     }, { transaction: t })
+
+    await syncAutoStockDisbursementsForSJ(sj, actor, t, { fleet, driver })
 
     return repo.findByUuid(sj.uuid, { transaction: t })
   })
@@ -430,6 +620,8 @@ async function voidSJ(uuid, payload, actor) {
       }
       await _detachFromInvoiceAndRecalc(sj, t)
     }
+
+    await clearAutoStockDisbursementsForSJ(sj, t)
 
     await sj.update({
       status:      STATUS.VOID,

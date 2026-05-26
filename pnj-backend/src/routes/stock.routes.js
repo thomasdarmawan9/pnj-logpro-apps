@@ -149,6 +149,25 @@ router.delete('/disbursements/:uuid',
 )
 
 // ── Stock Reports ─────────────────────────────────────────────────────────
+router.get('/customers/summary',
+  isAnyRole,
+  reportsController.customerSummary,
+)
+router.get('/customers/:uuid/detail',
+  isAnyRole,
+  validate(uuidParam, 'params'),
+  reportsController.customerDetail,
+)
+router.get('/customers/:uuid/export/pdf',
+  isAnyRole,
+  validate(uuidParam, 'params'),
+  reportsController.exportCustomerPdf,
+)
+router.get('/customers/:uuid/available-items',
+  isAnyRole,
+  validate(uuidParam, 'params'),
+  reportsController.customerAvailableItems,
+)
 router.get('/report/recap',
   isAnyRole,
   validate(listRecapQuery, 'query'),
@@ -162,6 +181,11 @@ router.get('/report/summary',
 router.get('/report/export',
   isAnyRole,
   reportsController.exportXlsx,
+)
+router.get('/report/export/pdf',
+  isAnyRole,
+  validate(listRecapQuery, 'query'),
+  reportsController.exportPdf,
 )
 
 module.exports = router

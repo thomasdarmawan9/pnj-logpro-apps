@@ -129,7 +129,7 @@ export default function DetailInvoicePage({ uuid }: Props) {
                 <div className="text-3xl font-bold font-mono" style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>
                   Invoice #{invoice.invoice_number}
                 </div>
-                <div className="text-sm text-gray-500 mt-1">{invoice.customer.name} · {invoice.project.contract_number}</div>
+                <div className="text-sm text-gray-500 mt-1">{invoice.customer.name} · {invoice.project?.contract_number || 'Tanpa proyek'}</div>
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -207,9 +207,9 @@ export default function DetailInvoicePage({ uuid }: Props) {
             <div>
               {/* Info header */}
               <div className="rounded-xl p-4 mb-4 grid grid-cols-2 gap-x-8 gap-y-2 text-sm" style={{ backgroundColor: '#F9FAFB', border: '1px solid var(--border-card)' }}>
-                <div><span className="text-gray-500">Proyek</span><span className="ml-2 font-medium">{invoice.project.name}</span></div>
+                <div><span className="text-gray-500">Proyek</span><span className="ml-2 font-medium">{invoice.project?.name || 'Tanpa proyek'}</span></div>
                 <div><span className="text-gray-500">Customer</span><span className="ml-2 font-medium">{invoice.customer.name}</span></div>
-                <div><span className="text-gray-500">No. Kontrak</span><span className="ml-2">{invoice.project.contract_number}</span></div>
+                <div><span className="text-gray-500">No. Kontrak</span><span className="ml-2">{invoice.project?.contract_number || '-'}</span></div>
                 <div><span className="text-gray-500">Jenis Jasa</span><span className="ml-2">{isRentalInvoice ? 'Jasa Penyewaan' : 'Jasa Pengiriman'}</span></div>
                 <div><span className="text-gray-500">Tgl Invoice</span><span className="ml-2">{formatDate(invoice.invoice_date)}</span></div>
                 <div><span className="text-gray-500">Jatuh Tempo</span><span className="ml-2">{formatDate(invoice.due_date)}</span></div>
@@ -362,8 +362,8 @@ export default function DetailInvoicePage({ uuid }: Props) {
           {/* Project info */}
           <div className="bg-white rounded-xl border p-5" style={{ borderColor: 'var(--border-card)' }}>
             <h3 className="text-sm font-semibold mb-3 text-gray-600">Info Proyek</h3>
-            <div className="text-sm font-semibold">{invoice.project.name}</div>
-            <div className="text-xs text-gray-500 mt-1">{invoice.project.code} · {invoice.project.contract_number}</div>
+            <div className="text-sm font-semibold">{invoice.project?.name || 'Tanpa proyek'}</div>
+            <div className="text-xs text-gray-500 mt-1">{invoice.project ? `${invoice.project.code} · ${invoice.project.contract_number}` : 'Invoice customer-only'}</div>
             <div className="border-t mt-3 pt-3 space-y-1.5 text-xs text-gray-500" style={{ borderColor: 'var(--border-card)' }}>
               <div>SJ di proyek: {invoice.attached_sj.length} SJ</div>
               <div>Invoice aktif: 1 outstanding</div>

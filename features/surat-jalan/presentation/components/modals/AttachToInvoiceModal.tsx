@@ -55,7 +55,7 @@ export default function AttachToInvoiceModal({
       open={open}
       onClose={handleClose}
       title="Lampirkan ke Invoice"
-      subtitle={sj ? `${sj.sj_number} · ${sj.project.name}` : undefined}
+      subtitle={sj ? `${sj.sj_number} · ${sj.project?.name || sj.customer.name}` : undefined}
       widthClass="max-w-[560px]"
     >
       <div className="space-y-4">
@@ -64,7 +64,7 @@ export default function AttachToInvoiceModal({
           style={{ borderColor: '#BFDBFE', backgroundColor: '#EFF6FF', color: '#1D4ED8' }}>
           <AlertCircle size={14} className="mt-0.5 shrink-0" />
           <span>
-            Hanya invoice dari proyek <strong>{sj?.project.name}</strong> yang belum memiliki lampiran SJ ini yang ditampilkan.
+            Hanya invoice dari {sj?.project ? <>proyek <strong>{sj.project.name}</strong></> : <>customer <strong>{sj?.customer.name}</strong> tanpa proyek</>} yang belum memiliki lampiran SJ ini yang ditampilkan.
           </span>
         </div>
 

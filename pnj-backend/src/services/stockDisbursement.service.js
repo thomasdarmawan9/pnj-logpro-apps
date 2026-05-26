@@ -151,6 +151,8 @@ async function create(payload, actor) {
       disbursement_date:     payload.disbursement_date,
       stock_item_id:         stockItem.id,
       qty:                   round2(payload.qty),
+      kategori_name:         payload.kategori_name || null,
+      source_type:           'manual',
       delivery_order_id:     sj?.id || null,
       sj_number_manual:      payload.sj_number_manual || null,
       invoice_number_manual: payload.invoice_number_manual || null,
@@ -182,11 +184,14 @@ async function update(uuid, payload, actor) {
       transaction: t,
     })
     if (!disb) throw new NotFoundError('Stock disbursement tidak ditemukan.')
+    if (disb.source_type === 'sj_auto') {
+      throw new ConflictError('Stock keluar otomatis dari SJ tidak bisa diedit langsung. Ubah item di SJ terkait.')
+    }
 
     const updates = {}
     const passthrough = [
       'disbursement_date', 'sj_number_manual', 'invoice_number_manual',
-      'driver_name', 'vehicle_plate', 'destination', 'notes',
+      'driver_name', 'vehicle_plate', 'destination', 'kategori_name', 'notes',
     ]
     for (const k of passthrough) {
       if (k in payload) updates[k] = payload[k] || null
@@ -265,6 +270,9 @@ async function remove(uuid) {
       transaction: t,
     })
     if (!disb) throw new NotFoundError('Stock disbursement tidak ditemukan.')
+    if (disb.source_type === 'sj_auto') {
+      throw new ConflictError('Stock keluar otomatis dari SJ tidak bisa dihapus langsung. Void atau ubah SJ terkait.')
+    }
 
     const stockItem = await StockItem.findByPk(disb.stock_item_id, {
       transaction: t,

@@ -15,7 +15,7 @@ function round2(n) { return Math.round(Number(n) * 100) / 100 }
  * @param {object} filters
  *   - period_preset, period_from, period_to
  *   - category: 'all' | 'truck' | 'trailer' | ...
- *   - status: 'all' | 'active' | 'inactive' | 'sold'
+ *   - status: 'all' | 'active' | 'inactive' | 'repair' | 'sold'
  */
 async function getSummary(filters = {}) {
   const { from: periodFrom, to: periodTo } = resolvePeriod(

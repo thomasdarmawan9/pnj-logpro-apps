@@ -3,7 +3,11 @@
 const Joi = require('joi')
 
 const CATEGORIES = ['truck', 'trailer', 'family_car', 'heavy_equipment', 'other']
-const STATUSES   = ['active', 'inactive', 'sold']
+const STATUSES   = ['active', 'inactive', 'repair', 'sold']
+
+const lampiranPaths = Joi.array().items(
+  Joi.string().trim().max(255).pattern(/^[^/\\]+\/[^/\\]+$/),
+).max(3).allow(null)
 
 const createFleetSchema = Joi.object({
   plate_number: Joi.string().trim().max(20).uppercase().required(),
@@ -24,6 +28,7 @@ const updateFleetSchema = Joi.object({
   year:         Joi.number().integer().min(1970).max(new Date().getFullYear() + 1).allow(null),
   capacity_ton: Joi.number().precision(2).min(0).allow(null),
   status:       Joi.string().valid(...STATUSES),
+  lampiran_paths: lampiranPaths,
   notes:        Joi.string().trim().allow('', null),
 }).min(1)
 

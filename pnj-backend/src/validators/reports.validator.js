@@ -52,7 +52,7 @@ const profitLossQuery = Joi.object({
 // ── Fleet Utilization ──────────────────────────────────────────────────────
 const PERIOD_PRESETS_UTIL = ['this_month', 'last_month', 'custom']
 const FLEET_CATEGORIES    = ['all', 'truck', 'trailer', 'family_car', 'heavy_equipment', 'other']
-const FLEET_STATUSES      = ['all', 'active', 'inactive', 'sold']
+const FLEET_STATUSES      = ['all', 'active', 'inactive', 'repair', 'sold']
 
 const fleetUtilizationQuery = Joi.object({
   period_preset: Joi.string().valid(...PERIOD_PRESETS_UTIL).default('this_month'),

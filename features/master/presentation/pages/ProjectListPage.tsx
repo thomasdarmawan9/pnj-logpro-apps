@@ -9,6 +9,9 @@ import ProjectFormModal from '../components/ProjectFormModal'
 import { useToast } from '@/components/toast/useToast'
 import { formatRupiah, formatDate } from '@/lib/formatters'
 import { Project, ProjectStatus } from '@/features/master/domain/entities/Project'
+import TablePagination from '../components/TablePagination'
+
+const ROWS_PER_PAGE = 10
 
 const STATUS_CONFIG: Record<ProjectStatus, { label: string; bg: string; text: string }> = {
   active:    { label: 'Aktif',   bg: '#D1FAE5', text: '#065F46' },
@@ -38,8 +41,9 @@ export default function ProjectListPage() {
   const [search, setSearch] = useState('')
   const [filterCustomer, setFilterCustomer] = useState<string>('all')
   const [filterStatus, setFilterStatus] = useState<ProjectStatus | 'all'>('all')
+  const [page, setPage] = useState(1)
 
-  const resetFilters = () => { setSearch(''); setFilterCustomer('all'); setFilterStatus('all') }
+  const resetFilters = () => { setSearch(''); setFilterCustomer('all'); setFilterStatus('all'); setPage(1) }
 
   const summary = useMemo(() => ({
     active: projects.filter(p => p.status === 'active').length,
@@ -58,6 +62,10 @@ export default function ProjectListPage() {
     const matchStatus = filterStatus === 'all' || p.status === filterStatus
     return matchSearch && matchCustomer && matchStatus
   }), [projects, search, filterCustomer, filterStatus])
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ROWS_PER_PAGE))
+  const currentPage = Math.min(page, totalPages)
+  const paginated = filtered.slice((currentPage - 1) * ROWS_PER_PAGE, currentPage * ROWS_PER_PAGE)
 
   const handleSubmit = async (data: Parameters<typeof create>[0]) => {
     const action = modal.data
@@ -115,7 +123,7 @@ export default function ProjectListPage() {
               className="form-input w-full"
               placeholder="Cari nama, no. kontrak, customer..."
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={e => { setSearch(e.target.value); setPage(1) }}
               style={{ paddingLeft: '38px' }}
             />
           </div>
@@ -138,7 +146,7 @@ export default function ProjectListPage() {
           <div>
             <div className="text-xs text-gray-600">Customer</div>
             <div className="relative mt-1">
-              <select className="form-input text-sm w-full pr-8" value={filterCustomer} onChange={e => setFilterCustomer(e.target.value)}>
+              <select className="form-input text-sm w-full pr-8" value={filterCustomer} onChange={e => { setFilterCustomer(e.target.value); setPage(1) }}>
                 <option value="all">Semua Customer</option>
                 {customers.map(c => <option key={c.uuid} value={String(c.id)}>{c.name}</option>)}
               </select>
@@ -148,7 +156,7 @@ export default function ProjectListPage() {
           <div>
             <div className="text-xs text-gray-600">Status</div>
             <div className="relative mt-1">
-              <select className="form-input text-sm w-full pr-8" value={filterStatus} onChange={e => setFilterStatus(e.target.value as typeof filterStatus)}>
+              <select className="form-input text-sm w-full pr-8" value={filterStatus} onChange={e => { setFilterStatus(e.target.value as typeof filterStatus); setPage(1) }}>
                 <option value="all">Semua Status</option>
                 <option value="active">Aktif</option>
                 <option value="completed">Selesai</option>
@@ -171,20 +179,21 @@ export default function ProjectListPage() {
             <p className="text-sm">Tidak ada proyek ditemukan</p>
           </div>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border-card)', backgroundColor: 'var(--bg-page)' }}>
-                {['Kode & Nama', 'Customer', 'No. Kontrak', 'Periode', 'SJ', 'Status', 'P&L', 'Aksi'].map(h => (
-                  <th key={h} className="text-left px-4 py-3 text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((p, i) => (
+          <>
+            <table className="w-full text-sm">
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border-card)', backgroundColor: 'var(--bg-page)' }}>
+                  {['Kode & Nama', 'Customer', 'No. Kontrak', 'Periode', 'SJ', 'Status', 'P&L', 'Aksi'].map(h => (
+                    <th key={h} className="text-left px-4 py-3 text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {paginated.map((p, i) => (
                 <tr
                   key={p.uuid}
                   style={{
-                    borderBottom: i < filtered.length - 1 ? '1px solid var(--border-card)' : 'none',
+                    borderBottom: i < paginated.length - 1 ? '1px solid var(--border-card)' : 'none',
                     backgroundColor: p.gross_profit < -1000 && p.invoice_paid_amount > 0 ? '#FFF5F5' : undefined,
                   }}
                   className="hover:bg-gray-50 transition-colors"
@@ -233,9 +242,11 @@ export default function ProjectListPage() {
                     </div>
                   </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+                ))}
+              </tbody>
+            </table>
+            <TablePagination page={currentPage} perPage={ROWS_PER_PAGE} total={filtered.length} label="proyek" onPageChange={setPage} />
+          </>
         )}
       </div>
 

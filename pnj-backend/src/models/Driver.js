@@ -36,6 +36,10 @@ module.exports = (sequelize) => {
       defaultValue: 'active',
       validate:     { isIn: [['active', 'inactive']] },
     },
+    lampiran_paths: {
+      type:      DataTypes.ARRAY(DataTypes.STRING(255)),
+      allowNull: true,
+    },
   }, {
     tableName: 'drivers',
     paranoid:  true,
