@@ -72,10 +72,10 @@ function render(doc, data, options = {}) {
     no: 36,
     date: 68,
     driver: 78,
-    plate: 70,
-    destination: 166,
+    plate: 92,
+    destination: 136,
     invoice: 56,
-    sj: 48,
+    sj: 56,
   }
   const categoryW = (tableW - fixed.no - fixed.date - fixed.driver - fixed.plate - fixed.destination - fixed.invoice - fixed.sj) / categories.length
 
@@ -105,8 +105,8 @@ function render(doc, data, options = {}) {
   }
   y += titleH
 
-  const headers = ['No', 'Tanggal', 'Sopir', 'No Pol', ...categories.map(c => `Stok ${c}`), 'Alamat Tujuan', 'No Invoice', 'No SJ']
-  const headerH = 15
+  const headers = ['No', 'Tanggal', 'Sopir', 'No /\nNama Kendaraan', ...categories.map(c => `Stok ${c}`), 'Alamat Tujuan', 'No Invoice', 'No SJ']
+  const headerH = 22
   headers.forEach((h, i) => drawCell(doc, xs[i], y, widths[i], headerH, h, { fontSize: 7 }))
   y += headerH
 
@@ -131,9 +131,14 @@ function render(doc, data, options = {}) {
     if (isReceipt) {
       const catIndex = categories.indexOf(row.kategori_name || data.stock_item?.name || 'Stok')
       const descX = xs[0]
-      const descW = widths[0] + widths[1] + widths[2] + widths[3]
+      const descW = widths[0] + widths[1] + widths[2]
       drawCell(doc, descX, y, descW, h, `Tambahan Stok :\n${row.sj_or_spal || row.reference_number || ''}${row.notes ? `\n${row.notes}` : ''}`, {
         fontSize: 7,
+      })
+      drawCell(doc, xs[3], y, widths[3], h, row.supplier_or_driver || '', {
+        fontSize: 6.7,
+        lineBreak: false,
+        ellipsis: true,
       })
       categories.forEach((_cat, idx) => {
         const col = 4 + idx
@@ -182,7 +187,7 @@ function render(doc, data, options = {}) {
   const summaryText = [
     `Total Masuk: ${formatQty(summary.total_in)} ${data.stock_item?.unit || ''}`,
     `Total Keluar: ${formatQty(summary.total_out)} ${data.stock_item?.unit || ''}`,
-    `Saldo Akhir: ${formatQty(summary.ending_balance)} ${data.stock_item?.unit || ''}`,
+    `Saldo (sisa stock) Akhir: ${formatQty(summary.ending_balance)} ${data.stock_item?.unit || ''}`,
   ].join('    ')
   doc.font('Helvetica-Bold').fontSize(7).fillColor(C_BLACK)
     .text(summaryText, margin, y + 8, { width: tableW, align: 'right' })

@@ -15,6 +15,7 @@ const STATUS_BADGE: Record<string, { label: string; bg: string; color: string }>
   active:    { label: 'Aktif',   bg: '#DCFCE7', color: '#15803D' },
   completed: { label: 'Selesai', bg: '#F3F4F6', color: '#6B7280' },
   on_hold:   { label: 'Ditunda', bg: '#FEF3C7', color: '#B45309' },
+  customer_only: { label: 'Non Proyek', bg: '#EFF6FF', color: '#1D4ED8' },
 }
 
 export default function ProfitLossProjectRow({ project, index }: ProfitLossProjectRowProps) {
@@ -30,6 +31,13 @@ export default function ProfitLossProjectRow({ project, index }: ProfitLossProje
 
   const grossProfitDisplay = () => {
     if (project.gross_profit === 0 && isNoData) return <span style={{ color: '#D1D5DB' }}>—</span>
+    if (project.gross_profit === 0) {
+      return (
+        <span className="font-bold font-mono px-2 py-0.5 rounded text-sm" style={{ backgroundColor: '#F3F4F6', color: 'var(--text-secondary)' }}>
+          {formatRupiah(0)}
+        </span>
+      )
+    }
     const isPositive = project.gross_profit > 0
     return (
       <span
@@ -93,9 +101,13 @@ export default function ProfitLossProjectRow({ project, index }: ProfitLossProje
           <div>{project.sj_delivered_count} delivered</div>
         </td>
         <td className="px-3 py-3 text-center">
-          <a href={`/master/proyek/${project.project_id}`} className="text-xs font-medium hover:underline" style={{ color: 'var(--green-primary)' }}>
-            Lihat Proyek →
-          </a>
+          {project.project_uuid ? (
+            <a href={`/master/proyek/${project.project_uuid}`} className="text-xs font-medium hover:underline" style={{ color: 'var(--green-primary)' }}>
+              Lihat Proyek →
+            </a>
+          ) : (
+            <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>-</span>
+          )}
         </td>
       </tr>
 
@@ -127,7 +139,7 @@ export default function ProfitLossProjectRow({ project, index }: ProfitLossProje
                     {(project.invoices ?? []).map(inv => (
                       <tr key={inv.uuid} className="border-b" style={{ borderColor: '#F3F4F6' }}>
                         <td className="px-8 py-2 font-mono font-medium" style={{ color: 'var(--text-primary)' }}>
-                          INV-{inv.invoice_number}
+                          {inv.invoice_number}
                         </td>
                         <td className="px-3 py-2 text-right font-mono font-bold" style={{ color: 'var(--text-primary)' }}>
                           {formatRupiah(inv.total_amount)}
@@ -140,7 +152,7 @@ export default function ProfitLossProjectRow({ project, index }: ProfitLossProje
                               color: inv.status === 'paid' ? '#15803D' : '#B45309',
                             }}
                           >
-                            {inv.status === 'paid' ? 'PAID ✓ masuk P&L' : inv.status.toUpperCase() + ' (belum masuk P&L)'}
+                            {inv.status.toUpperCase()}
                           </span>
                         </td>
                       </tr>

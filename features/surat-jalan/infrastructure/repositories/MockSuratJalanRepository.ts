@@ -1,4 +1,4 @@
-import { apiDownload, apiRequest } from '@/lib/apiClient'
+import { apiDownload, apiRequest, apiRequestAllPages } from '@/lib/apiClient'
 import { SuratJalan, StatusLampiran, SJFilterState, PaginationState } from '../../domain/entities/SuratJalan'
 import { ISuratJalanRepository, PaginatedResult } from './ISuratJalanRepository'
 import { CreateSJDto } from '../../application/dto/CreateSJDto'
@@ -116,12 +116,26 @@ function toUpdatePayload(dto: UpdateSJDto) {
   }
 }
 
+function buildExportQuery(filters: SJFilterState, uuids?: string[]) {
+  const params = new URLSearchParams()
+  params.set('status', filters.statusOps)
+  params.set('invoice_status', filters.statusLampiran)
+  params.set('period', filters.periode)
+
+  if (filters.search.trim()) params.set('search', filters.search.trim())
+  if (filters.proyek && filters.proyek !== 'all') params.set('project_code', filters.proyek)
+  if (filters.customer && filters.customer !== 'all') params.set('customer_name', filters.customer)
+  if (uuids && uuids.length > 0) params.set('uuids', uuids.join(','))
+
+  return params.toString()
+}
+
 export class MockSuratJalanRepository implements ISuratJalanRepository {
   async getList(filters: SJFilterState, pagination: PaginationState): Promise<PaginatedResult<SuratJalan>> {
-    const response = await apiRequest<ApiSJ[]>(`/surat-jalan?status=all&invoice_status=all&period=${filters.periode}&page=1&limit=100`, {
+    const rows = await apiRequestAllPages<ApiSJ>(`/surat-jalan?status=all&invoice_status=all&period=${filters.periode}`, {
       method: 'GET',
     })
-    const filtered = applyFrontendFilters(response.data.map(normalizeSJ), filters)
+    const filtered = applyFrontendFilters(rows.map(normalizeSJ), filters)
     const start = (pagination.page - 1) * pagination.perPage
     return {
       data: filtered.slice(start, start + pagination.perPage),
@@ -192,6 +206,15 @@ export class MockSuratJalanRepository implements ISuratJalanRepository {
     const response = await apiRequest<ApiSJ>(`/surat-jalan/${sjUuid}`, { method: 'GET' })
     return normalizeSJ(response.data)
   }
+
+  async exportXlsx(filters: SJFilterState, uuids?: string[]): Promise<Blob> {
+    const query = buildExportQuery(filters, uuids)
+    return apiDownload(`/surat-jalan/export?${query}`)
+  }
+}
+
+export async function exportSuratJalan(filters: SJFilterState, uuids?: string[]): Promise<Blob> {
+  return suratJalanRepository.exportXlsx(filters, uuids)
 }
 
 export async function uploadSuratJalanPOD(uuid: string, file: File): Promise<SuratJalan> {

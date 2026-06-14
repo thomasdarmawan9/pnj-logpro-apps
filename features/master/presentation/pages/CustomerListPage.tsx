@@ -17,7 +17,7 @@ export default function CustomerListPage() {
   const { customers, isLoading, modal, openForm, closeForm, create, update, remove } = useCustomer()
   const { push: pushToast } = useToast()
   const user = useSelector((s: RootState) => s.auth.user)
-  const canEdit = user?.role !== 'admin_finance'
+  const canEdit = user?.role === 'super_admin' || user?.role === 'admin_ops'
 
   const [search, setSearch] = useState('')
   const [filterPKP, setFilterPKP] = useState<'all' | 'pkp' | 'non_pkp'>('all')

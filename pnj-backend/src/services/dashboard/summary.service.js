@@ -8,7 +8,7 @@ const {
   DeliveryOrder,
   Fleet,
 } = require('../../models')
-const { startOfMonth, endOfMonth, toISODate } = require('../../utils/reportPeriods')
+const { startOfDay, endOfDay, startOfMonth, endOfMonth, toISODate } = require('../../utils/reportPeriods')
 
 function round2(n) { return Math.round(Number(n) * 100) / 100 }
 
@@ -31,12 +31,32 @@ function buildTrend(value, opts = {}) {
   return                       { value: 0, label: `Stagnan vs ${suffixPrev}`, color: '#6B7280' }
 }
 
+function startOfWeek(d) {
+  const start = new Date(d)
+  const day = start.getDay() || 7
+  start.setDate(start.getDate() - day + 1)
+  return startOfDay(start)
+}
+
+function addDays(d, days) {
+  const next = new Date(d)
+  next.setDate(next.getDate() + days)
+  return next
+}
+
 // ── Metric: Piutang Belum Lunas ───────────────────────────────────────────
-async function computePiutang() {
+// asOf: jika diisi, hanya invoice yang sudah terbit pada/sebelum tanggal
+// tersebut yang dihitung — dipakai untuk perbandingan tren bulan lalu.
+async function computePiutang(asOf = null) {
   // Outstanding total = SUM(total_amount - paid_amount) untuk invoice yang
   // status 'sent' atau 'outstanding' (= belum lunas, belum void).
+  const where = { status: { [Op.in]: ['sent', 'outstanding'] } }
+  if (asOf) {
+    where.invoice_date = { [Op.lte]: asOf }
+  }
+
   const rows = await Invoice.findAll({
-    where: { status: { [Op.in]: ['sent', 'outstanding'] } },
+    where,
     attributes: ['total_amount', 'paid_amount'],
   })
 
@@ -319,7 +339,12 @@ async function getSummary(period = 'this_month', module = 'all', status = 'all')
   const lastMonthTo   = endOfMonth(lastMonthRef)
 
   let periodFrom, periodTo, prevFrom, prevTo
-  if (period === 'last_month') {
+  if (period === 'this_week') {
+    periodFrom = startOfWeek(now)
+    periodTo   = endOfDay(now)
+    prevFrom   = addDays(periodFrom, -7)
+    prevTo     = addDays(periodTo, -7)
+  } else if (period === 'last_month') {
     periodFrom = lastMonthFrom
     periodTo   = lastMonthTo
     const twoRef = new Date(now.getFullYear(), now.getMonth() - 2, 1)
@@ -351,6 +376,7 @@ async function getSummary(period = 'this_month', module = 'all', status = 'all')
   // ── Compute paralel ────────────────────────────────────────────────────
   const [
     piutangNow,
+    piutangLastMonth,
     overdueNow,
     overdueLastMonth,
     sjCountThis,
@@ -361,6 +387,7 @@ async function getSummary(period = 'this_month', module = 'all', status = 'all')
     revenue,
   ] = await Promise.all([
     showInvoice ? computePiutang()                                         : Promise.resolve(0),
+    showInvoice ? computePiutang(lastMonthTo)                              : Promise.resolve(0),
     showInvoice ? computeOverdueInvoiceCount(now)                          : Promise.resolve(0),
     showInvoice ? computeOverdueInvoiceCount(prevTo || lastMonthTo)        : Promise.resolve(0),
     showSJ      ? computeSJCount(periodFrom, periodTo, sjStatus)            : Promise.resolve(0),
@@ -373,8 +400,15 @@ async function getSummary(period = 'this_month', module = 'all', status = 'all')
   ])
 
   const overdueTrendValue = pctChange(overdueNow, overdueLastMonth)
+  const piutangTrendValue = pctChange(piutangNow, piutangLastMonth)
   const sjTrend           = period === 'all' ? null : pctChange(sjCountThis, sjCountPrev)
-  const periodLabel       = period === 'last_month' ? 'bulan lalu' : period === 'all' ? 'semua waktu' : 'bulan ini'
+  const periodLabel       = period === 'this_week'
+    ? 'minggu lalu'
+    : period === 'last_month'
+      ? 'bulan lalu'
+      : period === 'all'
+        ? 'semua waktu'
+        : 'bulan ini'
 
   // Label metric SJ menyesuaikan status filter
   const sjMetricLabel = sjStatus
@@ -389,7 +423,7 @@ async function getSummary(period = 'this_month', module = 'all', status = 'all')
       label:         'Piutang Belum Lunas',
       value:         piutangNow,
       value_label:   formatRupiah(piutangNow),
-      trend:         buildTrend(null),
+      trend:         buildTrend(piutangTrendValue, { suffixPrev: 'bulan lalu' }),
       _show:         showInvoice,
     },
     {

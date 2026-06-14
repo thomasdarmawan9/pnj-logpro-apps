@@ -1,10 +1,12 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { SuratJalan, StatusOperasional } from '../../../domain/entities/SuratJalan'
 import SJStatusBadge from '../SJStatusBadge'
 import { formatShortDate, formatRupiah } from '../../utils/format'
 import SJTimeline from '../SJTimeline'
+import { downloadSuratJalanPOD } from '../../../infrastructure/repositories/MockSuratJalanRepository'
 
 interface DetailDrawerProps {
   open: boolean
@@ -15,6 +17,37 @@ interface DetailDrawerProps {
 }
 
 export default function DetailDrawer({ open, sj, onClose, onViewDetail, onPrint }: DetailDrawerProps) {
+  const [podPhotoSrc, setPodPhotoSrc] = useState<string | null>(null)
+  const [isLoadingPod, setIsLoadingPod] = useState(false)
+
+  useEffect(() => {
+    if (!open || !sj?.uuid || !sj.pod_photo_path) {
+      setPodPhotoSrc(null)
+      setIsLoadingPod(false)
+      return
+    }
+
+    let objectUrl: string | null = null
+    let cancelled = false
+
+    setIsLoadingPod(true)
+    downloadSuratJalanPOD(sj.uuid)
+      .then(blob => {
+        if (cancelled) return
+        objectUrl = URL.createObjectURL(blob)
+        setPodPhotoSrc(objectUrl)
+      })
+      .catch(() => setPodPhotoSrc(null))
+      .finally(() => {
+        if (!cancelled) setIsLoadingPod(false)
+      })
+
+    return () => {
+      cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [open, sj?.uuid, sj?.pod_photo_path])
+
   if (!open || !sj) return null
 
   const events = [
@@ -42,7 +75,7 @@ export default function DetailDrawer({ open, sj, onClose, onViewDetail, onPrint 
           <div className="rounded-xl bg-gray-50 p-4 text-sm">
             <div className="font-semibold">Informasi Ringkas</div>
             <div className="mt-2 text-xs text-gray-500">Proyek</div>
-            <div className="text-sm">{sj.project?.name || 'Tanpa proyek'}</div>
+            <div className="text-sm">{sj.project?.name || 'Jasa Pengiriman'}</div>
             <div className="mt-2 text-xs text-gray-500">Customer</div>
             <div className="text-sm">{sj.customer.name}</div>
             <div className="mt-2 text-xs text-gray-500">Tanggal SJ</div>
@@ -53,9 +86,15 @@ export default function DetailDrawer({ open, sj, onClose, onViewDetail, onPrint 
 
           <div>
             <div className="text-sm font-semibold mb-2">Foto Bukti Pengiriman</div>
-            {sj.pod_photo_path ? (
+            {isLoadingPod ? (
+              <div className="h-40 rounded-xl bg-gray-100 animate-pulse" />
+            ) : podPhotoSrc ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={sj.pod_photo_path} alt="Bukti Pengiriman" className="w-full rounded-xl" />
+              <img src={podPhotoSrc} alt="Bukti Pengiriman" className="w-full rounded-xl" />
+            ) : sj.pod_photo_path ? (
+              <div className="rounded-xl bg-gray-50 px-4 py-8 text-center text-xs text-gray-400">
+                Foto tidak dapat dimuat
+              </div>
             ) : (
               <div className="text-xs text-gray-500">Belum ada foto bukti pengiriman</div>
             )}

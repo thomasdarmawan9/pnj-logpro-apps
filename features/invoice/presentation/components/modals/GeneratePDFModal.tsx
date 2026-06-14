@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Download, Printer } from 'lucide-react'
 import ModalShell from '../../../../surat-jalan/presentation/components/modals/ModalShell'
 import { Invoice } from '../../../domain/entities/Invoice'
+import { resolveEffectiveInvoiceServiceType } from '../../../domain/services/invoiceServiceType'
 import { downloadPdfJob, generateInvoicePdf, getPdfJob } from '../../../infrastructure/repositories/MockInvoiceRepository'
 
 interface Props {
@@ -20,8 +21,12 @@ export default function GeneratePDFModal({ open, invoice, onClose }: Props) {
   const [copies, setCopies] = useState(3)
   const [copyLabel, setCopyLabel] = useState(false)
 
-  const hasLampiranFoto = (invoice?.lampiran_paths ?? []).filter(p => !p.endsWith('.pdf')).length > 0
-  const canIncludeSJ = invoice?.service_type !== 'rental'
+  const lampiranPaths = invoice?.lampiran_paths ?? []
+  const lampiranPdfCount = lampiranPaths.filter(p => p.toLowerCase().endsWith('.pdf')).length
+  const lampiranFotoCount = lampiranPaths.length - lampiranPdfCount
+  const hasLampiran = lampiranPaths.length > 0
+  const hasAttachedSJ = (invoice?.attached_sj ?? []).length > 0
+  const canIncludeSJ = resolveEffectiveInvoiceServiceType(invoice?.service_type, invoice?.custom_service_name) !== 'rental' && hasAttachedSJ
   const [status, setStatus] = useState<'idle' | 'processing' | 'done' | 'failed'>('idle')
   const [jobUuid, setJobUuid] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -33,12 +38,12 @@ export default function GeneratePDFModal({ open, invoice, onClose }: Props) {
       setError(null)
       setIncludeLogo(true)
       setIncludeSig(true)
-      setIncludeSJ(false)
+      setIncludeSJ(canIncludeSJ)
       setIncludeLampiran(true)
       setCopies(3)
       setCopyLabel(false)
     }
-  }, [open])
+  }, [open, canIncludeSJ])
 
   const handleGenerate = async () => {
     if (!invoice) return
@@ -49,8 +54,8 @@ export default function GeneratePDFModal({ open, invoice, onClose }: Props) {
       const job = await generateInvoicePdf(invoice.uuid, {
         includeLogo,
         includeSig,
-        includeSJ: canIncludeSJ ? includeSJ : false,
-        includeLampiran: hasLampiranFoto ? includeLampiran : false,
+        includeSJ: canIncludeSJ && includeSJ,
+        includeLampiran: hasLampiran ? includeLampiran : false,
         copies,
         copyLabel,
       })
@@ -158,14 +163,17 @@ export default function GeneratePDFModal({ open, invoice, onClose }: Props) {
                     <span className="text-sm text-gray-700">{opt.label}</span>
                   </label>
                 ))}
-                {/* Lampiran foto — hanya tampil jika invoice punya lampiran gambar */}
-                {hasLampiranFoto && (
+                {/* Lampiran invoice — gambar dirender, PDF digabung apa adanya di halaman akhir */}
+                {hasLampiran && (
                   <label className="flex items-center gap-3 cursor-pointer">
                     <input type="checkbox" checked={includeLampiran} onChange={e => setIncludeLampiran(e.target.checked)} className="rounded" />
                     <span className="text-sm text-gray-700">
-                      Sertakan foto lampiran
+                      Sertakan lampiran invoice
                       <span className="text-gray-400 ml-1">
-                        ({(invoice?.lampiran_paths ?? []).filter(p => !p.endsWith('.pdf')).length} foto, halaman terakhir)
+                        ({[
+                          lampiranFotoCount > 0 ? `${lampiranFotoCount} foto` : '',
+                          lampiranPdfCount > 0 ? `${lampiranPdfCount} PDF` : '',
+                        ].filter(Boolean).join(', ')}, halaman terakhir)
                       </span>
                     </span>
                   </label>

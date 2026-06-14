@@ -26,6 +26,88 @@ function calcMargin(grossProfit, revenuePaid) {
   return Math.round((grossProfit / revenuePaid) * 1000) / 10  // 1 decimal place
 }
 
+function makeProjectEntry(project) {
+  return {
+    project_id:        Number(project.id),
+    project_uuid:      project.uuid,
+    project_code:      project.code,
+    project_name:      project.name,
+    contract_number:   project.contract_number || '',
+    customer_id:       Number(project.customer_id),
+    customer_name:     project.customer.name,
+    start_date:        toISODate(project.start_date),
+    end_date:          toISODate(project.end_date),
+    status:            project.status,
+    revenue_invoiced:  0,
+    revenue_paid:      0,
+    invoice_count:            0,
+    invoice_paid_count:       0,
+    invoice_outstanding_count: 0,
+    total_operational_cost:   0,
+    sj_count:                 0,
+    sj_delivered_count:       0,
+    _invoices: [],
+    _sjs:      [],
+  }
+}
+
+function makeCustomerOnlyEntry(customer) {
+  return {
+    project_id:        null,
+    project_uuid:      null,
+    project_code:      '-',
+    project_name:      'Tanpa Proyek',
+    contract_number:   '',
+    customer_id:       Number(customer.id),
+    customer_name:     customer.name,
+    start_date:        null,
+    end_date:          null,
+    status:            'customer_only',
+    revenue_invoiced:  0,
+    revenue_paid:      0,
+    invoice_count:            0,
+    invoice_paid_count:       0,
+    invoice_outstanding_count: 0,
+    total_operational_cost:   0,
+    sj_count:                 0,
+    sj_delivered_count:       0,
+    _invoices: [],
+    _sjs:      [],
+  }
+}
+
+function finalizeEntry(e, includeDetails) {
+  const grossProfit = round2(e.revenue_paid - e.total_operational_cost)
+  const project = {
+    project_id:        e.project_id,
+    project_uuid:      e.project_uuid,
+    project_name:      e.project_name,
+    project_code:      e.project_code,
+    contract_number:   e.contract_number,
+    customer_id:       e.customer_id,
+    customer_name:     e.customer_name,
+    start_date:        e.start_date,
+    end_date:          e.end_date,
+    status:            e.status,
+    revenue_invoiced:  e.revenue_invoiced,
+    revenue_paid:      e.revenue_paid,
+    invoice_count:           e.invoice_count,
+    invoice_paid_count:      e.invoice_paid_count,
+    invoice_outstanding_count: e.invoice_outstanding_count,
+    total_operational_cost:  e.total_operational_cost,
+    sj_count:                e.sj_count,
+    sj_delivered_count:      e.sj_delivered_count,
+    gross_profit:            grossProfit,
+    margin_percent:          calcMargin(grossProfit, e.revenue_paid),
+    profitability:           classifyProfitability(grossProfit, e.revenue_paid),
+  }
+  if (includeDetails) {
+    project.invoices = e._invoices
+    project.sj_list  = e._sjs
+  }
+  return project
+}
+
 /**
  * @param {object} filters
  *   - period_preset, period_from, period_to
@@ -63,14 +145,33 @@ async function getSummary(filters = {}) {
     order: [['code', 'ASC']],
   })
 
-  if (projects.length === 0) {
-    return emptySummary(periodFrom, periodTo)
+  const projectIds = projects.map(p => Number(p.id))
+  const includeCustomerOnly = !filters.project_status || filters.project_status === 'all'
+  const customerOnlyWhere = {}
+  if (filters.customer_id && filters.customer_id !== 'all') {
+    customerOnlyWhere.id = Number(filters.customer_id)
   }
-
-  const projectIds = projects.map(p => p.id)
+  const customerOnlyCustomers = includeCustomerOnly
+    ? await Customer.findAll({
+        where: customerOnlyWhere,
+        attributes: ['id', 'uuid', 'name'],
+        order: [['name', 'ASC']],
+      })
+    : []
+  const customerOnlyIds = customerOnlyCustomers.map(c => Number(c.id))
 
   // Pre-fetch invoices in period (untuk revenue_invoiced + invoice counts).
-  const invoiceWhere = { project_id: { [Op.in]: projectIds } }
+  const invoiceWhere = {}
+  const invoiceOr = []
+  if (projectIds.length > 0) invoiceOr.push({ project_id: { [Op.in]: projectIds } })
+  if (customerOnlyIds.length > 0) {
+    invoiceOr.push({
+      customer_id: { [Op.in]: customerOnlyIds },
+      project_id: null,
+    })
+  }
+  if (invoiceOr.length === 0) return emptySummary(periodFrom, periodTo)
+  invoiceWhere[Op.or] = invoiceOr
   if (periodFrom || periodTo) {
     invoiceWhere.invoice_date = {}
     if (periodFrom) invoiceWhere.invoice_date[Op.gte] = periodFrom
@@ -78,7 +179,7 @@ async function getSummary(filters = {}) {
   }
   const invoices = await Invoice.findAll({
     where: invoiceWhere,
-    attributes: ['id', 'uuid', 'invoice_number', 'project_id', 'total_amount', 'paid_amount', 'status'],
+    attributes: ['id', 'uuid', 'invoice_number', 'project_id', 'customer_id', 'total_amount', 'paid_amount', 'status'],
   })
 
   // Payments in period (untuk revenue_paid).
@@ -88,13 +189,24 @@ async function getSummary(filters = {}) {
     if (periodFrom) paymentWhere.payment_date[Op.gte] = periodFrom
     if (periodTo)   paymentWhere.payment_date[Op.lte] = periodTo
   }
+  const paymentInvoiceOr = []
+  if (projectIds.length > 0) paymentInvoiceOr.push({ project_id: { [Op.in]: projectIds } })
+  if (customerOnlyIds.length > 0) {
+    paymentInvoiceOr.push({
+      customer_id: { [Op.in]: customerOnlyIds },
+      project_id: null,
+    })
+  }
   const payments = await Payment.findAll({
     where: paymentWhere,
     include: [{
       model:      Invoice,
       as:         'invoice',
-      attributes: ['id', 'project_id'],
-      where:      { project_id: { [Op.in]: projectIds } },
+      attributes: ['id', 'project_id', 'customer_id', 'status'],
+      where:      {
+        status: { [Op.ne]: 'void' },
+        [Op.or]: paymentInvoiceOr,
+      },
       required:   true,
     }],
     attributes: ['id', 'amount', 'invoice_id'],
@@ -102,9 +214,17 @@ async function getSummary(filters = {}) {
 
   // SJs in period (untuk operational_cost).
   const sjWhere = {
-    project_id: { [Op.in]: projectIds },
     status:     { [Op.ne]: 'void' },
   }
+  const sjOr = []
+  if (projectIds.length > 0) sjOr.push({ project_id: { [Op.in]: projectIds } })
+  if (customerOnlyIds.length > 0) {
+    sjOr.push({
+      customer_id: { [Op.in]: customerOnlyIds },
+      project_id: null,
+    })
+  }
+  sjWhere[Op.or] = sjOr
   if (periodFrom || periodTo) {
     sjWhere.sj_date = {}
     if (periodFrom) sjWhere.sj_date[Op.gte] = periodFrom
@@ -112,7 +232,7 @@ async function getSummary(filters = {}) {
   }
   const sjs = await DeliveryOrder.findAll({
     where: sjWhere,
-    attributes: ['id', 'uuid', 'sj_number', 'project_id', 'fleet_id', 'driver_id', 'status', 'operational_cost', 'driver_name_manual'],
+    attributes: ['id', 'uuid', 'sj_number', 'project_id', 'customer_id', 'fleet_id', 'driver_id', 'status', 'operational_cost', 'driver_name_manual'],
     include: filters.include_details ? [
       { model: Fleet,  as: 'fleet',  attributes: ['id', 'uuid', 'name', 'plate_number', 'is_tbd'], required: false },
       { model: Driver, as: 'driver', attributes: ['id', 'uuid', 'name'], required: false },
@@ -122,31 +242,24 @@ async function getSummary(filters = {}) {
   // Aggregate per project.
   const byProject = new Map()
   for (const p of projects) {
-    byProject.set(p.id, {
-      project_id:        p.id,
-      project_uuid:      p.uuid,
-      project_code:      p.code,
-      project_name:      p.name,
-      contract_number:   p.contract_number || '',
-      customer_name:     p.customer.name,
-      start_date:        toISODate(p.start_date),
-      end_date:          toISODate(p.end_date),
-      status:            p.status,
-      revenue_invoiced:  0,
-      revenue_paid:      0,
-      invoice_count:            0,
-      invoice_paid_count:       0,
-      invoice_outstanding_count: 0,
-      total_operational_cost:   0,
-      sj_count:                 0,
-      sj_delivered_count:       0,
-      _invoices: [],
-      _sjs:      [],
-    })
+    byProject.set(Number(p.id), makeProjectEntry(p))
+  }
+
+  const byCustomerOnly = new Map()
+  for (const c of customerOnlyCustomers) {
+    byCustomerOnly.set(Number(c.id), makeCustomerOnlyEntry(c))
+  }
+
+  function getEntryForRecord(record) {
+    const projectId = record.project_id ? Number(record.project_id) : null
+    if (projectId && byProject.has(projectId)) return byProject.get(projectId)
+    const customerId = record.customer_id ? Number(record.customer_id) : null
+    if (customerId && byCustomerOnly.has(customerId)) return byCustomerOnly.get(customerId)
+    return null
   }
 
   for (const inv of invoices) {
-    const e = byProject.get(inv.project_id)
+    const e = getEntryForRecord(inv)
     if (!e) continue
     if (inv.status !== 'void') {
       e.revenue_invoiced = round2(e.revenue_invoiced + Number(inv.total_amount))
@@ -165,13 +278,13 @@ async function getSummary(filters = {}) {
   }
 
   for (const pm of payments) {
-    const e = byProject.get(pm.invoice.project_id)
+    const e = getEntryForRecord(pm.invoice)
     if (!e) continue
     e.revenue_paid = round2(e.revenue_paid + Number(pm.amount))
   }
 
   for (const sj of sjs) {
-    const e = byProject.get(sj.project_id)
+    const e = getEntryForRecord(sj)
     if (!e) continue
     e.sj_count += 1
     if (sj.status === 'delivered') e.sj_delivered_count += 1
@@ -193,35 +306,9 @@ async function getSummary(filters = {}) {
   }
 
   // Build final projects array with computed fields.
-  let projectsArr = [...byProject.values()].map(e => {
-    const grossProfit = round2(e.revenue_paid - e.total_operational_cost)
-    const project = {
-      project_id:        e.project_id,
-      project_name:      e.project_name,
-      project_code:      e.project_code,
-      contract_number:   e.contract_number,
-      customer_name:     e.customer_name,
-      start_date:        e.start_date,
-      end_date:          e.end_date,
-      status:            e.status,
-      revenue_invoiced:  e.revenue_invoiced,
-      revenue_paid:      e.revenue_paid,
-      invoice_count:           e.invoice_count,
-      invoice_paid_count:      e.invoice_paid_count,
-      invoice_outstanding_count: e.invoice_outstanding_count,
-      total_operational_cost:  e.total_operational_cost,
-      sj_count:                e.sj_count,
-      sj_delivered_count:      e.sj_delivered_count,
-      gross_profit:            grossProfit,
-      margin_percent:          calcMargin(grossProfit, e.revenue_paid),
-      profitability:           classifyProfitability(grossProfit, e.revenue_paid),
-    }
-    if (filters.include_details) {
-      project.invoices = e._invoices
-      project.sj_list  = e._sjs
-    }
-    return project
-  })
+  let projectsArr = [...byProject.values(), ...byCustomerOnly.values()]
+    .filter(e => e.invoice_count > 0 || e.sj_count > 0 || e.revenue_paid > 0)
+    .map(e => finalizeEntry(e, filters.include_details))
 
   // Apply profitability filter.
   if (filters.profitability && filters.profitability !== 'all') {

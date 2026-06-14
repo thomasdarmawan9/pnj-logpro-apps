@@ -1,4 +1,4 @@
-import { apiDownload, apiRequest } from '@/lib/apiClient'
+import { apiDownload, apiRequest, apiRequestAllPages } from '@/lib/apiClient'
 import { IMasterRepository } from './IMasterRepository'
 import { Customer } from '../../domain/entities/Customer'
 import { Fleet } from '../../domain/entities/Fleet'
@@ -81,10 +81,7 @@ function toNullableNumber(value: ApiId) {
 }
 
 async function listAll<T>(path: string): Promise<T[]> {
-  const response = await apiRequest<T[]>(`${path}${path.includes('?') ? '&' : '?'}page=1&limit=100`, {
-    method: 'GET',
-  })
-  return response.data
+  return apiRequestAllPages<T>(path.replace(/\?$/, ''), { method: 'GET' })
 }
 
 function normalizeCustomer(customer: ApiCustomer, extras?: Partial<Customer>): Customer {

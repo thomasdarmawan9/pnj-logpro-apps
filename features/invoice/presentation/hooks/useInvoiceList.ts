@@ -12,7 +12,7 @@ import { InvoiceFilterState } from '../../domain/entities/Invoice'
 
 export default function useInvoiceList() {
   const dispatch = useDispatch<AppDispatch>()
-  const { list, filters, pagination, isLoading, error } = useSelector((state: RootState) => state.invoice)
+  const { list, summary, filters, pagination, isLoading, error } = useSelector((state: RootState) => state.invoice)
 
   useEffect(() => {
     dispatch(fetchInvoiceList())
@@ -20,6 +20,7 @@ export default function useInvoiceList() {
 
   return {
     list,
+    summary,
     filters,
     pagination,
     isLoading,

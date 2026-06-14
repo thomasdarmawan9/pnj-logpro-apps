@@ -12,7 +12,7 @@ import { ChevronDown, Filter, RefreshCw } from 'lucide-react'
 
 type ModuleFilter = 'all' | 'sj' | 'invoice'
 type StatusFilter = 'all' | 'DELIVERED' | 'ASSIGNED' | 'DRAFT' | 'OUTSTANDING' | 'PAID' | 'VOID'
-type PeriodFilter = 'all' | 'this_month' | 'last_month'
+type PeriodFilter = 'all' | 'this_week' | 'this_month' | 'last_month'
 
 const MODULE_OPTIONS: { value: ModuleFilter; label: string }[] = [
   { value: 'all', label: 'Semua Modul' },
@@ -32,6 +32,7 @@ const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
 
 const PERIOD_OPTIONS: { value: PeriodFilter; label: string }[] = [
   { value: 'all', label: 'Semua Waktu' },
+  { value: 'this_week', label: 'Minggu Ini' },
   { value: 'this_month', label: 'Bulan Ini' },
   { value: 'last_month', label: 'Bulan Lalu' },
 ]

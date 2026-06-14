@@ -12,6 +12,7 @@
 const fs   = require('fs')
 const path = require('path')
 const PDFDocument = require('pdfkit')
+const { PDFDocument: PDFLibDocument } = require('pdf-lib')
 const sharp = require('sharp')
 
 const env  = require('../config/env')
@@ -50,6 +51,41 @@ async function resolveLampiranBuffers(lampiranPaths) {
     .slice(0, 3)
   const results = await Promise.all(imgPaths.map(resolveImageBuffer))
   return results.filter(Boolean)
+}
+
+function resolvePdfLampiranPaths(lampiranPaths) {
+  if (!Array.isArray(lampiranPaths) || lampiranPaths.length === 0) return []
+  return lampiranPaths
+    .filter(p => typeof p === 'string' && p.toLowerCase().endsWith('.pdf'))
+    .map(relPath => {
+      const absPath = path.resolve(env.upload.dir, relPath)
+      const uploadDir = path.resolve(env.upload.dir)
+      if (!absPath.startsWith(uploadDir + path.sep) && absPath !== uploadDir) return null
+      return fs.existsSync(absPath) ? absPath : null
+    })
+    .filter(Boolean)
+}
+
+async function appendPdfAttachments(targetPdfPath, attachmentPaths) {
+  if (!Array.isArray(attachmentPaths) || attachmentPaths.length === 0) return
+
+  const mergedPdf = await PDFLibDocument.load(await fs.promises.readFile(targetPdfPath))
+  let appendedPages = 0
+
+  for (const attachmentPath of attachmentPaths) {
+    try {
+      const attachmentPdf = await PDFLibDocument.load(await fs.promises.readFile(attachmentPath))
+      const copiedPages = await mergedPdf.copyPages(attachmentPdf, attachmentPdf.getPageIndices())
+      copiedPages.forEach(page => mergedPdf.addPage(page))
+      appendedPages += copiedPages.length
+    } catch (err) {
+      logger.warn(`[render] gagal merge lampiran PDF ${attachmentPath}: ${err.message}`)
+    }
+  }
+
+  if (appendedPages > 0) {
+    await fs.promises.writeFile(targetPdfPath, await mergedPdf.save())
+  }
 }
 
 function ensureOutputDir() {
@@ -108,8 +144,12 @@ async function renderPdf(job) {
       }
     } else if (job_type === 'invoice') {
       const lampiranBuffers = await resolveLampiranBuffers(plain.lampiran_paths)
+      const pdfLampiranPaths = resolvePdfLampiranPaths(plain.lampiran_paths)
       if (lampiranBuffers.length > 0) {
         resolvedOptions = { ...resolvedOptions, lampiranBuffers }
+      }
+      if (pdfLampiranPaths.length > 0) {
+        resolvedOptions = { ...resolvedOptions, pdfLampiranPaths }
       }
     }
   }
@@ -154,6 +194,10 @@ async function renderPdf(job) {
 
       doc.end()
     })
+
+    if (job_type === 'invoice' && Array.isArray(resolvedOptions.pdfLampiranPaths)) {
+      await appendPdfAttachments(filePath, resolvedOptions.pdfLampiranPaths)
+    }
 
     return filePath
   } catch (err) {

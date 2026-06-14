@@ -7,15 +7,15 @@ import { fetchAgingARCustomerDetail } from '@/store/slices/reportsSlice'
 
 export function useAgingARCustomerDetail(customerId: number | null) {
   const dispatch = useDispatch<AppDispatch>()
-  const { data, isLoading, error, currentCustomerId } = useSelector(
+  const { data, isLoading, error } = useSelector(
     (state: RootState) => state.reports.agingARCustomerDetail
   )
 
   useEffect(() => {
-    if (customerId !== null && customerId !== currentCustomerId) {
+    if (customerId !== null) {
       dispatch(fetchAgingARCustomerDetail(customerId))
     }
-  }, [customerId, currentCustomerId, dispatch])
+  }, [customerId, dispatch])
 
   return { data, isLoading, error }
 }

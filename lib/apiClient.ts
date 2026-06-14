@@ -8,7 +8,12 @@ export interface ApiEnvelope<T> {
   success: boolean
   message?: string
   data: T
-  meta?: unknown
+  meta?: {
+    total?: number
+    page?: number
+    limit?: number
+    totalPages?: number
+  }
 }
 
 export class ApiError extends Error {
@@ -25,24 +30,55 @@ function isBrowser() {
   return typeof window !== 'undefined'
 }
 
-export function getAccessToken() {
+function readAuthStorage() {
   if (!isBrowser()) return null
-  return window.localStorage.getItem(ACCESS_TOKEN_KEY)
+  if (window.localStorage.getItem(ACCESS_TOKEN_KEY)) {
+    return { storage: window.localStorage, remember: true }
+  }
+  if (window.sessionStorage.getItem(ACCESS_TOKEN_KEY)) {
+    return { storage: window.sessionStorage, remember: false }
+  }
+  return null
 }
 
-export function storeAuthSession(accessToken: string, refreshToken: string, user: unknown) {
+export function getAccessToken() {
+  if (!isBrowser()) return null
+  return readAuthStorage()?.storage.getItem(ACCESS_TOKEN_KEY) ?? null
+}
+
+export function getRefreshToken() {
+  if (!isBrowser()) return null
+  return readAuthStorage()?.storage.getItem(REFRESH_TOKEN_KEY) ?? null
+}
+
+export function isRememberedAuthSession() {
+  return readAuthStorage()?.remember === true
+}
+
+export function storeAuthSession(accessToken: string, refreshToken: string, user: unknown, remember?: boolean) {
   if (!isBrowser()) return
-  window.localStorage.setItem(ACCESS_TOKEN_KEY, accessToken)
-  window.localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken)
-  window.localStorage.setItem(USER_KEY, JSON.stringify(user))
+  const shouldRemember = remember ?? readAuthStorage()?.remember ?? true
+  const target = shouldRemember ? window.localStorage : window.sessionStorage
+  const other = shouldRemember ? window.sessionStorage : window.localStorage
+
+  other.removeItem(ACCESS_TOKEN_KEY)
+  other.removeItem(REFRESH_TOKEN_KEY)
+  other.removeItem(USER_KEY)
+
+  target.setItem(ACCESS_TOKEN_KEY, accessToken)
+  target.setItem(REFRESH_TOKEN_KEY, refreshToken)
+  target.setItem(USER_KEY, JSON.stringify(user))
 }
 
 export function getStoredAuthSession<TUser>() {
   if (!isBrowser()) return null
 
-  const accessToken = window.localStorage.getItem(ACCESS_TOKEN_KEY)
-  const refreshToken = window.localStorage.getItem(REFRESH_TOKEN_KEY)
-  const userText = window.localStorage.getItem(USER_KEY)
+  const authStorage = readAuthStorage()
+  if (!authStorage) return null
+
+  const accessToken = authStorage.storage.getItem(ACCESS_TOKEN_KEY)
+  const refreshToken = authStorage.storage.getItem(REFRESH_TOKEN_KEY)
+  const userText = authStorage.storage.getItem(USER_KEY)
 
   if (!accessToken || !refreshToken || !userText) return null
 
@@ -51,6 +87,7 @@ export function getStoredAuthSession<TUser>() {
       accessToken,
       refreshToken,
       user: JSON.parse(userText) as TUser,
+      remember: authStorage.remember,
     }
   } catch {
     clearAuthSession()
@@ -63,6 +100,9 @@ export function clearAuthSession() {
   window.localStorage.removeItem(ACCESS_TOKEN_KEY)
   window.localStorage.removeItem(REFRESH_TOKEN_KEY)
   window.localStorage.removeItem(USER_KEY)
+  window.sessionStorage.removeItem(ACCESS_TOKEN_KEY)
+  window.sessionStorage.removeItem(REFRESH_TOKEN_KEY)
+  window.sessionStorage.removeItem(USER_KEY)
 }
 
 function forceLogout() {
@@ -94,7 +134,7 @@ async function tryRefreshToken(): Promise<string | null> {
       const newRefresh = data?.data?.refresh_token
       if (!newAccess) return null
 
-      storeAuthSession(newAccess, newRefresh ?? session.refreshToken, session.user)
+      storeAuthSession(newAccess, newRefresh ?? session.refreshToken, session.user, session.remember)
       return newAccess as string
     } catch {
       return null
@@ -162,6 +202,21 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
   }
 
   return payload as ApiEnvelope<T>
+}
+
+export async function apiRequestAllPages<T>(path: string, options: ApiRequestOptions = {}): Promise<T[]> {
+  const pageSize = 100
+  const joiner = path.includes('?') ? '&' : '?'
+  const first = await apiRequest<T[]>(`${path}${joiner}page=1&limit=${pageSize}`, options)
+  const rows = [...first.data]
+  const totalPages = Number(first.meta?.totalPages || 1)
+
+  for (let page = 2; page <= totalPages; page += 1) {
+    const next = await apiRequest<T[]>(`${path}${joiner}page=${page}&limit=${pageSize}`, options)
+    rows.push(...next.data)
+  }
+
+  return rows
 }
 
 export async function apiDownload(path: string, options: RequestInit = {}) {

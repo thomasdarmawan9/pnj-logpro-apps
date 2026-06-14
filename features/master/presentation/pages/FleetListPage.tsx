@@ -12,12 +12,16 @@ import { Fleet, FleetCategory, FleetStatus } from '@/features/master/domain/enti
 import { PendingFleetLampiran } from '../components/FleetLampiranUploadZone'
 import { downloadFleetLampiran, uploadFleetLampiran } from '../../infrastructure/repositories/MockMasterRepository'
 import TablePagination from '../components/TablePagination'
+import { useSelector } from 'react-redux'
+import { RootState } from '@/store'
 
 const ROWS_PER_PAGE = 10
 
 export default function FleetListPage() {
   const { fleets, isLoading, modal, openForm, closeForm, create, update, toggle, completeRental, refresh } = useFleet()
   const { push: pushToast } = useToast()
+  const user = useSelector((s: RootState) => s.auth.user)
+  const canEdit = user?.role === 'super_admin' || user?.role === 'admin_ops'
 
   const [search, setSearch] = useState('')
   const [filterCategory, setFilterCategory] = useState<FleetCategory | 'all'>('all')
@@ -121,9 +125,11 @@ export default function FleetListPage() {
           </nav>
           <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Master Armada</h1>
         </div>
-        <button data-tour="armada-add-btn" onClick={() => openForm(null)} className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: 'var(--green-primary)' }}>
-          <Plus size={15} /> Tambah Armada
-        </button>
+        {canEdit && (
+          <button data-tour="armada-add-btn" onClick={() => openForm(null)} className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: 'var(--green-primary)' }}>
+            <Plus size={15} /> Tambah Armada
+          </button>
+        )}
       </div>
 
       {/* Summary Cards */}
@@ -288,8 +294,8 @@ export default function FleetListPage() {
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    {!f.is_tbd ? (
-                      <div className="flex items-center gap-1">
+	                    {canEdit && !f.is_tbd ? (
+	                      <div className="flex items-center gap-1">
                         <button onClick={() => openForm(f)} className="p-1.5 rounded-lg hover:bg-blue-50" title="Edit">
                           <Pencil size={13} className="text-blue-600" />
                         </button>
@@ -302,8 +308,10 @@ export default function FleetListPage() {
                           <ToggleLeft size={13} className="text-amber-600" />
                         </button>
                       </div>
-                    ) : (
-                      <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Tidak bisa diedit</span>
+	                    ) : !f.is_tbd ? (
+	                      <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Lihat saja</span>
+	                    ) : (
+	                      <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Tidak bisa diedit</span>
                     )}
                   </td>
                 </tr>

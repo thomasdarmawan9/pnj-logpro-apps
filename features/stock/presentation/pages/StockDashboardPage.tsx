@@ -13,6 +13,8 @@ export default function StockDashboardPage() {
   const router = useRouter()
   const dispatch = useDispatch<AppDispatch>()
   const { items, receipts, disbursements, customerSummaries, isLoading } = useSelector((state: RootState) => state.stock)
+  const role = useSelector((state: RootState) => state.auth.user?.role ?? null)
+  const isReadOnly = role === 'admin_finance'
 
   useEffect(() => {
     dispatch(fetchStockItems())
@@ -40,11 +42,10 @@ export default function StockDashboardPage() {
         date: r.receipt_date,
         updatedAt: r.updated_at || r.created_at || r.receipt_date,
         type: 'masuk' as const,
-        number: r.receipt_number,
+        spalNumber: r.document_number ?? '',
         itemName: item.stock_item.name,
         qty: item.qty,
         unit: item.stock_item.unit,
-        reference: r.document_number ?? r.receipt_number,
         sjNumber: null as string | null,
         invoiceNumber: null as string | null,
       }))
@@ -54,11 +55,10 @@ export default function StockDashboardPage() {
       date: d.disbursement_date,
       updatedAt: d.updated_at || d.created_at || d.disbursement_date,
       type: 'keluar' as const,
-      number: d.disbursement_number,
+      spalNumber: '',
       itemName: d.stock_item.name,
       qty: d.qty,
       unit: d.stock_item.unit,
-      reference: d.sj_number_manual ? `SJ ${d.sj_number_manual}` : d.delivery_order?.sj_number || d.disbursement_number,
       sjNumber: d.delivery_order?.sj_number || d.sj_number_manual || null,
       invoiceNumber: d.delivery_order?.invoice?.invoice_number || d.invoice_number_manual || null,
     }))
@@ -74,8 +74,37 @@ export default function StockDashboardPage() {
   // Overview stats
   const totalIn = receipts.flatMap(r => r.items).reduce((s, i) => s + i.qty, 0)
   const totalOut = disbursements.reduce((s, d) => s + d.qty, 0)
-  const activeItems = items.filter(i => i.is_active).length
-  const lowStockItems = items.filter(i => i.peak_stock > 0 && i.current_stock / i.peak_stock < 0.2).length
+  const totalItemTypes = useMemo(() => {
+    const activeItemIds = new Set(items.filter(item => item.is_active).map(item => item.id))
+    const itemTypeKeys = new Set<string>()
+    const itemIdsWithCategory = new Set<number>()
+
+    receipts.forEach(receipt => {
+      receipt.items.forEach(item => {
+        if (!activeItemIds.has(item.stock_item_id)) return
+        const category = item.kategori_name || ''
+        itemTypeKeys.add(`${item.stock_item_id}::${category}`)
+        if (category) itemIdsWithCategory.add(item.stock_item_id)
+      })
+    })
+
+    disbursements.forEach(disbursement => {
+      if (!activeItemIds.has(disbursement.stock_item_id)) return
+      const category = disbursement.kategori_name || ''
+      itemTypeKeys.add(`${disbursement.stock_item_id}::${category}`)
+      if (category) itemIdsWithCategory.add(disbursement.stock_item_id)
+    })
+
+    items.forEach(item => {
+      if (!item.is_active || itemIdsWithCategory.has(item.id)) return
+      itemTypeKeys.add(`${item.id}::`)
+    })
+
+    return itemTypeKeys.size
+  }, [items, receipts, disbursements])
+  const totalRemainingStock = items
+    .filter(i => i.is_active)
+    .reduce((sum, item) => sum + Number(item.current_stock || 0), 0)
 
   const selectedPdfCustomer = customerSummaries.find(customer => customer.customerUuid === selectedPdfCustomerUuid)
 
@@ -123,21 +152,25 @@ export default function StockDashboardPage() {
             <FileBarChart2 size={16} />
             Rekap / Cetak PDF
           </button>
-          <button
-            onClick={() => router.push('/stok/masuk/create')}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-medium"
-            style={{ backgroundColor: 'var(--green-primary)' }}
-          >
-            <PackagePlus size={16} />
-            Stok Masuk
-          </button>
-          <button
-            onClick={() => router.push('/stok/keluar/create')}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-medium bg-red-600"
-          >
-            <PackageMinus size={16} />
-            Stok Keluar
-          </button>
+          {!isReadOnly && (
+            <>
+              <button
+                onClick={() => router.push('/stok/masuk/create')}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-medium"
+                style={{ backgroundColor: 'var(--green-primary)' }}
+              >
+                <PackagePlus size={16} />
+                Stok Masuk
+              </button>
+              <button
+                onClick={() => router.push('/stok/keluar/create')}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-medium bg-red-600"
+              >
+                <PackageMinus size={16} />
+                Stok Keluar
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -146,7 +179,7 @@ export default function StockDashboardPage() {
         <div className="bg-white rounded-xl border shadow-sm p-4" style={{ borderColor: 'var(--border-card)' }}>
           <div className="text-xs text-gray-500 mb-1">Total Jenis Barang</div>
           {isLoading ? <div className="h-8 bg-gray-100 rounded animate-pulse" /> : (
-            <div className="text-2xl font-bold text-gray-900">{activeItems}</div>
+            <div className="text-2xl font-bold text-gray-900">{totalItemTypes}</div>
           )}
         </div>
         <div className="bg-white rounded-xl border shadow-sm p-4" style={{ borderColor: 'var(--border-card)' }}>
@@ -184,10 +217,10 @@ export default function StockDashboardPage() {
           )}
         </div>
         <div className="bg-white rounded-xl border shadow-sm p-4" style={{ borderColor: 'var(--border-card)' }}>
-          <div className="text-xs text-gray-500 mb-1">Stok Rendah</div>
+          <div className="text-xs text-gray-500 mb-1">Total Sisa Stock</div>
           {isLoading ? <div className="h-8 bg-gray-100 rounded animate-pulse" /> : (
-            <div className={`text-2xl font-bold ${lowStockItems > 0 ? 'text-red-600' : 'text-gray-900'}`}>
-              {lowStockItems}
+            <div className="text-2xl font-bold text-gray-900">
+              {totalRemainingStock.toLocaleString('id-ID', { maximumFractionDigits: 2 })}
             </div>
           )}
         </div>
@@ -241,7 +274,7 @@ export default function StockDashboardPage() {
                     <th className="px-4 py-3 text-left font-semibold">Customer</th>
                     <th className="px-4 py-3 text-left font-semibold">Barang</th>
                     <th className="px-4 py-3 text-left font-semibold">Kategori</th>
-                    <th className="px-4 py-3 text-right font-semibold">Saldo</th>
+                    <th className="px-4 py-3 text-right font-semibold">Saldo (sisa stock)</th>
                     <th className="px-4 py-3 text-right font-semibold w-24">Aksi</th>
                   </tr>
                 </thead>
@@ -369,12 +402,12 @@ export default function StockDashboardPage() {
           <table className="min-w-full text-sm">
             <thead className="bg-gray-50 text-xs text-gray-500">
               <tr>
+                <th className="px-4 py-3 text-left">No.</th>
                 <th className="px-4 py-3 text-left">Tanggal</th>
                 <th className="px-4 py-3 text-left">Tipe</th>
-                <th className="px-4 py-3 text-left">Nomor</th>
+                <th className="px-4 py-3 text-left">Nomor SPAL</th>
                 <th className="px-4 py-3 text-left">Barang</th>
                 <th className="px-4 py-3 text-right">Qty</th>
-                <th className="px-4 py-3 text-left">Referensi</th>
                 <th className="px-4 py-3 text-left">SJ</th>
                 <th className="px-4 py-3 text-left">Invoice</th>
               </tr>
@@ -382,6 +415,7 @@ export default function StockDashboardPage() {
             <tbody>
               {recentTransactions.map((txn, idx) => (
                 <tr key={txn.id} className={`border-t ${idx % 2 === 0 ? '' : 'bg-gray-50/50'}`} style={{ borderColor: 'var(--border-card)' }}>
+                  <td className="px-4 py-3 text-gray-500 text-xs">{idx + 1}</td>
                   <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
                     {new Date(txn.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
                   </td>
@@ -393,13 +427,12 @@ export default function StockDashboardPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3 font-mono text-xs text-gray-600" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                    {txn.number}
+                    {txn.spalNumber || '-'}
                   </td>
                   <td className="px-4 py-3 text-gray-800 font-medium">{txn.itemName}</td>
                   <td className={`px-4 py-3 text-right font-bold ${txn.type === 'masuk' ? 'text-green-700' : 'text-red-600'}`}>
                     {txn.type === 'masuk' ? '+' : '-'}{txn.qty} {txn.unit}
                   </td>
-                  <td className="px-4 py-3 text-gray-500 text-xs">{txn.reference}</td>
                   <td className="px-4 py-3 text-gray-600 text-xs font-mono" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{txn.sjNumber || '-'}</td>
                   <td className="px-4 py-3 text-gray-600 text-xs font-mono" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{txn.invoiceNumber || '-'}</td>
                 </tr>
@@ -447,7 +480,7 @@ export default function StockDashboardPage() {
 
               {selectedPdfCustomer && (
                 <div className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600">
-                  {selectedPdfCustomer.totalItemTypes} barang, saldo total {selectedPdfCustomer.totalAsset.toLocaleString('id-ID')}
+                  {selectedPdfCustomer.totalItemTypes} barang, saldo (sisa stock) total {selectedPdfCustomer.totalAsset.toLocaleString('id-ID')}
                 </div>
               )}
             </div>

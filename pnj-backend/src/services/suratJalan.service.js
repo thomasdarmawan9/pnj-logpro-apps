@@ -133,6 +133,54 @@ async function resolveStockLineItems(lines, t) {
   return rows
 }
 
+async function normalizeSJItems(items, t) {
+  if (!Array.isArray(items)) return null
+
+  const stockRefs = items
+    .filter(item => item?.source_type === 'stock' && (item.stock_item_uuid || item.stock_item_id))
+    .map(item => ({
+      uuid: item.stock_item_uuid || null,
+      id:   item.stock_item_id || null,
+    }))
+
+  if (stockRefs.length === 0) return items
+
+  const stockWhere = []
+  const uuids = [...new Set(stockRefs.map(ref => ref.uuid).filter(Boolean))]
+  const ids = [...new Set(stockRefs.map(ref => ref.id).filter(Boolean))]
+  if (uuids.length > 0) stockWhere.push({ uuid: { [Op.in]: uuids } })
+  if (ids.length > 0) stockWhere.push({ id: { [Op.in]: ids } })
+
+  const stockItems = await StockItem.findAll({
+    where:       { [Op.or]: stockWhere },
+    transaction: t,
+    paranoid:    false,
+  })
+
+  const byUuid = new Map(stockItems.map(row => [row.uuid, row]))
+  const byId = new Map(stockItems.map(row => [Number(row.id), row]))
+
+  return items.map((item) => {
+    if (item?.source_type !== 'stock') return item
+
+    const stockItem = item.stock_item_uuid
+      ? byUuid.get(item.stock_item_uuid)
+      : byId.get(Number(item.stock_item_id))
+
+    if (!stockItem) throw new NotFoundError('Stock item tidak ditemukan.')
+
+    return {
+      ...item,
+      description:     stockItem.name,
+      unit:            stockItem.unit || item.unit || 'pcs',
+      stock_item_id:   stockItem.id,
+      stock_item_uuid: stockItem.uuid,
+      stock_item_code: stockItem.code,
+      stock_item_name: stockItem.name,
+    }
+  })
+}
+
 async function getCustomerStockBalance(customerId, stockItemId, kategoriName, t, excludeAutoForDeliveryOrderId = null) {
   const receiptQty = await StockReceiptItem.sum('qty', {
     include: [{
@@ -263,7 +311,7 @@ async function resolveMasters({ project_uuid, project_id, customer_uuid, custome
 async function list(params) {
   const {
     page, limit, search, status, invoice_status,
-    project_uuid, customer_uuid, period, from, to,
+    project_uuid, project_code, customer_uuid, customer_name, uuids, period, from, to,
   } = params
 
   // Resolve UUID → id
@@ -293,7 +341,10 @@ async function list(params) {
     status,
     invoiceStatus: invoice_status,
     projectId,
+    projectCode: project_code,
     customerId,
+    customerName: customer_name,
+    uuids,
     periodRange,
   })
 
@@ -327,6 +378,7 @@ async function create(payload, actor) {
 
     const sjNumber = await generateSJNumber(t)
     const status   = payload.publish ? STATUS.ASSIGNED : STATUS.DRAFT
+    const normalizedItems = await normalizeSJItems(payload.items, t)
 
     const sj = await DeliveryOrder.create({
       sj_number:                 sjNumber,
@@ -339,7 +391,7 @@ async function create(payload, actor) {
       origin:                    payload.origin,
       destination:               payload.destination,
       cargo_description:         payload.cargo_description || null,
-      items:                     Array.isArray(payload.items) ? payload.items : null,
+      items:                     normalizedItems,
       operational_cost:          payload.operational_cost || 0,
       status,
       invoice_attachment_status: 'no_invoice',
@@ -396,10 +448,13 @@ async function update(uuid, payload, actor) {
 
     const passthrough = [
       'driver_name_manual', 'sj_date', 'origin', 'destination',
-      'cargo_description', 'items', 'operational_cost', 'internal_notes',
+      'cargo_description', 'operational_cost', 'internal_notes',
     ]
     for (const k of passthrough) {
       if (k in payload) updates[k] = payload[k]
+    }
+    if ('items' in payload) {
+      updates.items = await normalizeSJItems(payload.items, t)
     }
 
     // lampiran_paths handling — kalau payload kirim array, validasi tiap path

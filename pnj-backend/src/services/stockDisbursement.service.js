@@ -4,11 +4,14 @@ const {
   sequelize,
   StockDisbursement,
   StockItem,
+  StockReceipt,
+  StockReceiptItem,
   Customer,
   DeliveryOrder,
 } = require('../models')
 const repo = require('../repositories/stockDisbursement.repository')
 const {
+  BadRequestError,
   NotFoundError,
   ConflictError,
 } = require('../utils/AppError')
@@ -93,6 +96,53 @@ async function resolveDeliveryOrder(ref, t) {
   return sj
 }
 
+async function getCustomerStockBalance(customerId, stockItemId, kategoriName, t, excludeDisbursementId = null) {
+  const receiptItems = await StockReceiptItem.findAll({
+    where: {
+      stock_item_id: stockItemId,
+      kategori_name: kategoriName || null,
+    },
+    include: [{
+      model:      StockReceipt,
+      as:         'receipt',
+      where:      { customer_id: customerId },
+      required:   true,
+      attributes: [],
+    }],
+    transaction: t,
+  })
+
+  const disbursementWhere = {
+    customer_id:    customerId,
+    stock_item_id:  stockItemId,
+    kategori_name:  kategoriName || null,
+  }
+  if (excludeDisbursementId) {
+    disbursementWhere.id = { [require('sequelize').Op.ne]: excludeDisbursementId }
+  }
+
+  const disbursements = await StockDisbursement.findAll({
+    where:       disbursementWhere,
+    transaction: t,
+  })
+
+  const totalIn = receiptItems.reduce((sum, row) => sum + Number(row.qty || 0), 0)
+  const totalOut = disbursements.reduce((sum, row) => sum + Number(row.qty || 0), 0)
+  return round2(totalIn - totalOut)
+}
+
+async function assertCustomerStockAvailable(customer, stockItem, kategoriName, qty, t, excludeDisbursementId = null) {
+  if (!customer) return
+  const available = await getCustomerStockBalance(customer.id, stockItem.id, kategoriName, t, excludeDisbursementId)
+  if (round2(qty) > available) {
+    const categoryLabel = kategoriName ? ` kategori ${kategoriName}` : ' tanpa kategori'
+    throw new BadRequestError(
+      `Saldo customer ${customer.name} untuk ${stockItem.code}${categoryLabel} tidak mencukupi. ` +
+      `Tersedia: ${available} ${stockItem.unit}, diminta: ${round2(qty)} ${stockItem.unit}.`,
+    )
+  }
+}
+
 // ── LIST & DETAIL ──────────────────────────────────────────────────────────
 async function list(params) {
   const {
@@ -140,9 +190,11 @@ async function create(payload, actor) {
     const stockItem = await resolveStockItem(payload, t)
     const customer  = await resolveCustomer(payload, t)
     const sj        = await resolveDeliveryOrder(payload, t)
+    const qty = round2(payload.qty)
 
     // Subtract stock — block kalau insufficient.
-    await applyStockDelta(stockItem, -round2(payload.qty), t)
+    await assertCustomerStockAvailable(customer, stockItem, payload.kategori_name || null, qty, t)
+    await applyStockDelta(stockItem, -qty, t)
 
     const disbNumber = await generateStockDisbursementNumber(t)
 
@@ -150,7 +202,7 @@ async function create(payload, actor) {
       disbursement_number:   disbNumber,
       disbursement_date:     payload.disbursement_date,
       stock_item_id:         stockItem.id,
-      qty:                   round2(payload.qty),
+      qty,
       kategori_name:         payload.kategori_name || null,
       source_type:           'manual',
       delivery_order_id:     sj?.id || null,
@@ -231,6 +283,19 @@ async function update(uuid, payload, actor) {
     }
 
     const qtyChanged = 'qty' in payload && newQty !== Number(disb.qty)
+    const targetStockItem = stockItemChanged
+      ? newStockItem
+      : await StockItem.findByPk(newStockItemId, { transaction: t, lock: t.LOCK.UPDATE })
+    if (!targetStockItem) {
+      throw new ConflictError('Stock item target tidak dapat di-load.')
+    }
+
+    const targetCustomerId = 'customer_id' in updates ? updates.customer_id : disb.customer_id
+    const targetCustomer = targetCustomerId
+      ? await Customer.findByPk(targetCustomerId, { transaction: t })
+      : null
+    const targetKategoriName = 'kategori_name' in updates ? updates.kategori_name : disb.kategori_name
+    await assertCustomerStockAvailable(targetCustomer, targetStockItem, targetKategoriName || null, newQty, t, disb.id)
 
     if (stockItemChanged || qtyChanged) {
       // Reverse old (add back).
@@ -244,7 +309,6 @@ async function update(uuid, payload, actor) {
       await applyStockDelta(oldStockItem, +Number(disb.qty), t)
 
       // Apply new (subtract).
-      const targetStockItem = stockItemChanged ? newStockItem : oldStockItem
       await applyStockDelta(targetStockItem, -newQty, t)
 
       if (qtyChanged) updates.qty = newQty

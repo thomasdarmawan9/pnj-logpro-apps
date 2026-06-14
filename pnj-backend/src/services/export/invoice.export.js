@@ -14,6 +14,7 @@ const STATUS_LABEL = {
 const SERVICE_TYPE_LABEL = {
   delivery: 'Jasa Pengiriman',
   rental:   'Jasa Penyewaan',
+  other:    'Jasa Lainnya',
 }
 
 async function exportXlsx(filters, res) {
@@ -60,7 +61,9 @@ async function exportXlsx(filters, res) {
       invoice_number: inv.invoice_number,
       invoice_date:   inv.invoice_date ? new Date(inv.invoice_date) : null,
       due_date:       inv.due_date ? new Date(inv.due_date) : null,
-      service_type:   SERVICE_TYPE_LABEL[inv.service_type] || SERVICE_TYPE_LABEL.delivery,
+      service_type:   inv.service_type === 'other'
+        ? inv.custom_service_name || SERVICE_TYPE_LABEL.other
+        : SERVICE_TYPE_LABEL[inv.service_type] || SERVICE_TYPE_LABEL.delivery,
       customer:       inv.customer?.name || '-',
       project:        inv.project?.code || '-',
       subtotal:       Number(inv.subtotal_amount || 0),

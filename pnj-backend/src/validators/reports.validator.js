@@ -49,26 +49,6 @@ const profitLossQuery = Joi.object({
   return val
 }).messages({ 'any.custom': '{{#message}}' })
 
-// ── Fleet Utilization ──────────────────────────────────────────────────────
-const PERIOD_PRESETS_UTIL = ['this_month', 'last_month', 'custom']
-const FLEET_CATEGORIES    = ['all', 'truck', 'trailer', 'family_car', 'heavy_equipment', 'other']
-const FLEET_STATUSES      = ['all', 'active', 'inactive', 'repair', 'sold']
-
-const fleetUtilizationQuery = Joi.object({
-  period_preset: Joi.string().valid(...PERIOD_PRESETS_UTIL).default('this_month'),
-  period_from:   Joi.date().iso(),
-  period_to:     Joi.date().iso(),
-  category:      Joi.string().valid(...FLEET_CATEGORIES).default('all'),
-  status:        Joi.string().valid(...FLEET_STATUSES).default('all'),
-}).custom((val, helpers) => {
-  if (val.period_preset === 'custom' && (!val.period_from || !val.period_to)) {
-    return helpers.error('any.custom', {
-      message: 'period_from dan period_to wajib diisi untuk preset custom.',
-    })
-  }
-  return val
-}).messages({ 'any.custom': '{{#message}}' })
-
 // ── Audit Trail ────────────────────────────────────────────────────────────
 const PERIOD_PRESETS_AT = ['today', 'yesterday', 'this_week', 'this_month', 'all', 'custom']
 const AUDIT_MODULES     = ['all', 'surat_jalan', 'invoice', 'stok', 'auth', 'master', 'settings']
@@ -84,6 +64,7 @@ const AUDIT_ACTIONS = [
   // Stock
   'stock_in', 'stock_out', 'update_stock_receipt', 'delete_stock_receipt',
   'update_stock_disbursement', 'delete_stock_disbursement',
+  'adjust_customer_stock_balance',
   // Auth
   'login', 'logout', 'change_password',
   // User management
@@ -126,15 +107,11 @@ module.exports = {
   PERIOD_PRESETS_PL,
   PROFITABILITY,
   PROJECT_STATUSES,
-  PERIOD_PRESETS_UTIL,
-  FLEET_CATEGORIES,
-  FLEET_STATUSES,
   PERIOD_PRESETS_AT,
   AUDIT_MODULES,
   AUDIT_ACTIONS,
   agingARQuery,
   agingARIdParam,
   profitLossQuery,
-  fleetUtilizationQuery,
   auditTrailQuery,
 }

@@ -17,7 +17,8 @@ export enum InvoiceStatus {
   VOID        = 'void',
 }
 
-export type InvoiceServiceType = 'delivery' | 'rental'
+export type InvoiceServiceType = 'delivery' | 'rental' | 'other'
+export type DeliveryPricingMode = 'shipment' | 'item'
 
 export interface InvoiceItem {
   id?: number
@@ -29,12 +30,27 @@ export interface InvoiceItem {
     name: string
     plate_number: string
   } | null
+  driver_id?: number | null
+  driver?: {
+    id: number
+    name: string
+  } | null
+  driver_name_manual?: string | null
   fleet_label: string
   description: string | null
   period_start: string | null
   period_end: string | null
+  rental_duration_years?: number
+  rental_duration_months?: number
+  rental_duration_days?: number
+  rental_duration_hours?: number
   qty: number
   unit: string
+  cargo_qty?: number | null
+  cargo_unit?: string | null
+  cargo_weight?: number | null
+  cargo_volume?: number | null
+  cargo_notes?: string | null
   unit_price: number
   subtotal: number
   sort_order: number
@@ -106,6 +122,8 @@ export interface Invoice {
   invoice_date: string
   due_date: string
   service_type: InvoiceServiceType
+  custom_service_name?: string | null
+  delivery_pricing_mode: DeliveryPricingMode
   items: InvoiceItem[]
   subtotal_amount: number
   tax_percent: number
@@ -132,6 +150,10 @@ export interface Invoice {
   } | null
   status: InvoiceStatus
   notes: string | null
+  origin?: string | null
+  destination?: string | null
+  cargo_description?: string | null
+  manual_sj_numbers?: string | null
   sent_at: string | null
   void_reason: string | null
   lampiran_paths: string[] | null
@@ -154,6 +176,15 @@ export interface PaginationState {
   page: number
   perPage: number
   total: number
+}
+
+export interface InvoiceSummaryStats {
+  totalPiutang: number
+  jatuhTempo: number
+  terbayarBulanIni: number
+  draftBelumDikirim: number
+  countOutstanding: number
+  countPaidThisMonth: number
 }
 
 export const INVOICE_TRANSITIONS: Record<string, InvoiceStatus[]> = {

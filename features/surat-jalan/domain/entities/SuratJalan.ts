@@ -3,7 +3,8 @@ export interface SJItem {
   description: string
   qty: number
   unit: string
-  unit_price: number
+  weight?: number | null
+  volume?: number | null
   notes: string
   source_type?: 'manual' | 'stock'
   stock_item_id?: number | null

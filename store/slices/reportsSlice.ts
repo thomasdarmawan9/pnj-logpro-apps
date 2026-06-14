@@ -29,7 +29,9 @@ export interface AuditTrailFilterState {
   search: string
   module: string
   action: string
-  periodPreset: 'today' | 'yesterday' | 'this_week' | 'this_month' | 'custom'
+  periodPreset: 'today' | 'yesterday' | 'this_week' | 'this_month' | 'all' | 'custom'
+  periodFrom: string
+  periodTo: string
 }
 
 export interface PaginationState {
@@ -116,7 +118,7 @@ const initialState: ReportsState = {
   },
   auditTrail: {
     logs: [],
-    filters: { search: '', module: 'all', action: 'all', periodPreset: 'today' },
+    filters: { search: '', module: 'all', action: 'all', periodPreset: 'today', periodFrom: today, periodTo: today },
     pagination: { page: 1, perPage: 25, total: 0 },
     isLoading: false,
   },

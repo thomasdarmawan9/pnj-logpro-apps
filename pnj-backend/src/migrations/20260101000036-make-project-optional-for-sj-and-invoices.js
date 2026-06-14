@@ -9,6 +9,9 @@ module.exports = {
       onUpdate:   'CASCADE',
       onDelete:   'RESTRICT',
     })
+    await queryInterface.sequelize.query(
+      'ALTER TABLE delivery_orders ALTER COLUMN project_id DROP NOT NULL;'
+    )
 
     await queryInterface.changeColumn('invoices', 'project_id', {
       type:       Sequelize.BIGINT,
@@ -17,6 +20,9 @@ module.exports = {
       onUpdate:   'CASCADE',
       onDelete:   'RESTRICT',
     })
+    await queryInterface.sequelize.query(
+      'ALTER TABLE invoices ALTER COLUMN project_id DROP NOT NULL;'
+    )
   },
 
   async down(queryInterface, Sequelize) {

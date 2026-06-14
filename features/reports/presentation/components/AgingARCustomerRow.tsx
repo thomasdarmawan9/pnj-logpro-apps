@@ -36,13 +36,13 @@ export default function AgingARCustomerRow({ customer, index }: AgingARCustomerR
 
   const unpaidInvoices = customer.invoices.filter(inv => inv.remaining_amount > 0)
   const paidInvoices = customer.invoices.filter(inv => inv.remaining_amount <= 0 || inv.paid_amount >= inv.total_amount)
-  const belumJatuhTempo = unpaidInvoices
+  const belumJatuhTempo = customer.not_due_amount ?? unpaidInvoices
     .filter(inv => inv.aging_bucket === AgingBucket.CURRENT)
     .reduce((sum, inv) => sum + inv.remaining_amount, 0)
-  const sudahJatuhTempo = unpaidInvoices
+  const sudahJatuhTempo = customer.overdue_amount ?? unpaidInvoices
     .filter(inv => inv.aging_bucket !== AgingBucket.CURRENT)
     .reduce((sum, inv) => sum + inv.remaining_amount, 0)
-  const sudahLunas = paidInvoices.reduce((sum, inv) => sum + inv.total_amount, 0)
+  const sudahLunas = customer.fully_paid_amount ?? paidInvoices.reduce((sum, inv) => sum + inv.total_amount, 0)
 
   const rowBg =
     customer.oldest_invoice_days > 90 ? '#FEE2E2' :
@@ -155,19 +155,35 @@ export default function AgingARCustomerRow({ customer, index }: AgingARCustomerR
                           ↳ #{inv.invoice_number}
                         </td>
                         <td className="px-3 py-2">
-                          <a
-                            href={`/laporan/aging-ar/detail?project_id=${inv.project_id}`}
-                            className="flex items-center gap-1 group w-fit"
-                            onClick={e => e.stopPropagation()}
-                          >
-                            <span
-                              className="truncate max-w-40 text-xs font-medium group-hover:underline"
-                              style={{ color: 'var(--green-primary)' }}
+                          {inv.project_id ? (
+                            <a
+                              href={`/laporan/aging-ar/detail?project_id=${inv.project_id}`}
+                              className="flex items-center gap-1 group w-fit"
+                              onClick={e => e.stopPropagation()}
                             >
-                              {inv.project_name}
-                            </span>
-                            <ExternalLink size={10} style={{ color: 'var(--green-primary)', flexShrink: 0 }} />
-                          </a>
+                              <span
+                                className="truncate max-w-40 text-xs font-medium group-hover:underline"
+                                style={{ color: 'var(--green-primary)' }}
+                              >
+                                {inv.project_name}
+                              </span>
+                              <ExternalLink size={10} style={{ color: 'var(--green-primary)', flexShrink: 0 }} />
+                            </a>
+                          ) : (
+                            <a
+                              href={`/laporan/aging-ar/detail?customer_id=${customer.customer_id}&scope=non_project`}
+                              className="flex items-center gap-1 group w-fit"
+                              onClick={e => e.stopPropagation()}
+                            >
+                              <span
+                                className="truncate max-w-40 text-xs font-medium group-hover:underline"
+                                style={{ color: 'var(--green-primary)' }}
+                              >
+                                {inv.project_name || 'Proyek Customer'}
+                              </span>
+                              <ExternalLink size={10} style={{ color: 'var(--green-primary)', flexShrink: 0 }} />
+                            </a>
+                          )}
                           <div className="font-mono text-[10px]" style={{ color: 'var(--text-secondary)' }}>{inv.contract_number}</div>
                         </td>
                         <td className="px-3 py-2" style={{ color: 'var(--text-secondary)' }}>{formatDate(inv.invoice_date)}</td>

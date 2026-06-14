@@ -112,9 +112,10 @@ export default function CompanyProfilePage() {
 
   const [form, setForm] = useState<CompanyProfile | null>(null)
   const [deletingUuid, setDeletingUuid] = useState<string | null>(null)
+  const isReadOnly = currentUser?.role === 'admin_finance'
 
   useEffect(() => {
-    if (currentUser && currentUser.role !== 'super_admin') router.replace('/dashboard')
+    if (currentUser && !['super_admin', 'admin_finance'].includes(currentUser.role)) router.replace('/dashboard')
   }, [currentUser, router])
 
   useEffect(() => { dispatch(fetchCompanyProfile()); dispatch(fetchBankAccounts()) }, [dispatch])
@@ -123,7 +124,7 @@ export default function CompanyProfilePage() {
     if (company && !form) setForm({ ...company })
   }, [company, form])
 
-  if (currentUser && currentUser.role !== 'super_admin') return null
+  if (currentUser && !['super_admin', 'admin_finance'].includes(currentUser.role)) return null
   if (!form) return (
     <div className="flex items-center justify-center py-32">
       <div className="w-6 h-6 rounded-full border-2 animate-spin" style={{ borderColor: 'var(--green-primary)', borderTopColor: 'transparent' }} />
@@ -236,13 +237,15 @@ export default function CompanyProfilePage() {
                 <Landmark size={15} style={{ color: 'var(--green-primary)' }} />
                 <h3 className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>Rekening Bank</h3>
               </div>
-              <button
-                onClick={() => dispatch(openBankForm(null))}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white"
-                style={{ backgroundColor: 'var(--green-primary)' }}
-              >
-                <Plus size={13} /> Tambah Rekening
-              </button>
+              {!isReadOnly && (
+                <button
+                  onClick={() => dispatch(openBankForm(null))}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white"
+                  style={{ backgroundColor: 'var(--green-primary)' }}
+                >
+                  <Plus size={13} /> Tambah Rekening
+                </button>
+              )}
             </div>
 
             {bankAccounts.length === 0 ? (
@@ -268,7 +271,7 @@ export default function CompanyProfilePage() {
                         {bank.account_number} · a.n. {bank.account_holder}
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 shrink-0">
+                    {!isReadOnly && <div className="flex items-center gap-1 shrink-0">
                       <button
                         onClick={() => dispatch(openBankForm(bank))}
                         className="p-1.5 rounded-lg hover:bg-gray-100"
@@ -284,7 +287,7 @@ export default function CompanyProfilePage() {
                       >
                         <Trash2 size={13} style={{ color: '#EF4444' }} />
                       </button>
-                    </div>
+                    </div>}
                   </div>
                 ))}
               </div>
@@ -364,7 +367,7 @@ export default function CompanyProfilePage() {
       </div>
 
       {/* Action Bar */}
-      <div className="flex justify-end gap-3 p-4 rounded-2xl" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-card)' }}>
+      {!isReadOnly && <div className="flex justify-end gap-3 p-4 rounded-2xl" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-card)' }}>
         <button
           onClick={() => company && setForm({ ...company })}
           className="px-4 py-2 rounded-xl text-sm font-medium"
@@ -380,7 +383,7 @@ export default function CompanyProfilePage() {
         >
           {isSaving ? 'Menyimpan...' : 'Simpan Profil Perusahaan'}
         </button>
-      </div>
+      </div>}
     </div>
   )
 }

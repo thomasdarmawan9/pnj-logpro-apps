@@ -8,6 +8,7 @@ const {
   Project,
   Customer,
   Fleet,
+  Driver,
   DeliveryOrder,
 } = require('../models')
 const repo = require('../repositories/invoice.repository')
@@ -27,6 +28,13 @@ const STATUS = {
   PAID:        'paid',
   VOID:        'void',
 }
+
+const DELIVERY_PRICING_MODE = {
+  SHIPMENT: 'shipment',
+  ITEM:     'item',
+}
+
+const DELIVERY_ADDITIONAL_CHARGE_LABEL = 'Pembiayaan Lainnya'
 
 const ALLOWED_TRANSITIONS = {
   [STATUS.DRAFT]:       [STATUS.SENT, STATUS.OUTSTANDING, STATUS.VOID],
@@ -108,6 +116,23 @@ function fleetStatusLabel(status) {
   }[status] || status
 }
 
+function driverStatusLabel(status) {
+  return {
+    active:   'aktif',
+    inactive: 'tidak aktif',
+  }[status] || status
+}
+
+function effectiveServiceType(serviceType, customServiceName) {
+  if (serviceType === 'rental') return 'rental'
+  if (serviceType === 'other') {
+    const name = String(customServiceName || '').toLowerCase()
+    if (name.includes('penyewaan') || name.includes('sewa')) return 'rental'
+    if (name.includes('pengiriman')) return 'delivery'
+  }
+  return 'delivery'
+}
+
 /**
  * Decorate Invoice response — pisahkan DP dari payments biasa supaya FE
  * gampang render section terpisah. Tambah field turunan:
@@ -128,6 +153,10 @@ function decorate(row) {
   const total = round2(plain.total_amount || 0)
   const paid  = round2(plain.paid_amount  || 0)
 
+  plain.delivery_pricing_mode = resolveDeliveryPricingMode(
+    effectiveServiceType(plain.service_type || 'delivery', plain.custom_service_name),
+    plain.delivery_pricing_mode,
+  )
   plain.down_payment        = dpRow
   plain.down_payment_amount = dpRow ? round2(dpRow.amount) : 0
   plain.has_down_payment    = !!dpRow
@@ -171,11 +200,55 @@ async function resolveBillingScope(payload, t) {
 function assertRentalItemsUseFleet(items, serviceType) {
   if (serviceType !== 'rental') return
 
+  if (!Array.isArray(items) || items.length === 0) {
+    throw new BadRequestError('Minimal 1 rincian item wajib diisi untuk invoice penyewaan.')
+  }
+
   items.forEach((item, idx) => {
     if (!item.fleet_uuid && !item.fleet_id) {
       throw new BadRequestError(`Item penyewaan baris ${idx + 1} wajib memilih armada aktif dari master.`)
     }
   })
+}
+
+function resolveDeliveryPricingMode(serviceType, mode) {
+  if (serviceType === 'rental') return DELIVERY_PRICING_MODE.SHIPMENT
+  return mode || DELIVERY_PRICING_MODE.SHIPMENT
+}
+
+function isDeliveryAdditionalChargeItem(item) {
+  return item.fleet_label === DELIVERY_ADDITIONAL_CHARGE_LABEL &&
+    Number(item.unit_price || 0) > 0 &&
+    (item.cargo_qty === null || item.cargo_qty === undefined)
+}
+
+function assertDeliveryItemPricing(items, serviceType, deliveryPricingMode) {
+  if (serviceType === 'rental') return
+
+  const billableItems = (items || []).filter(item => !isDeliveryAdditionalChargeItem(item))
+  if (billableItems.length === 0) {
+    if (deliveryPricingMode === DELIVERY_PRICING_MODE.ITEM) {
+      throw new BadRequestError('Minimal 1 rincian barang/muatan wajib diisi untuk mode harga per barang.')
+    }
+    return
+  }
+
+  if (deliveryPricingMode === DELIVERY_PRICING_MODE.ITEM) {
+    billableItems.forEach((item, idx) => {
+      if (Number(item.qty || 0) <= 0) {
+        throw new BadRequestError(`Qty harga barang baris ${idx + 1} wajib lebih dari 0.`)
+      }
+      if (Number(item.unit_price || 0) <= 0) {
+        throw new BadRequestError(`Harga barang baris ${idx + 1} wajib diisi untuk mode harga per barang.`)
+      }
+    })
+    return
+  }
+
+  const hasShipmentPrice = billableItems.some(item => Number(item.qty || 0) > 0 && Number(item.unit_price || 0) > 0)
+  if (!hasShipmentPrice) {
+    throw new BadRequestError('Harga pengiriman wajib diisi.')
+  }
 }
 
 /**
@@ -222,7 +295,46 @@ async function resolveItemFleets(items, t) {
   return { byUuid, byId }
 }
 
-function buildItemRows(items, invoiceId, fleetMap) {
+async function resolveItemDrivers(items, t) {
+  const uuids = [...new Set(items.map(i => i.driver_uuid).filter(Boolean))]
+  const ids   = [...new Set(items.map(i => i.driver_id).filter(Boolean))]
+  if (uuids.length === 0 && ids.length === 0) return { byUuid: new Map(), byId: new Map() }
+
+  const where = {}
+  if (uuids.length > 0 && ids.length > 0) {
+    where[require('sequelize').Op.or] = [{ uuid: uuids }, { id: ids }]
+  } else if (uuids.length > 0) {
+    where.uuid = uuids
+  } else {
+    where.id = ids
+  }
+
+  const drivers = await Driver.findAll({
+    where,
+    attributes: ['id', 'uuid', 'status', 'name'],
+    transaction: t,
+  })
+  const byUuid = new Map(drivers.map(d => [d.uuid, d.id]))
+  const byId   = new Map(drivers.map(d => [Number(d.id), d.id]))
+  for (const u of uuids) {
+    if (!byUuid.has(u)) {
+      throw new NotFoundError(`Supir dengan uuid ${u} tidak ditemukan.`)
+    }
+  }
+  for (const id of ids) {
+    if (!byId.has(Number(id))) {
+      throw new NotFoundError(`Supir dengan id ${id} tidak ditemukan.`)
+    }
+  }
+  for (const driver of drivers) {
+    if (driver.status !== 'active') {
+      throw new BadRequestError(`Supir ${driver.name || driver.id} berstatus ${driverStatusLabel(driver.status)} dan tidak dapat dipakai pada invoice.`)
+    }
+  }
+  return { byUuid, byId }
+}
+
+function buildItemRows(items, invoiceId, fleetMap, driverMap) {
   return items.map((it) => {
     const qty       = Number(it.qty)
     const unitPrice = Number(it.unit_price)
@@ -233,17 +345,113 @@ function buildItemRows(items, invoiceId, fleetMap) {
         : it.fleet_id
           ? fleetMap.byId.get(Number(it.fleet_id))
           : null,
+      driver_id:     it.driver_uuid
+        ? driverMap.byUuid.get(it.driver_uuid)
+        : it.driver_id
+          ? driverMap.byId.get(Number(it.driver_id))
+          : null,
+      driver_name_manual: it.driver_name_manual || null,
       fleet_label:   it.fleet_label,
       description:   it.description || null,
       period_start:  it.period_start || null,
       period_end:    it.period_end   || null,
+      rental_duration_years:  Number(it.rental_duration_years || 0),
+      rental_duration_months: Number(it.rental_duration_months || 0),
+      rental_duration_days:   Number(it.rental_duration_days || 0),
+      rental_duration_hours:  Number(it.rental_duration_hours || 0),
       qty,
       unit:          it.unit || 'Unit',
+      cargo_qty:     it.cargo_qty === null || it.cargo_qty === undefined ? null : Number(it.cargo_qty),
+      cargo_unit:    it.cargo_unit || null,
+      cargo_weight:  it.cargo_weight === null || it.cargo_weight === undefined ? null : Number(it.cargo_weight),
+      cargo_volume:  it.cargo_volume === null || it.cargo_volume === undefined ? null : Number(it.cargo_volume),
+      cargo_notes:   it.cargo_notes || null,
       unit_price:    unitPrice,
       subtotal:      round2(qty * unitPrice),
       sort_order:    it.sort_order ?? 0,
+      source_sj_id:  it.source_sj_id ?? null,
     }
   })
+}
+
+function groupRowsBySourceSj(rows) {
+  return rows.reduce((acc, row) => {
+    if (!row.source_sj_id) return acc
+    const key = Number(row.source_sj_id)
+    if (!acc.has(key)) acc.set(key, [])
+    acc.get(key).push(row)
+    return acc
+  }, new Map())
+}
+
+async function getLockedDeliveryOrder(id, cache, transaction) {
+  if (cache.has(id)) return cache.get(id)
+  const sj = await DeliveryOrder.findByPk(id, { transaction, lock: transaction.LOCK.UPDATE })
+  if (!sj) throw new BadRequestError('SJ sumber item invoice tidak ditemukan.')
+  cache.set(id, sj)
+  return sj
+}
+
+async function syncSourceSjItem(existingItem, sourceRows, payloadItem, sjCache, transaction) {
+  if (!existingItem?.source_sj_id) return
+
+  const sourceSjId = Number(existingItem.source_sj_id)
+  const rowsFromSameSj = sourceRows.get(sourceSjId) || []
+  const sourceIndex = rowsFromSameSj.findIndex(row => row.uuid === existingItem.uuid)
+  if (sourceIndex < 0) {
+    throw new BadRequestError('Urutan item sumber SJ tidak dapat dipetakan.')
+  }
+
+  const sj = await getLockedDeliveryOrder(sourceSjId, sjCache, transaction)
+  const sjItems = Array.isArray(sj.items) ? [...sj.items] : []
+  const current = sjItems[sourceIndex] || {}
+  sjItems[sourceIndex] = {
+    ...current,
+    description: payloadItem.description || '',
+    qty:         payloadItem.cargo_qty === null || payloadItem.cargo_qty === undefined
+      ? Number(payloadItem.qty)
+      : Number(payloadItem.cargo_qty),
+    unit:        payloadItem.cargo_unit || current.unit || 'Unit',
+    weight:      payloadItem.cargo_weight === null || payloadItem.cargo_weight === undefined ? null : Number(payloadItem.cargo_weight),
+    volume:      payloadItem.cargo_volume === null || payloadItem.cargo_volume === undefined ? null : Number(payloadItem.cargo_volume),
+    notes:       payloadItem.cargo_notes || current.notes || '',
+  }
+  await sj.update({ items: sjItems }, { transaction })
+}
+
+async function replaceInvoiceItems(invoice, payloadItems, transaction) {
+  assertRentalItemsUseFleet(payloadItems, effectiveServiceType(invoice.service_type, invoice.custom_service_name))
+  const fleetMap = await resolveItemFleets(payloadItems, transaction)
+  const driverMap = await resolveItemDrivers(payloadItems, transaction)
+  const existingItems = await InvoiceItem.findAll({
+    where:       { invoice_id: invoice.id },
+    order:       [['sort_order', 'ASC'], ['id', 'ASC']],
+    transaction,
+  })
+  const existingByUuid = new Map(existingItems.map(item => [item.uuid, item]))
+  const sourceRows = groupRowsBySourceSj(existingItems)
+  const sjCache = new Map()
+
+  const normalizedItems = []
+  for (const [idx, payloadItem] of payloadItems.entries()) {
+    const existingItem = payloadItem.uuid ? existingByUuid.get(payloadItem.uuid) : null
+    const sourceSjId = existingItem?.source_sj_id ? Number(existingItem.source_sj_id) : null
+
+    if (sourceSjId) {
+      await syncSourceSjItem(existingItem, sourceRows, payloadItem, sjCache, transaction)
+    }
+
+    normalizedItems.push({
+      ...payloadItem,
+      sort_order:   idx,
+      source_sj_id: sourceSjId,
+    })
+  }
+
+  await InvoiceItem.destroy({ where: { invoice_id: invoice.id }, transaction })
+  const itemRows = buildItemRows(normalizedItems, invoice.id, fleetMap, driverMap)
+  await InvoiceItem.bulkCreate(itemRows, { transaction })
+  return itemRows
 }
 
 function sameBillingScope(invoice, sj) {
@@ -269,17 +477,25 @@ function buildSJItemRows(sj, invoiceId, startOrder) {
     : `${sj.fleet.name} (${sj.fleet.plate_number})`
 
   return items.map((item, i) => {
-    const qty       = Number(item.qty)       || 1
-    const unitPrice = Number(item.unit_price) || 0
+    const cargoQty  = Number(item.qty) || 1
+    const qty       = 1
+    const unitPrice = 0
     return {
       invoice_id:   invoiceId,
       fleet_id:     fleetIsTbd ? null : sj.fleet_id,
+      driver_id:    sj.driver_id || null,
+      driver_name_manual: sj.driver_name_manual || null,
       fleet_label:  fleetLabel,
       description:  item.description || null,
       period_start: null,
       period_end:   null,
       qty,
-      unit:         item.unit || 'Unit',
+      unit:         'unit',
+      cargo_qty:    cargoQty,
+      cargo_unit:   item.unit || null,
+      cargo_weight: item.weight === null || item.weight === undefined ? null : Number(item.weight),
+      cargo_volume: item.volume === null || item.volume === undefined ? null : Number(item.volume),
+      cargo_notes:  item.notes || null,
       unit_price:   unitPrice,
       subtotal:     round2(qty * unitPrice),
       sort_order:   startOrder + i,
@@ -351,6 +567,10 @@ async function list(params) {
       const plain = r.get ? r.get({ plain: true }) : r
       const total = round2(plain.total_amount || 0)
       const paid  = round2(plain.paid_amount  || 0)
+      plain.delivery_pricing_mode = resolveDeliveryPricingMode(
+        effectiveServiceType(plain.service_type || 'delivery', plain.custom_service_name),
+        plain.delivery_pricing_mode,
+      )
       plain.remaining_amount = round2(Math.max(0, total - paid))
       plain.has_down_payment = dpInvoiceIds.has(Number(plain.id))
       return plain
@@ -415,6 +635,15 @@ async function upsertDownPayment(invoice, dp, actor, t) {
 
   // Upsert DP.
   const dpAmount = round2(dp.amount)
+  const total = round2(invoice.total_amount || 0)
+  const nextPaid = round2(regularPaid + dpAmount)
+
+  if (nextPaid > total + 0.001) {
+    throw new BadRequestError(
+      `Nominal DP melebihi sisa tagihan setelah pembayaran tercatat (Rp ${Math.max(0, total - regularPaid).toLocaleString('id-ID')}).`,
+      { code: 'DOWN_PAYMENT_EXCEEDS_REMAINING' },
+    )
+  }
 
   if (existing) {
     await existing.update({
@@ -438,7 +667,7 @@ async function upsertDownPayment(invoice, dp, actor, t) {
   }
 
   // Recompute paid_amount = regular + DP.
-  const newPaid = round2(regularPaid + dpAmount)
+  const newPaid = nextPaid
   const updates = { paid_amount: newPaid }
   if (invoice.status === STATUS.PAID && newPaid < round2(invoice.total_amount || 0)) {
     updates.status = STATUS.OUTSTANDING
@@ -450,9 +679,19 @@ async function upsertDownPayment(invoice, dp, actor, t) {
 async function create(payload, actor) {
   return sequelize.transaction(async (t) => {
     const scope = await resolveBillingScope(payload, t)
+    const serviceType = payload.service_type || 'delivery'
+    const customServiceName = serviceType === 'other' ? payload.custom_service_name || null : null
+    const effectiveType = effectiveServiceType(serviceType, customServiceName)
+    const deliveryPricingMode = resolveDeliveryPricingMode(effectiveType, payload.delivery_pricing_mode)
+    const linkedSjUuids = effectiveType === 'rental' ? [] : [...new Set(payload.linked_sj_uuids || [])]
 
-    assertRentalItemsUseFleet(payload.items, payload.service_type || 'delivery')
+    assertRentalItemsUseFleet(payload.items, effectiveType)
+    assertDeliveryItemPricing(payload.items, effectiveType, deliveryPricingMode)
+    if ((payload.payment_method || 'transfer') === 'transfer' && !payload.bank_account_id) {
+      throw new BadRequestError('Rekening tujuan wajib dipilih untuk metode Transfer Bank.')
+    }
     const fleetMap = await resolveItemFleets(payload.items, t)
+    const driverMap = await resolveItemDrivers(payload.items, t)
     const invoiceNumber = await generateInvoiceNumber(t)
 
     // Status awal — sesuai send_immediately flag.
@@ -468,7 +707,9 @@ async function create(payload, actor) {
       customer_id:      scope.customerId,
       invoice_date:     payload.invoice_date,
       due_date:         payload.due_date,
-      service_type:     payload.service_type || 'delivery',
+      service_type:     serviceType,
+      custom_service_name: customServiceName,
+      delivery_pricing_mode: deliveryPricingMode,
       payment_method:   payload.payment_method || 'transfer',
       bank_account_id:  payload.payment_method === 'transfer' ? (payload.bank_account_id || null) : null,
       tax_percent:      payload.tax_percent || 0,
@@ -478,11 +719,66 @@ async function create(payload, actor) {
       paid_amount:      0,
       status:           initialStatus,
       notes:            payload.notes || null,
+      origin:           effectiveType === 'rental' ? null : payload.origin || null,
+      destination:      effectiveType === 'rental' ? null : payload.destination || null,
+      cargo_description: effectiveType === 'rental' ? null : payload.cargo_description || null,
+      manual_sj_numbers: effectiveType === 'rental' ? null : payload.manual_sj_numbers || null,
       sent_at:          sentAt,
       created_by:       actor?.id || null,
     }, { transaction: t })
 
-    const itemRows = buildItemRows(payload.items, invoice.id, fleetMap)
+    const linkedSjIds = new Set()
+
+    if (linkedSjUuids.length > 0) {
+      const sjList = await DeliveryOrder.findAll({
+        where:       { uuid: linkedSjUuids },
+        transaction: t,
+        lock:        t.LOCK.UPDATE,
+      })
+      if (sjList.length !== linkedSjUuids.length) {
+        const found = new Set(sjList.map(sj => sj.uuid))
+        const missing = linkedSjUuids.filter(uuid => !found.has(uuid))
+        throw new NotFoundError(`SJ tidak ditemukan: ${missing.join(', ')}`)
+      }
+      for (const sj of sjList) {
+        if (!sameBillingScope(invoice, sj)) {
+          throw new BadRequestError(`SJ ${sj.sj_number} tidak sesuai dengan scope invoice.`)
+        }
+        if (!['assigned', 'delivered'].includes(sj.status)) {
+          throw new BadRequestError(`SJ ${sj.sj_number} status ${sj.status} — hanya SJ berstatus Terbit atau Terkirim yang bisa dilampirkan.`)
+        }
+        if (sj.invoice_id && sj.invoice_id !== invoice.id) {
+          throw new ConflictError(`SJ ${sj.sj_number} sudah ter-attach ke invoice lain.`)
+        }
+        linkedSjIds.add(Number(sj.id))
+      }
+
+      const firstSj = sjList[0]
+      const invoiceRouteUpdates = {}
+      if (firstSj) {
+        if (!invoice.origin && firstSj.origin) invoiceRouteUpdates.origin = firstSj.origin
+        if (!invoice.destination && firstSj.destination) invoiceRouteUpdates.destination = firstSj.destination
+        if (!invoice.cargo_description && firstSj.cargo_description) invoiceRouteUpdates.cargo_description = firstSj.cargo_description
+      }
+      if (Object.keys(invoiceRouteUpdates).length > 0) {
+        await invoice.update(invoiceRouteUpdates, { transaction: t })
+      }
+
+      await DeliveryOrder.update({
+        invoice_id:                invoice.id,
+        invoice_attachment_status: 'attached',
+      }, {
+        where:       { id: sjList.map(sj => sj.id) },
+        transaction: t,
+      })
+    }
+
+    const orphanSourceItem = (payload.items || []).find(item => item.source_sj_id && !linkedSjIds.has(Number(item.source_sj_id)))
+    if (orphanSourceItem) {
+      throw new BadRequestError('Item invoice dari sumber SJ harus berasal dari SJ yang dilampirkan.')
+    }
+
+    const itemRows = buildItemRows(payload.items, invoice.id, fleetMap, driverMap)
     await InvoiceItem.bulkCreate(itemRows, { transaction: t })
 
     // Optional DP saat create.
@@ -508,22 +804,26 @@ async function update(uuid, payload, actor) {
     })
     if (!invoice) throw new NotFoundError('Invoice tidak ditemukan.')
 
-    // DP edit policy lebih longgar dari edit invoice umum:
-    //   - DP boleh diedit di semua status KECUALI void
-    //   - Field invoice lain (items/tax/dst) hanya boleh di-edit di non-final
-    //
-    // Kalau payload HANYA berisi `down_payment` → bypass FINAL_STATUSES check.
-    const isDpOnly = Object.keys(payload).every(k => k === 'down_payment')
+    // Edit policy:
+    //   - draft: edit penuh
+    //   - sent/terbit: metode pembayaran/rekening + DP + rincian item
+    //   - outstanding/paid: hanya DP dan lampiran
+    //   - void: tidak bisa diedit
+    const payloadKeys = Object.keys(payload)
+    const isDpOnly = payloadKeys.every(k => k === 'down_payment')
+    const isLampiranOnly = payloadKeys.every(k => k === 'lampiran_paths')
+    const isSentBillingOnly = invoice.status === STATUS.SENT &&
+      payloadKeys.every(k => ['payment_method', 'bank_account_id', 'down_payment', 'items', 'delivery_pricing_mode', 'origin', 'destination', 'cargo_description', 'lampiran_paths'].includes(k))
 
     if (invoice.status === STATUS.VOID) {
       throw new ForbiddenError('Invoice void tidak dapat diedit.')
     }
-    if (!isDpOnly && FINAL_STATUSES.includes(invoice.status)) {
-      throw new ForbiddenError(`Invoice status ${invoice.status} tidak dapat diedit.`)
+    if (!isDpOnly && !isLampiranOnly && invoice.status !== STATUS.DRAFT && !isSentBillingOnly) {
+      throw new ForbiddenError(`Invoice status ${invoice.status} tidak dapat diedit untuk field yang dikirim.`)
     }
 
     const updates = {}
-    const passthrough = ['invoice_date', 'due_date', 'notes', 'payment_method']
+    const passthrough = ['invoice_date', 'due_date', 'notes', 'payment_method', 'origin', 'destination', 'cargo_description']
     for (const k of passthrough) {
       if (k in payload) updates[k] = payload[k]
     }
@@ -531,7 +831,13 @@ async function update(uuid, payload, actor) {
     // bank_account_id — hanya relevan jika payment_method transfer
     if ('bank_account_id' in payload || 'payment_method' in payload) {
       const method = updates.payment_method ?? invoice.payment_method
-      updates.bank_account_id = method === 'transfer' ? (payload.bank_account_id ?? null) : null
+      const nextBankAccountId = method === 'transfer'
+        ? (payload.bank_account_id ?? invoice.bank_account_id ?? null)
+        : null
+      if (method === 'transfer' && !nextBankAccountId) {
+        throw new BadRequestError('Rekening tujuan wajib dipilih untuk metode Transfer Bank.')
+      }
+      updates.bank_account_id = nextBankAccountId
     }
 
     // lampiran_paths → harus subset dari old (tidak boleh tambah via update).
@@ -553,6 +859,11 @@ async function update(uuid, payload, actor) {
 
     let nextTaxPercent = invoice.tax_percent
     let nextPphPercent = invoice.pph_percent
+    let nextDeliveryPricingMode = invoice.delivery_pricing_mode || DELIVERY_PRICING_MODE.SHIPMENT
+    if ('delivery_pricing_mode' in payload) {
+      nextDeliveryPricingMode = resolveDeliveryPricingMode(effectiveServiceType(invoice.service_type, invoice.custom_service_name), payload.delivery_pricing_mode)
+      updates.delivery_pricing_mode = nextDeliveryPricingMode
+    }
     if ('tax_percent' in payload) {
       nextTaxPercent = payload.tax_percent
       updates.tax_percent = payload.tax_percent
@@ -566,13 +877,17 @@ async function update(uuid, payload, actor) {
     let itemRowsForRecalc = null
 
     if (payload.items) {
-      assertRentalItemsUseFleet(payload.items, invoice.service_type)
-      const fleetMap = await resolveItemFleets(payload.items, t)
-      // Replace seluruh items
-      await InvoiceItem.destroy({ where: { invoice_id: invoice.id }, transaction: t })
-      const itemRows = buildItemRows(payload.items, invoice.id, fleetMap)
-      await InvoiceItem.bulkCreate(itemRows, { transaction: t })
-      itemRowsForRecalc = itemRows
+      itemRowsForRecalc = await replaceInvoiceItems(invoice, payload.items, t)
+    }
+
+    if (payload.items || 'delivery_pricing_mode' in payload) {
+      const itemsForPricingValidation = itemRowsForRecalc
+        ? itemRowsForRecalc
+        : await InvoiceItem.findAll({
+            where: { invoice_id: invoice.id },
+            transaction: t,
+          })
+      assertDeliveryItemPricing(itemsForPricingValidation, effectiveServiceType(invoice.service_type, invoice.custom_service_name), nextDeliveryPricingMode)
     }
 
     // Recalc total kalau items / tax / pph / insurance berubah
@@ -754,7 +1069,7 @@ async function attachSJ(invoiceUuid, sjUuids, actor) {
     if (FINAL_STATUSES.includes(invoice.status)) {
       throw new ForbiddenError(`Invoice status ${invoice.status} tidak dapat diubah attachment-nya.`)
     }
-    if (invoice.service_type === 'rental') {
+    if (effectiveServiceType(invoice.service_type, invoice.custom_service_name) === 'rental') {
       throw new ForbiddenError('Invoice jasa penyewaan tidak dapat dikaitkan dengan Surat Jalan.')
     }
 
@@ -785,6 +1100,17 @@ async function attachSJ(invoiceUuid, sjUuids, actor) {
 
     // Filter SJ yang belum ter-attach ke invoice ini (idempotent)
     const sjToProcess = sjList.filter(sj => sj.invoice_id !== invoice.id)
+
+    const firstSj = sjToProcess[0]
+    const invoiceRouteUpdates = {}
+    if (firstSj) {
+      if (!invoice.origin && firstSj.origin) invoiceRouteUpdates.origin = firstSj.origin
+      if (!invoice.destination && firstSj.destination) invoiceRouteUpdates.destination = firstSj.destination
+      if (!invoice.cargo_description && firstSj.cargo_description) invoiceRouteUpdates.cargo_description = firstSj.cargo_description
+    }
+    if (Object.keys(invoiceRouteUpdates).length > 0) {
+      await invoice.update(invoiceRouteUpdates, { transaction: t })
+    }
 
     // Update delivery_orders
     await DeliveryOrder.update({
@@ -859,7 +1185,7 @@ async function detachSJ(invoiceUuid, sjUuid, actor) {
 async function getAttachableSJ(invoiceUuid) {
   const invoice = await Invoice.findOne({ where: { uuid: invoiceUuid } })
   if (!invoice) throw new NotFoundError('Invoice tidak ditemukan.')
-  if (invoice.service_type === 'rental') return []
+  if (effectiveServiceType(invoice.service_type, invoice.custom_service_name) === 'rental') return []
 
   const rows = await DeliveryOrder.findAll({
     where: {

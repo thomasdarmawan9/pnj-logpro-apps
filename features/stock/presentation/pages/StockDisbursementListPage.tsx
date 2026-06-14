@@ -16,7 +16,9 @@ export default function StockDisbursementListPage() {
   const dispatch = useDispatch<AppDispatch>()
   const { push: pushToast } = useToast()
   const { disbursements, isLoading, isSubmitting, modals } = useSelector((state: RootState) => state.stock)
+  const role = useSelector((state: RootState) => state.auth.user?.role ?? null)
   const [search, setSearch] = useState('')
+  const isReadOnly = role === 'admin_finance'
 
   useEffect(() => {
     dispatch(fetchStockDisbursements())
@@ -49,13 +51,15 @@ export default function StockDisbursementListPage() {
           <div className="text-xs text-gray-500">Dashboard / Manajemen Stok / Stok Keluar</div>
           <h1 className="text-2xl font-bold">Daftar Stok Keluar</h1>
         </div>
-        <button
-          onClick={() => router.push('/stok/keluar/create')}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-medium bg-red-600 hover:bg-red-700 transition-colors"
-        >
-          <Plus size={16} />
-          Tambah Stok Keluar
-        </button>
+        {!isReadOnly && (
+          <button
+            onClick={() => router.push('/stok/keluar/create')}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-medium bg-red-600 hover:bg-red-700 transition-colors"
+          >
+            <Plus size={16} />
+            Tambah Stok Keluar
+          </button>
+        )}
       </div>
 
       {/* Search */}
@@ -144,13 +148,15 @@ export default function StockDisbursementListPage() {
                     >
                       <Eye size={14} />
                     </button>
-                    <button
-                      onClick={() => dispatch(openDeleteConfirm({ type: 'disbursement', uuid: d.uuid }))}
-                      className="p-1.5 rounded-lg hover:bg-red-50 transition-colors text-red-500"
-                      title="Hapus"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    {!isReadOnly && (
+                      <button
+                        onClick={() => dispatch(openDeleteConfirm({ type: 'disbursement', uuid: d.uuid }))}
+                        className="p-1.5 rounded-lg hover:bg-red-50 transition-colors text-red-500"
+                        title="Hapus"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>

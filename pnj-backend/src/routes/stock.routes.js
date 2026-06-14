@@ -33,7 +33,12 @@ const {
 const disbursementsController = require('../controllers/stockDisbursements.controller')
 
 // Reports
-const { listRecapQuery, listSummaryQuery } = require('../validators/stockReport.validator')
+const {
+  adjustCustomerStockItemSchema,
+  customerStockItemParams,
+  listRecapQuery,
+  listSummaryQuery,
+} = require('../validators/stockReport.validator')
 const reportsController = require('../controllers/stockReports.controller')
 
 const { logActivity } = require('../middlewares/activityLog.middleware')
@@ -157,6 +162,18 @@ router.get('/customers/:uuid/detail',
   isAnyRole,
   validate(uuidParam, 'params'),
   reportsController.customerDetail,
+)
+router.get('/customers/:uuid/items/:stockItemCode',
+  isAnyRole,
+  validate(customerStockItemParams, 'params'),
+  reportsController.customerStockItemDetail,
+)
+router.put('/customers/:uuid/items/:stockItemCode/balance',
+  isOpsOrAbove,
+  validate(customerStockItemParams, 'params'),
+  validate(adjustCustomerStockItemSchema),
+  logActivity('adjust_customer_stock_balance', 'stok'),
+  reportsController.adjustCustomerStockItemBalance,
 )
 router.get('/customers/:uuid/export/pdf',
   isAnyRole,

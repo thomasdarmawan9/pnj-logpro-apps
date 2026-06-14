@@ -51,7 +51,7 @@ export default function RunningBalanceTable({ rows, unit }: RunningBalanceTableP
             <th className="px-3 py-3 text-left">No. SJ / SPAL</th>
             <th className="px-3 py-3 text-right text-green-700">Masuk (+)</th>
             <th className="px-3 py-3 text-right text-red-600">Keluar (-)</th>
-            <th className="px-3 py-3 text-right">Saldo</th>
+            <th className="px-3 py-3 text-right">Saldo (sisa stock)</th>
           </tr>
         </thead>
         <tbody>

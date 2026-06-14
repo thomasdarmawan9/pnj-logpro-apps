@@ -1,13 +1,5 @@
 import { AlertCircle, Clock, CheckCircle, FileText } from 'lucide-react'
-
-interface Stats {
-  totalPiutang: number
-  jatuhTempo: number
-  terbayarBulanIni: number
-  draftBelumDikirim: number
-  countOutstanding: number
-  countPaidThisMonth: number
-}
+import { InvoiceSummaryStats } from '../../domain/entities/Invoice'
 
 function formatRupiah(amount: number): string {
   if (amount >= 1_000_000_000) return `Rp ${(amount / 1_000_000_000).toFixed(1)}M`
@@ -38,14 +30,14 @@ function SummaryCard({ icon, value, label, sub, borderColor }: CardProps) {
   )
 }
 
-export default function InvoiceSummaryCards({ stats }: { stats: Stats }) {
+export default function InvoiceSummaryCards({ stats }: { stats: InvoiceSummaryStats }) {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
       <SummaryCard
         icon={<AlertCircle size={20} />}
         value={formatRupiah(stats.totalPiutang)}
         label="Total Piutang Aktif"
-        sub={`${stats.countOutstanding} invoice belum lunas`}
+        sub={`${stats.countOutstanding} invoice terbit/outstanding`}
         borderColor="#DC2626"
       />
       <SummaryCard

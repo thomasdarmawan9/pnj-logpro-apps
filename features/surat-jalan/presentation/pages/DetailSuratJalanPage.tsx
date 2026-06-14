@@ -41,6 +41,14 @@ interface DetailSuratJalanPageProps {
   uuid: string
 }
 
+const ITEMS_PER_PAGE = 10
+
+function formatNumber(value: number | string | null | undefined): string {
+  const numeric = Number(value || 0)
+  if (!Number.isFinite(numeric) || numeric <= 0) return '-'
+  return new Intl.NumberFormat('id-ID', { maximumFractionDigits: 2 }).format(numeric)
+}
+
 export default function DetailSuratJalanPage({ uuid }: DetailSuratJalanPageProps) {
   const router = useRouter()
   const dispatch = useDispatch<AppDispatch>()
@@ -51,16 +59,21 @@ export default function DetailSuratJalanPage({ uuid }: DetailSuratJalanPageProps
     isAssignModalOpen, isUploadPODModalOpen, isVoidModalOpen, isGeneratePDFModalOpen,
     isAttachInvoiceModalOpen, availableInvoices, isLoadingInvoices, isSubmitting,
   } = useSelector((state: RootState) => state.suratJalan)
-  const role = useSelector((state: RootState) => state.auth.user?.role || 'super_admin')
+  const role = useSelector((state: RootState) => state.auth.user?.role ?? null)
 
   const [tab, setTab] = useState<'info' | 'lampiran' | 'history'>('info')
   const [lampiranPaths, setLampiranPaths] = useState<string[]>([])
   const [isSavingLampiran, setIsSavingLampiran] = useState(false)
   const [podPhotoSrc, setPodPhotoSrc] = useState<string | null>(null)
+  const [itemPage, setItemPage] = useState(1)
 
   useEffect(() => {
     if (selectedSJ) setLampiranPaths(selectedSJ.lampiran_paths ?? [])
   }, [selectedSJ])
+
+  useEffect(() => {
+    setItemPage(1)
+  }, [selectedSJ?.uuid, tab])
 
   useEffect(() => {
     if (!selectedSJ?.uuid || !selectedSJ.pod_photo_path) {
@@ -165,6 +178,11 @@ export default function DetailSuratJalanPage({ uuid }: DetailSuratJalanPageProps
   }
 
   const showAttach = selectedSJ.status === StatusOperasional.DELIVERED && selectedSJ.invoice_attachment_status === StatusLampiran.NO_INVOICE
+  const sjItems = selectedSJ.items ?? []
+  const itemTotalPages = Math.max(1, Math.ceil(sjItems.length / ITEMS_PER_PAGE))
+  const safeItemPage = Math.min(itemPage, itemTotalPages)
+  const itemStart = (safeItemPage - 1) * ITEMS_PER_PAGE
+  const pagedItems = sjItems.slice(itemStart, itemStart + ITEMS_PER_PAGE)
 
   return (
     <DashboardLayout>
@@ -213,41 +231,141 @@ export default function DetailSuratJalanPage({ uuid }: DetailSuratJalanPageProps
             </div>
 
             {tab === 'info' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                <div className="rounded-xl bg-gray-50 p-4">
-                  <div className="text-xs text-gray-500">Proyek</div>
-                  <div className="text-sm font-semibold">{selectedSJ.project?.name || 'Tanpa proyek'}</div>
-                  <div className="text-xs text-gray-500 mt-2">Customer</div>
-                  <div className="text-sm">{selectedSJ.customer.name}</div>
-                  <div className="text-xs text-gray-500 mt-2">No. Kontrak</div>
-                  <div className="text-sm">{selectedSJ.project?.contract_number || '-'}</div>
-                  <div className="text-xs text-gray-500 mt-2">Kode Proyek</div>
-                  <div className="text-sm">{selectedSJ.project?.code || '-'}</div>
+              <div className="mt-4 space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="rounded-xl bg-gray-50 p-4">
+                    <div className="text-xs text-gray-500">Proyek</div>
+                    <div className="text-sm font-semibold">{selectedSJ.project?.name || 'Tanpa proyek'}</div>
+                    <div className="text-xs text-gray-500 mt-2">Customer</div>
+                    <div className="text-sm">{selectedSJ.customer.name}</div>
+                    <div className="text-xs text-gray-500 mt-2">No. Kontrak</div>
+                    <div className="text-sm">{selectedSJ.project?.contract_number || '-'}</div>
+                    <div className="text-xs text-gray-500 mt-2">Kode Proyek</div>
+                    <div className="text-sm">{selectedSJ.project?.code || '-'}</div>
+                  </div>
+
+                  <div className="rounded-xl bg-gray-50 p-4">
+                    <div className="text-xs text-gray-500">Armada</div>
+                    <div className="text-sm font-semibold">{selectedSJ.fleet.name} ({selectedSJ.fleet.plate_number})</div>
+                    <div className="text-xs text-gray-500 mt-2">Supir</div>
+                    <div className="text-sm">{selectedSJ.driver?.name || selectedSJ.driver_name_manual || '-'}</div>
+                  </div>
+
+                  <div className="rounded-xl bg-gray-50 p-4">
+                    <div className="text-xs text-gray-500">Asal</div>
+                    <div className="text-sm">{selectedSJ.origin}</div>
+                    <div className="text-xs text-gray-500 mt-2">Tujuan</div>
+                    <div className="text-sm">{selectedSJ.destination}</div>
+                    <div className="text-xs text-gray-500 mt-2">Muatan</div>
+                    <div className="text-sm">{selectedSJ.cargo_description || '-'}</div>
+                    <div className="text-xs text-gray-500 mt-2">Tgl SJ</div>
+                    <div className="text-sm">{formatLongDate(selectedSJ.sj_date)}</div>
+                  </div>
+
+                  <div className="rounded-xl bg-gray-50 p-4">
+                    <div className="text-xs text-gray-500">Tiba Pukul</div>
+                    <div className="text-sm">{selectedSJ.delivered_at ? `${formatTimeWIB(selectedSJ.delivered_at)} WIB (${formatShortDate(selectedSJ.delivered_at)})` : '-'}</div>
+                    <div className="text-xs text-gray-500 mt-2">Catatan</div>
+                    <div className="text-sm">{selectedSJ.internal_notes || '-'}</div>
+                  </div>
                 </div>
 
-                <div className="rounded-xl bg-gray-50 p-4">
-                  <div className="text-xs text-gray-500">Armada</div>
-                  <div className="text-sm font-semibold">{selectedSJ.fleet.name} ({selectedSJ.fleet.plate_number})</div>
-                  <div className="text-xs text-gray-500 mt-2">Supir</div>
-                  <div className="text-sm">{selectedSJ.driver?.name || selectedSJ.driver_name_manual || '-'}</div>
-                </div>
-
-                <div className="rounded-xl bg-gray-50 p-4">
-                  <div className="text-xs text-gray-500">Asal</div>
-                  <div className="text-sm">{selectedSJ.origin}</div>
-                  <div className="text-xs text-gray-500 mt-2">Tujuan</div>
-                  <div className="text-sm">{selectedSJ.destination}</div>
-                  <div className="text-xs text-gray-500 mt-2">Muatan</div>
-                  <div className="text-sm">{selectedSJ.cargo_description || '-'}</div>
-                  <div className="text-xs text-gray-500 mt-2">Tgl SJ</div>
-                  <div className="text-sm">{formatLongDate(selectedSJ.sj_date)}</div>
-                </div>
-
-                <div className="rounded-xl bg-gray-50 p-4">
-                  <div className="text-xs text-gray-500">Tiba Pukul</div>
-                  <div className="text-sm">{selectedSJ.delivered_at ? `${formatTimeWIB(selectedSJ.delivered_at)} WIB (${formatShortDate(selectedSJ.delivered_at)})` : '-'}</div>
-                  <div className="text-xs text-gray-500 mt-2">Catatan</div>
-                  <div className="text-sm">{selectedSJ.internal_notes || '-'}</div>
+                <div className="rounded-xl border overflow-hidden bg-white" style={{ borderColor: 'var(--border-card)' }}>
+                  <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b bg-gray-50" style={{ borderColor: 'var(--border-card)' }}>
+                    <div>
+                      <div className="text-sm font-semibold">Rincian Item / Muatan</div>
+                      <div className="text-xs text-gray-500 mt-0.5">{sjItems.length} item tercatat</div>
+                    </div>
+                    {sjItems.length > 0 && (
+                      <div className="text-[11px] text-gray-400">Scroll horizontal untuk melihat semua kolom</div>
+                    )}
+                  </div>
+                  {sjItems.length > 0 ? (
+                    <>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-[1080px] w-full table-fixed text-sm">
+                          <colgroup>
+                            <col className="w-14" />
+                            <col className="w-28" />
+                            <col className="w-[360px]" />
+                            <col className="w-32" />
+                            <col className="w-28" />
+                            <col className="w-32" />
+                            <col className="w-[260px]" />
+                          </colgroup>
+                          <thead className="bg-gray-50 text-[11px] uppercase tracking-wide text-gray-500">
+                            <tr>
+                              <th className="px-4 py-3 text-left">No</th>
+                              <th className="px-4 py-3 text-left">Sumber</th>
+                              <th className="px-4 py-3 text-left">Nama Barang</th>
+                              <th className="px-4 py-3 text-right">Jumlah</th>
+                              <th className="px-4 py-3 text-right">Berat/kg</th>
+                              <th className="px-4 py-3 text-right">Volume/m3</th>
+                              <th className="px-4 py-3 text-left">Keterangan</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y" style={{ borderColor: 'var(--border-card)' }}>
+                            {pagedItems.map((item, index) => (
+                              <tr key={item.id || `${itemStart + index}-${item.description}`} className="align-top hover:bg-gray-50/60">
+                                <td className="px-4 py-3 text-xs font-medium text-gray-400">{itemStart + index + 1}</td>
+                                <td className="px-4 py-3">
+                                  <span className="inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold bg-gray-100 text-gray-600">
+                                    {item.source_type === 'stock' ? 'Stok' : 'Manual'}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <div className="font-medium text-gray-800 whitespace-normal break-words leading-5">{item.stock_item_name || item.description || '-'}</div>
+                                  {(item.stock_item_code || item.stock_kategori_name) && (
+                                    <div className="mt-1 flex flex-wrap gap-1.5">
+                                      {item.stock_item_code && <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[11px] text-gray-500">{item.stock_item_code}</span>}
+                                      {item.stock_kategori_name && <span className="rounded bg-green-50 px-1.5 py-0.5 text-[11px] text-green-700">{item.stock_kategori_name}</span>}
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 text-right font-semibold text-gray-800">
+                                  {formatNumber(item.qty)}
+                                  <span className="ml-1 text-xs font-normal text-gray-400">{item.unit}</span>
+                                </td>
+                                <td className="px-4 py-3 text-right text-gray-700">{formatNumber(item.weight)}</td>
+                                <td className="px-4 py-3 text-right text-gray-700">{formatNumber(item.volume)}</td>
+                                <td className="px-4 py-3 text-gray-600 whitespace-normal break-words leading-5">{item.notes || '-'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      {sjItems.length > ITEMS_PER_PAGE && (
+                        <div className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3 text-sm" style={{ borderColor: 'var(--border-card)' }}>
+                          <div className="text-xs text-gray-500">
+                            Menampilkan {itemStart + 1}-{Math.min(itemStart + ITEMS_PER_PAGE, sjItems.length)} dari {sjItems.length} item
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setItemPage(page => Math.max(1, page - 1))}
+                              disabled={safeItemPage <= 1}
+                              className="px-3 py-1.5 rounded-lg border text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                              style={{ borderColor: 'var(--border-card)' }}
+                            >
+                              Sebelumnya
+                            </button>
+                            <span className="text-xs text-gray-500">Halaman {safeItemPage} / {itemTotalPages}</span>
+                            <button
+                              type="button"
+                              onClick={() => setItemPage(page => Math.min(itemTotalPages, page + 1))}
+                              disabled={safeItemPage >= itemTotalPages}
+                              className="px-3 py-1.5 rounded-lg border text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                              style={{ borderColor: 'var(--border-card)' }}
+                            >
+                              Berikutnya
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="px-4 py-8 text-center text-sm text-gray-400">Belum ada rincian item.</div>
+                  )}
                 </div>
               </div>
             )}
@@ -333,6 +451,13 @@ export default function DetailSuratJalanPage({ uuid }: DetailSuratJalanPageProps
                 <button
                   className="w-full px-4 py-2 rounded-lg text-white"
                   style={{ backgroundColor: 'var(--green-primary)' }}
+                  onClick={() => dispatch(openGeneratePDFModal(selectedSJ.uuid))}
+                >
+                  Cetak PDF SJ
+                </button>
+                <button
+                  className="w-full px-4 py-2 rounded-lg text-white"
+                  style={{ backgroundColor: 'var(--green-primary)' }}
                   onClick={() => dispatch(openUploadPODModal(selectedSJ.uuid))}
                 >
                   Konfirmasi Tiba & Pengiriman
@@ -384,14 +509,8 @@ export default function DetailSuratJalanPage({ uuid }: DetailSuratJalanPageProps
               </div>
             )}
             {selectedSJ.status === StatusOperasional.VOID && (
-              <div className="space-y-2">
-                <button
-                  className="w-full px-4 py-2 rounded-lg text-white"
-                  style={{ backgroundColor: 'var(--green-primary)' }}
-                  onClick={() => dispatch(openGeneratePDFModal(selectedSJ.uuid))}
-                >
-                  Cetak PDF SJ
-                </button>
+              <div className="rounded-lg border px-3 py-2 text-sm text-gray-500" style={{ borderColor: 'var(--border-card)' }}>
+                SJ void tidak dapat dicetak PDF.
               </div>
             )}
           </div>
@@ -426,15 +545,6 @@ export default function DetailSuratJalanPage({ uuid }: DetailSuratJalanPageProps
                 <button className="text-sm text-green-700 mt-3">Lihat Detail Invoice →</button>
               </div>
             )}
-          </div>
-
-          <div className="rounded-xl bg-white p-5 border" style={{ borderColor: 'var(--border-card)' }}>
-            <div className="text-sm font-semibold mb-3">Quick Stats Proyek</div>
-            <div className="text-xs text-gray-500">Revenue proyek ini</div>
-            <div className="text-sm">Rp 120.000.000</div>
-            <div className="text-xs text-gray-500 mt-2">Estimasi margin</div>
-            <div className="text-sm">Rp 75.000.000</div>
-            <button className="text-sm text-green-700 mt-3">Lihat Laporan P&L →</button>
           </div>
         </div>
       </div>

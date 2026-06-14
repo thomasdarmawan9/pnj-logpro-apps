@@ -103,6 +103,14 @@ export default function DetailStockReceiptPage({ uuid }: Props) {
               <div className="font-medium">{r.document_number ?? '—'}</div>
             </div>
             <div>
+              <div className="text-xs text-gray-500 mb-0.5">No. SJ (Manual)</div>
+              <div className="font-medium">{r.sj_number_manual ?? '—'}</div>
+            </div>
+            <div>
+              <div className="text-xs text-gray-500 mb-0.5">No. Invoice (Manual)</div>
+              <div className="font-medium">{r.invoice_number_manual ?? '—'}</div>
+            </div>
+            <div>
               <div className="text-xs text-gray-500 mb-0.5">Customer</div>
               <div className="font-medium">{r.customer?.name ?? '—'}</div>
             </div>

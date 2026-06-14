@@ -1,4 +1,4 @@
-import { apiRequest } from '@/lib/apiClient'
+import { apiRequest, apiRequestAllPages } from '@/lib/apiClient'
 import { IStockRepository } from './IStockRepository'
 import { StockItem } from '../../domain/entities/StockItem'
 import { StockReceipt, StockReceiptItem } from '../../domain/entities/StockReceipt'
@@ -133,6 +133,13 @@ function normalizeCustomerStockSummary(summary: ApiCustomerStockSummary): Custom
       totalOut: Number(row.totalOut || 0),
       balance: Number(row.balance || 0),
       categories: row.categories || [],
+      categoryRows: (row.categoryRows || []).map(categoryRow => ({
+        ...categoryRow,
+        categoryName: categoryRow.categoryName || null,
+        totalIn: Number(categoryRow.totalIn || 0),
+        totalOut: Number(categoryRow.totalOut || 0),
+        balance: Number(categoryRow.balance || 0),
+      })),
     })),
     transactions: (summary.transactions || []).map(row => ({
       ...row,
@@ -155,8 +162,8 @@ function normalizeAvailableItem(item: ApiCustomerStockAvailableItem): CustomerSt
 
 class MockStockRepository implements IStockRepository {
   async getItems(): Promise<StockItem[]> {
-    const response = await apiRequest<ApiStockItem[]>('/stock/items?page=1&limit=100', { method: 'GET' })
-    return response.data.map(normalizeItem)
+    const rows = await apiRequestAllPages<ApiStockItem>('/stock/items', { method: 'GET' })
+    return rows.map(normalizeItem)
   }
 
   async createItem(dto: CreateStockItemDto): Promise<StockItem> {
@@ -176,8 +183,8 @@ class MockStockRepository implements IStockRepository {
   }
 
   async getReceipts(): Promise<StockReceipt[]> {
-    const response = await apiRequest<ApiReceipt[]>('/stock/receipts?period=all&page=1&limit=100', { method: 'GET' })
-    return response.data.map(normalizeReceipt)
+    const rows = await apiRequestAllPages<ApiReceipt>('/stock/receipts?period=all', { method: 'GET' })
+    return rows.map(normalizeReceipt)
   }
 
   async getReceiptByUuid(uuid: string): Promise<StockReceipt | null> {
@@ -192,6 +199,8 @@ class MockStockRepository implements IStockRepository {
         receipt_date: dto.receipt_date,
         supplier_name: dto.supplier_name,
         document_number: dto.document_number,
+        sj_number_manual: dto.sj_number_manual,
+        invoice_number_manual: dto.invoice_number_manual,
         customer_id: dto.customer_id,
         notes: dto.notes,
         items: dto.items.map(receiptItemPayload),
@@ -205,8 +214,8 @@ class MockStockRepository implements IStockRepository {
   }
 
   async getDisbursements(): Promise<StockDisbursement[]> {
-    const response = await apiRequest<ApiDisbursement[]>('/stock/disbursements?period=all&page=1&limit=100', { method: 'GET' })
-    return response.data.map(normalizeDisbursement)
+    const rows = await apiRequestAllPages<ApiDisbursement>('/stock/disbursements?period=all', { method: 'GET' })
+    return rows.map(normalizeDisbursement)
   }
 
   async getDisbursementByUuid(uuid: string): Promise<StockDisbursement | null> {

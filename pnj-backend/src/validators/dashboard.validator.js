@@ -10,7 +10,7 @@ const ACTIVITY_STATUSES = [
   // Note: 'sent' invoice di-rebrand ke 'OUTSTANDING' di FE; OUTSTANDING di BE
   // mencakup 'sent' + 'outstanding'.
 ]
-const ACTIVITY_PERIODS = ['all', 'this_month', 'last_month']
+const ACTIVITY_PERIODS = ['all', 'this_week', 'this_month', 'last_month']
 
 /**
  * GET /dashboard/summary — filter periode, modul, dan status.

@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useSelector } from 'react-redux'
 import { Download, RefreshCw, TrendingUp, TrendingDown, Receipt, Truck, Percent, SlidersHorizontal, Info } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
@@ -25,12 +25,26 @@ export default function ProfitLossPage() {
   const user = useSelector((state: RootState) => state.auth.user)
   const { data, filters, isLoading, lastRefreshed, refresh, setFilters } = useProfitLoss()
   const { isExporting, exportProfitLoss } = useReportExport()
+  const [customerOptions, setCustomerOptions] = useState<Array<{ value: number; label: string }>>([])
 
   useEffect(() => {
     if (user && user.role !== 'super_admin') {
       router.replace('/dashboard')
     }
   }, [user, router])
+
+  useEffect(() => {
+    if (!data?.projects.length) return
+    setCustomerOptions(prev => {
+      const options = new Map(prev.map(option => [option.value, option.label]))
+      for (const project of data.projects) {
+        if (project.customer_id) options.set(project.customer_id, project.customer_name)
+      }
+      return [...options.entries()]
+        .map(([value, label]) => ({ value, label }))
+        .sort((a, b) => a.label.localeCompare(b.label))
+    })
+  }, [data?.projects])
 
   if (user && user.role !== 'super_admin') return null
 
@@ -183,6 +197,18 @@ export default function ProfitLossPage() {
         {/* Status & Profitabilitas */}
         <div className="flex flex-wrap items-end gap-3 pt-1 border-t" style={{ borderColor: 'var(--border-light)' }}>
           <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Customer</label>
+            <select
+              value={filters.customerId}
+              onChange={e => setFilters({ customerId: e.target.value === 'all' ? 'all' : Number(e.target.value) })}
+              className="form-input"
+              style={{ padding: '7px 12px', borderRadius: '10px', fontSize: '13px', minWidth: '180px' }}
+            >
+              <option value="all">Semua Customer</option>
+              {customerOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
             <label className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Status Proyek</label>
             <select
               value={filters.projectStatus}
@@ -207,6 +233,7 @@ export default function ProfitLossPage() {
               <option value="all">Semua</option>
               <option value="profit">Profit</option>
               <option value="loss">Rugi</option>
+              <option value="breakeven">Impas</option>
               <option value="no_data">Belum Ada Data</option>
             </select>
           </div>

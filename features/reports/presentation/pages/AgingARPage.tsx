@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useSelector } from 'react-redux'
 import { Download, RefreshCw, DollarSign, Clock, Search, SlidersHorizontal, CheckCircle, AlertTriangle } from 'lucide-react'
 import { RootState } from '@/store'
@@ -18,6 +18,7 @@ export default function AgingARPage() {
   const user = useSelector((state: RootState) => state.auth.user)
   const { data, filters, isLoading, lastRefreshed, refresh, setFilters } = useAgingAR()
   const { isExporting, exportAgingAR } = useReportExport()
+  const [customerOptions, setCustomerOptions] = useState<Array<{ value: number; label: string }>>([])
 
   useEffect(() => {
     if (user && !['super_admin', 'admin_finance'].includes(user.role)) {
@@ -25,28 +26,39 @@ export default function AgingARPage() {
     }
   }, [user, router])
 
-  if (user && !['super_admin', 'admin_finance'].includes(user.role)) return null
+  useEffect(() => {
+    if (!data?.customers.length) return
+    setCustomerOptions(prev => {
+      const options = new Map(prev.map(option => [option.value, option.label]))
+      for (const customer of data.customers) {
+        options.set(customer.customer_id, customer.customer_name)
+      }
+      return [...options.entries()]
+        .map(([value, label]) => ({ value, label }))
+        .sort((a, b) => a.label.localeCompare(b.label))
+    })
+  }, [data?.customers])
 
-  const customerOptions = data?.customers.map(c => ({ value: c.customer_id, label: c.customer_name })) ?? []
+  if (user && !['super_admin', 'admin_finance'].includes(user.role)) return null
 
   const hasActiveFilter = filters.customerId !== 'all' || filters.bucket !== 'all' || filters.search
 
   const invoices = data?.customers.flatMap(customer => customer.invoices) ?? []
-  const unpaidInvoices = invoices.filter(inv => inv.remaining_amount > 0)
   const paidInvoices = invoices.filter(inv => inv.remaining_amount <= 0 || inv.paid_amount >= inv.total_amount)
-
-  const belumJatuhTempoAmount = data?.bucket_totals[AgingBucket.CURRENT] ?? 0
-  const sudahJatuhTempoAmount = data
+  const fallbackOverdueAmount = data
     ? data.bucket_totals[AgingBucket.DAYS_1_30]
     + data.bucket_totals[AgingBucket.DAYS_31_60]
     + data.bucket_totals[AgingBucket.DAYS_61_90]
     + data.bucket_totals[AgingBucket.OVER_90]
     : 0
-  const sudahLunasAmount = paidInvoices.reduce((sum, inv) => sum + inv.total_amount, 0)
 
-  const belumJatuhTempoCount = unpaidInvoices.filter(inv => inv.aging_bucket === AgingBucket.CURRENT).length
-  const sudahJatuhTempoCount = unpaidInvoices.filter(inv => inv.aging_bucket !== AgingBucket.CURRENT).length
-  const sudahLunasCount = paidInvoices.length
+  const belumJatuhTempoAmount = data?.not_due_amount ?? data?.bucket_totals[AgingBucket.CURRENT] ?? 0
+  const sudahJatuhTempoAmount = data?.overdue_amount ?? fallbackOverdueAmount
+  const sudahLunasAmount = data?.fully_paid_amount ?? paidInvoices.reduce((sum, inv) => sum + inv.total_amount, 0)
+
+  const belumJatuhTempoCount = data?.not_due_count ?? invoices.filter(inv => inv.remaining_amount > 0 && inv.aging_bucket === AgingBucket.CURRENT).length
+  const sudahJatuhTempoCount = data?.overdue_count ?? invoices.filter(inv => inv.remaining_amount > 0 && inv.aging_bucket !== AgingBucket.CURRENT).length
+  const sudahLunasCount = data?.fully_paid_count ?? paidInvoices.length
 
   const infoCards = data ? [
     {
@@ -153,6 +165,23 @@ export default function AgingARPage() {
             >
               <option value="all">Semua Customer</option>
               {customerOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
+          {/* Aging Bucket */}
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Bucket Aging</label>
+            <select
+              value={filters.bucket}
+              onChange={e => setFilters({ bucket: e.target.value as AgingBucket | 'all' })}
+              className="form-input"
+              style={{ padding: '7px 12px', borderRadius: '10px', fontSize: '13px', minWidth: '150px' }}
+            >
+              <option value="all">Semua Bucket</option>
+              <option value={AgingBucket.CURRENT}>Belum Jatuh Tempo</option>
+              <option value={AgingBucket.DAYS_1_30}>1-30 Hari</option>
+              <option value={AgingBucket.DAYS_31_60}>31-60 Hari</option>
+              <option value={AgingBucket.DAYS_61_90}>61-90 Hari</option>
+              <option value={AgingBucket.OVER_90}>&gt; 90 Hari</option>
             </select>
           </div>
           {/* Search */}

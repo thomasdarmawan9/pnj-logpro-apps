@@ -1,4 +1,4 @@
-import { API_BASE_URL, apiRequest } from '@/lib/apiClient'
+import { API_BASE_URL, apiRequest, apiRequestAllPages } from '@/lib/apiClient'
 import { SystemUser } from '../../domain/entities/SystemUser'
 import { NumberingSettings, CompanyProfile, BankAccount, DEFAULT_NUMBERING, DEFAULT_COMPANY } from '../../domain/entities/SystemSetting'
 import { CreateSystemUserPayload } from './ISettingsRepository'
@@ -15,10 +15,8 @@ class MockSettingsRepository {
   }
 
   async getUsers(): Promise<SystemUser[]> {
-    const response = await apiRequest<(SystemUser & { id: number | string })[]>('/users?limit=100', {
-      method: 'GET',
-    })
-    return response.data.map(user => this.normalizeUser(user))
+    const users = await apiRequestAllPages<SystemUser & { id: number | string }>('/users', { method: 'GET' })
+    return users.map(user => this.normalizeUser(user))
   }
 
   async createUser(data: CreateSystemUserPayload): Promise<SystemUser> {

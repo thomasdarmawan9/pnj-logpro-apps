@@ -27,7 +27,8 @@ import {
 } from 'lucide-react'
 import { RootState } from '@/store'
 import { useAgingARDetail } from '../hooks/useAgingARDetail'
-import { ProjectDetailInvoice, ProjectDetailSuratJalan } from '@/features/reports/domain/entities/AgingARProjectDetail'
+import { useAgingARCustomerDetail } from '../hooks/useAgingARCustomerDetail'
+import { AgingARProjectDetail, ProjectDetailInvoice, ProjectDetailSuratJalan } from '@/features/reports/domain/entities/AgingARProjectDetail'
 import { formatRupiah, formatDate } from '@/lib/formatters'
 import { AGING_BUCKET_CONFIG } from '@/features/reports/domain/value-objects/AgingBucket'
 
@@ -53,6 +54,7 @@ const PROJECT_STATUS_CONFIG: Record<string, { label: string; bg: string; color: 
   completed: { label: 'Selesai',   bg: '#F3F4F6', color: '#374151' },
   cancelled: { label: 'Dibatalkan',bg: '#FEE2E2', color: '#B91C1C' },
   on_hold:   { label: 'Ditunda',   bg: '#FEF3C7', color: '#B45309' },
+  customer_only: { label: 'Proyek Customer', bg: '#EFF6FF', color: '#1D4ED8' },
 }
 
 const METHOD_LABEL: Record<string, string> = {
@@ -846,9 +848,30 @@ export default function AgingARDetailPage() {
   const user = useSelector((state: RootState) => state.auth.user)
 
   const projectIdParam = searchParams.get('project_id')
+  const customerIdParam = searchParams.get('customer_id')
+  const scope = searchParams.get('scope')
   const projectId = projectIdParam ? parseInt(projectIdParam, 10) : null
+  const customerId = customerIdParam ? parseInt(customerIdParam, 10) : null
+  const isProjectDetail = projectId !== null && !Number.isNaN(projectId)
+  const isNonProjectDetail = !isProjectDetail && scope === 'non_project' && customerId !== null && !Number.isNaN(customerId)
 
-  const { data, isLoading, error } = useAgingARDetail(isNaN(projectId as number) ? null : projectId)
+  const {
+    data: projectData,
+    isLoading: isProjectLoading,
+    error: projectError,
+  } = useAgingARDetail(isProjectDetail ? projectId : null)
+  const {
+    data: customerData,
+    isLoading: isCustomerLoading,
+    error: customerError,
+  } = useAgingARCustomerDetail(isNonProjectDetail ? customerId : null)
+
+  const matchingProjectData = projectData?.project_id === projectId ? projectData : null
+  const matchingCustomerData = customerData?.customer_id === customerId ? customerData : null
+  const nonProjectData = matchingCustomerData?.projects.find(project => project.project_id === null) ?? null
+  const data: AgingARProjectDetail | null = isProjectDetail ? matchingProjectData : nonProjectData
+  const isLoading = isProjectDetail ? isProjectLoading : isCustomerLoading
+  const error = isProjectDetail ? projectError : customerError
 
   useEffect(() => {
     if (user && !['super_admin', 'admin_finance'].includes(user.role)) {
@@ -858,11 +881,11 @@ export default function AgingARDetailPage() {
 
   if (user && !['super_admin', 'admin_finance'].includes(user.role)) return null
 
-  if (!projectIdParam || isNaN(Number(projectIdParam))) {
+  if (!isProjectDetail && !isNonProjectDetail) {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-3">
         <AlertCircle size={40} style={{ color: '#DC2626' }} />
-        <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Parameter project tidak valid.</p>
+        <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Parameter detail Aging AR tidak valid.</p>
         <button onClick={() => router.back()} className="text-sm underline" style={{ color: 'var(--green-primary)' }}>
           Kembali
         </button>
@@ -884,11 +907,24 @@ export default function AgingARDetailPage() {
     )
   }
 
+  if (isNonProjectDetail && !data) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-3">
+        <AlertCircle size={40} style={{ color: '#D97706' }} />
+        <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Data non-proyek untuk customer ini tidak ditemukan.</p>
+        <button onClick={() => router.back()} className="text-sm underline" style={{ color: 'var(--green-primary)' }}>
+          Kembali
+        </button>
+      </div>
+    )
+  }
+
   if (!data) return null
 
   const projectStatusCfg = PROJECT_STATUS_CONFIG[data.status] ?? PROJECT_STATUS_CONFIG.active
   const totalOpsFormatted = formatRupiah(data.total_operational_cost)
   const hasOutstanding = data.total_outstanding > 0
+  const isNonProject = data.project_id === null
 
   return (
     <div className="animate-fadeIn space-y-5">
@@ -908,7 +944,7 @@ export default function AgingARDetailPage() {
           <span>/</span>
           <a href="/laporan/aging-ar" className="hover:underline" style={{ color: 'var(--text-secondary)' }}>Aging AR</a>
           <span>/</span>
-          <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>Detail Proyek</span>
+          <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{isNonProject ? 'Detail Non Proyek' : 'Detail Proyek'}</span>
         </nav>
       </div>
 
@@ -936,15 +972,22 @@ export default function AgingARDetailPage() {
             </div>
             <div className="flex items-center gap-2 flex-wrap text-xs" style={{ color: 'var(--text-secondary)' }}>
               <span className="font-mono font-medium" style={{ color: 'var(--text-primary)' }}>{data.project_code}</span>
-              <span>·</span>
-              <span>Kontrak: <span className="font-mono">{data.contract_number}</span></span>
+              {!isNonProject && (
+                <>
+                  <span>·</span>
+                  <span>Kontrak: <span className="font-mono">{data.contract_number || '—'}</span></span>
+                </>
+              )}
+              {isNonProject && <span>Invoice dan SJ berdasarkan permintaan jasa langsung</span>}
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl" style={{ backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0', color: '#15803D' }}>
-              <Calendar size={12} />
-              {formatDate(data.start_date)} – {data.end_date ? formatDate(data.end_date) : 'Selesai belum ditentukan'}
-            </div>
+            {!isNonProject && (
+              <div className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl" style={{ backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0', color: '#15803D' }}>
+                <Calendar size={12} />
+                {data.start_date ? formatDate(data.start_date) : 'Mulai belum ditentukan'} – {data.end_date ? formatDate(data.end_date) : 'Selesai belum ditentukan'}
+              </div>
+            )}
           </div>
         </div>
 

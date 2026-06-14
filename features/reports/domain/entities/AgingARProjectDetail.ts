@@ -66,7 +66,7 @@ export interface ProjectDetailSuratJalan {
 }
 
 export interface AgingARProjectDetail {
-  project_id: number
+  project_id: number | null
   project_code: string
   project_name: string
   contract_number: string
@@ -74,9 +74,9 @@ export interface AgingARProjectDetail {
   customer_name: string
   npwp: string | null
   is_pkp: boolean
-  start_date: string
+  start_date: string | null
   end_date: string | null
-  status: 'active' | 'completed' | 'cancelled' | 'on_hold'
+  status: 'active' | 'completed' | 'cancelled' | 'on_hold' | 'customer_only'
 
   // Financial summary
   total_invoiced: number

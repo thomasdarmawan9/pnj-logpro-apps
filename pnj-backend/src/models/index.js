@@ -45,6 +45,7 @@ Fleet.hasMany(FleetRentalCompletion, { foreignKey: 'fleet_id', as: 'rentalComple
 
 // ── Driver associations ────────────────────────────────────────────────────
 Driver.hasMany(DeliveryOrder, { foreignKey: 'driver_id', as: 'deliveryOrders' })
+Driver.hasMany(InvoiceItem,   { foreignKey: 'driver_id', as: 'invoiceItems' })
 
 // ── Project associations ───────────────────────────────────────────────────
 Project.belongsTo(Customer,    { foreignKey: 'customer_id', as: 'customer' })
@@ -72,6 +73,7 @@ Invoice.hasMany(DeliveryOrder, { foreignKey: 'invoice_id', as: 'attachedSJs' })
 // ── InvoiceItem associations ───────────────────────────────────────────────
 InvoiceItem.belongsTo(Invoice, { foreignKey: 'invoice_id', as: 'invoice' })
 InvoiceItem.belongsTo(Fleet,   { foreignKey: 'fleet_id',   as: 'fleet' })
+InvoiceItem.belongsTo(Driver,  { foreignKey: 'driver_id',  as: 'driver' })
 InvoiceItem.hasMany(FleetRentalCompletion, { foreignKey: 'invoice_item_id', as: 'rentalCompletions' })
 FleetRentalCompletion.belongsTo(Fleet,       { foreignKey: 'fleet_id',         as: 'fleet' })
 FleetRentalCompletion.belongsTo(InvoiceItem, { foreignKey: 'invoice_item_id',  as: 'invoiceItem' })

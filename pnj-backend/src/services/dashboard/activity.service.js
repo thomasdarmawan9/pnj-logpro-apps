@@ -9,7 +9,7 @@ const {
   Fleet,
   Driver,
 } = require('../../models')
-const { startOfMonth, endOfMonth, toISODate } = require('../../utils/reportPeriods')
+const { startOfDay, endOfDay, startOfMonth, endOfMonth, toISODate } = require('../../utils/reportPeriods')
 
 // FE → BE status mapping. FE pakai uppercase, BE pakai lowercase.
 const SJ_STATUS_MAP = {
@@ -29,6 +29,12 @@ const INVOICE_STATUS_MAP = {
 function periodToRange(period) {
   if (period === 'all') return { from: null, to: null }
   const now = new Date()
+  if (period === 'this_week') {
+    const start = new Date(now)
+    const day = start.getDay() || 7
+    start.setDate(start.getDate() - day + 1)
+    return { from: startOfDay(start), to: endOfDay(now) }
+  }
   if (period === 'this_month') {
     return { from: startOfMonth(now), to: endOfMonth(now) }
   }

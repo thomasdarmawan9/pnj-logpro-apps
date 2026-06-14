@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit'
-import { Invoice, InvoiceFilterState, PaginationState, AttachedSJ } from '../../features/invoice/domain/entities/Invoice'
+import { Invoice, InvoiceFilterState, PaginationState, AttachedSJ, InvoiceSummaryStats } from '../../features/invoice/domain/entities/Invoice'
 import { invoiceRepository } from '../../features/invoice/infrastructure/repositories/MockInvoiceRepository'
 import { CreateInvoiceDto } from '../../features/invoice/application/dto/CreateInvoiceDto'
 import { UpdateInvoiceDto } from '../../features/invoice/application/dto/UpdateInvoiceDto'
@@ -9,6 +9,7 @@ interface InvoiceState {
   list: Invoice[]
   selectedInvoice: Invoice | null
   attachableSJ: AttachedSJ[]
+  summary: InvoiceSummaryStats
   filters: InvoiceFilterState
   pagination: PaginationState
   isLoading: boolean
@@ -41,6 +42,14 @@ const initialState: InvoiceState = {
   list: [],
   selectedInvoice: null,
   attachableSJ: [],
+  summary: {
+    totalPiutang: 0,
+    jatuhTempo: 0,
+    terbayarBulanIni: 0,
+    draftBelumDikirim: 0,
+    countOutstanding: 0,
+    countPaidThisMonth: 0,
+  },
   filters: defaultFilters,
   pagination: { page: 1, perPage: 12, total: 0 },
   isLoading: false,
@@ -225,6 +234,7 @@ const invoiceSlice = createSlice({
       .addCase(fetchInvoiceList.fulfilled, (state, action) => {
         state.isLoading = false
         state.list = action.payload.data
+        if (action.payload.summary) state.summary = action.payload.summary
         state.pagination.total = action.payload.total
       })
       .addCase(fetchInvoiceList.rejected, (state, action) => {

@@ -5,24 +5,63 @@ import { AgingARProjectDetail, ProjectDetailInvoice } from '../../domain/entitie
 import { AgingARCustomerDetail } from '../../domain/entities/AgingARCustomerDetail'
 import { ProfitLossProject, ProfitLossSummary } from '../../domain/entities/ProfitLossReport'
 import { AuditLog } from '../../domain/entities/AuditLog'
-import { FleetUtilization, FleetUtilizationSummary } from '../../domain/entities/FleetUtilizationReport'
 import { AgingARFilterDto } from '../../application/dto/AgingARFilterDto'
 import { ProfitLossFilterDto } from '../../application/dto/ProfitLossFilterDto'
 import { AuditTrailFilterDto } from '../../application/dto/AuditTrailFilterDto'
 
 type ApiId = number | string | null | undefined
 
-type ApiAgingCustomer = Omit<AgingARCustomer, 'customer_id' | 'total_outstanding' | 'oldest_invoice_days' | 'invoice_count'> & {
+type ApiAgingCustomer = Omit<
+  AgingARCustomer,
+  | 'customer_id'
+  | 'total_outstanding'
+  | 'not_due_amount'
+  | 'overdue_amount'
+  | 'paid_amount'
+  | 'fully_paid_amount'
+  | 'not_due_count'
+  | 'overdue_count'
+  | 'fully_paid_count'
+  | 'oldest_invoice_days'
+  | 'invoice_count'
+> & {
   customer_id: ApiId
   total_outstanding: number | string
+  not_due_amount?: number | string
+  overdue_amount?: number | string
+  paid_amount?: number | string
+  fully_paid_amount?: number | string
+  not_due_count?: number | string
+  overdue_count?: number | string
+  fully_paid_count?: number | string
   oldest_invoice_days: number | string
   invoice_count: number | string
 }
 
-type ApiAgingSummary = Omit<AgingARSummary, 'total_outstanding' | 'customer_count' | 'invoice_count' | 'customers'> & {
+type ApiAgingSummary = Omit<
+  AgingARSummary,
+  | 'total_outstanding'
+  | 'customer_count'
+  | 'invoice_count'
+  | 'not_due_amount'
+  | 'overdue_amount'
+  | 'paid_amount'
+  | 'fully_paid_amount'
+  | 'not_due_count'
+  | 'overdue_count'
+  | 'fully_paid_count'
+  | 'customers'
+> & {
   total_outstanding: number | string
   customer_count: number | string
   invoice_count: number | string
+  not_due_amount?: number | string
+  overdue_amount?: number | string
+  paid_amount?: number | string
+  fully_paid_amount?: number | string
+  not_due_count?: number | string
+  overdue_count?: number | string
+  fully_paid_count?: number | string
   customers: ApiAgingCustomer[]
 }
 
@@ -86,6 +125,7 @@ type ApiAgingCustomerDetail = Omit<
 type ApiProfitLossProject = Omit<
   ProfitLossProject,
   | 'project_id'
+  | 'customer_id'
   | 'revenue_invoiced'
   | 'revenue_paid'
   | 'invoice_count'
@@ -98,6 +138,8 @@ type ApiProfitLossProject = Omit<
   | 'margin_percent'
 > & {
   project_id: ApiId
+  project_uuid?: string | null
+  customer_id: ApiId
   revenue_invoiced: number | string
   revenue_paid: number | string
   invoice_count: number | string
@@ -131,58 +173,6 @@ type ApiProfitLossSummary = Omit<
   projects: ApiProfitLossProject[]
 }
 
-type ApiFleetUtilization = Omit<
-  FleetUtilization,
-  | 'fleet_id'
-  | 'year'
-  | 'total_trips'
-  | 'delivered_trips'
-  | 'assigned_trips'
-  | 'draft_trips'
-  | 'void_trips'
-  | 'active_days'
-  | 'total_days_in_period'
-  | 'utilization_percent'
-  | 'total_operational_cost'
-  | 'avg_cost_per_trip'
-  | 'unique_projects'
-  | 'unique_customers'
-> & {
-  fleet_id: ApiId
-  year: number | string | null
-  total_trips: number | string
-  delivered_trips: number | string
-  assigned_trips: number | string
-  draft_trips: number | string
-  void_trips: number | string
-  active_days: number | string
-  total_days_in_period: number | string
-  utilization_percent: number | string
-  total_operational_cost: number | string
-  avg_cost_per_trip: number | string
-  unique_projects: number | string
-  unique_customers: number | string
-}
-
-type ApiFleetUtilizationSummary = Omit<
-  FleetUtilizationSummary,
-  | 'total_fleets'
-  | 'active_fleets'
-  | 'idle_fleets'
-  | 'avg_utilization'
-  | 'total_trips'
-  | 'total_operational_cost'
-  | 'fleets'
-> & {
-  total_fleets: number | string
-  active_fleets: number | string
-  idle_fleets: number | string
-  avg_utilization: number | string
-  total_trips: number | string
-  total_operational_cost: number | string
-  fleets: ApiFleetUtilization[]
-}
-
 function toNumber(value: ApiId) {
   return Number(value || 0)
 }
@@ -208,6 +198,13 @@ function normalizeAgingSummary(data: ApiAgingSummary): AgingARSummary {
     total_outstanding: Number(data.total_outstanding || 0),
     customer_count: Number(data.customer_count || 0),
     invoice_count: Number(data.invoice_count || 0),
+    not_due_amount: Number(data.not_due_amount || 0),
+    overdue_amount: Number(data.overdue_amount || 0),
+    paid_amount: Number(data.paid_amount || 0),
+    fully_paid_amount: Number(data.fully_paid_amount || 0),
+    not_due_count: Number(data.not_due_count || 0),
+    overdue_count: Number(data.overdue_count || 0),
+    fully_paid_count: Number(data.fully_paid_count || 0),
     bucket_totals: {
       current: Number(data.bucket_totals.current || 0),
       '1-30': Number(data.bucket_totals['1-30'] || 0),
@@ -220,7 +217,7 @@ function normalizeAgingSummary(data: ApiAgingSummary): AgingARSummary {
       customer_id: toNumber(customer.customer_id),
       invoices: customer.invoices.map(invoice => ({
         ...invoice,
-        project_id: toNumber(invoice.project_id),
+        project_id: toNullableNumber(invoice.project_id),
         total_amount: Number(invoice.total_amount || 0),
         paid_amount: Number(invoice.paid_amount || 0),
         remaining_amount: Number(invoice.remaining_amount || 0),
@@ -234,6 +231,13 @@ function normalizeAgingSummary(data: ApiAgingSummary): AgingARSummary {
         '>90': Number(customer.bucket_totals['>90'] || 0),
       },
       total_outstanding: Number(customer.total_outstanding || 0),
+      not_due_amount: Number(customer.not_due_amount || 0),
+      overdue_amount: Number(customer.overdue_amount || 0),
+      paid_amount: Number(customer.paid_amount || 0),
+      fully_paid_amount: Number(customer.fully_paid_amount || 0),
+      not_due_count: Number(customer.not_due_count || 0),
+      overdue_count: Number(customer.overdue_count || 0),
+      fully_paid_count: Number(customer.fully_paid_count || 0),
       oldest_invoice_days: Number(customer.oldest_invoice_days || 0),
       invoice_count: Number(customer.invoice_count || 0),
     })),
@@ -243,7 +247,7 @@ function normalizeAgingSummary(data: ApiAgingSummary): AgingARSummary {
 function normalizeProjectDetail(data: ApiAgingProjectDetail): AgingARProjectDetail {
   return {
     ...data,
-    project_id: toNumber(data.project_id),
+    project_id: toNullableNumber(data.project_id),
     customer_id: toNumber(data.customer_id),
     status: data.status,
     total_invoiced: Number(data.total_invoiced || 0),
@@ -308,7 +312,9 @@ function normalizeProfitLoss(data: ApiProfitLossSummary): ProfitLossSummary {
     loss_count: Number(data.loss_count || 0),
     projects: data.projects.map(project => ({
       ...project,
-      project_id: toNumber(project.project_id),
+      project_id: toNullableNumber(project.project_id),
+      project_uuid: project.project_uuid ?? null,
+      customer_id: toNumber(project.customer_id),
       revenue_invoiced: Number(project.revenue_invoiced || 0),
       revenue_paid: Number(project.revenue_paid || 0),
       invoice_count: Number(project.invoice_count || 0),
@@ -319,35 +325,6 @@ function normalizeProfitLoss(data: ApiProfitLossSummary): ProfitLossSummary {
       sj_delivered_count: Number(project.sj_delivered_count || 0),
       gross_profit: Number(project.gross_profit || 0),
       margin_percent: toNullableNumber(project.margin_percent),
-    })),
-  }
-}
-
-export function normalizeFleetUtilization(data: ApiFleetUtilizationSummary): FleetUtilizationSummary {
-  return {
-    ...data,
-    total_fleets: Number(data.total_fleets || 0),
-    active_fleets: Number(data.active_fleets || 0),
-    idle_fleets: Number(data.idle_fleets || 0),
-    avg_utilization: Number(data.avg_utilization || 0),
-    total_trips: Number(data.total_trips || 0),
-    total_operational_cost: Number(data.total_operational_cost || 0),
-    fleets: data.fleets.map(fleet => ({
-      ...fleet,
-      fleet_id: toNumber(fleet.fleet_id),
-      year: toNullableNumber(fleet.year),
-      total_trips: Number(fleet.total_trips || 0),
-      delivered_trips: Number(fleet.delivered_trips || 0),
-      assigned_trips: Number(fleet.assigned_trips || 0),
-      draft_trips: Number(fleet.draft_trips || 0),
-      void_trips: Number(fleet.void_trips || 0),
-      active_days: Number(fleet.active_days || 0),
-      total_days_in_period: Number(fleet.total_days_in_period || 0),
-      utilization_percent: Number(fleet.utilization_percent || 0),
-      total_operational_cost: Number(fleet.total_operational_cost || 0),
-      avg_cost_per_trip: Number(fleet.avg_cost_per_trip || 0),
-      unique_projects: Number(fleet.unique_projects || 0),
-      unique_customers: Number(fleet.unique_customers || 0),
     })),
   }
 }
@@ -363,10 +340,12 @@ function agingQuery(filters: AgingARFilterDto) {
 }
 
 function profitLossQuery(filters: ProfitLossFilterDto) {
+  const isCustomPeriod = filters.periodPreset === 'custom'
+
   return query({
     period_preset: filters.periodPreset,
-    period_from: filters.periodFrom,
-    period_to: filters.periodTo,
+    period_from: isCustomPeriod ? filters.periodFrom : undefined,
+    period_to: isCustomPeriod ? filters.periodTo : undefined,
     customer_id: filters.customerId,
     project_status: filters.projectStatus,
     profitability: filters.profitability,
@@ -375,32 +354,18 @@ function profitLossQuery(filters: ProfitLossFilterDto) {
 }
 
 function auditQuery(filters: AuditTrailFilterDto) {
+  const isCustomPeriod = filters.periodPreset === 'custom'
+
   return query({
     search: filters.search,
     user_id: filters.userId,
     module: filters.module,
     action: filters.action,
     period_preset: filters.periodPreset,
-    period_from: filters.periodFrom,
-    period_to: filters.periodTo,
+    period_from: isCustomPeriod ? filters.periodFrom : undefined,
+    period_to: isCustomPeriod ? filters.periodTo : undefined,
     page: filters.page,
     perPage: filters.perPage,
-  })
-}
-
-export function fleetUtilizationQuery(filters: {
-  periodPreset?: string
-  periodFrom?: string
-  periodTo?: string
-  category?: string
-  statusFilter?: string
-}) {
-  return query({
-    period_preset: filters.periodPreset,
-    period_from: filters.periodFrom,
-    period_to: filters.periodTo,
-    category: filters.category,
-    status: filters.statusFilter,
   })
 }
 
@@ -434,21 +399,20 @@ class MockReportsRepository implements IReportsRepository {
   }
 }
 
-export async function getFleetUtilizationReport(filters: Parameters<typeof fleetUtilizationQuery>[0]) {
-  const response = await apiRequest<ApiFleetUtilizationSummary>(`/reports/fleet-utilization${fleetUtilizationQuery(filters)}`, { method: 'GET' })
-  return normalizeFleetUtilization(response.data)
-}
-
 export async function exportAgingARReport(filters: AgingARFilterDto) {
   return apiDownload(`/reports/aging-ar/export${agingQuery(filters)}`)
 }
 
-export async function exportProfitLossReport(filters: ProfitLossFilterDto) {
-  return apiDownload(`/reports/profit-loss/export${profitLossQuery(filters)}`)
+export async function exportAgingARCustomerExcel(customerId: number) {
+  return apiDownload(`/reports/aging-ar/customers/${customerId}/export/excel`)
 }
 
-export async function exportFleetUtilizationReport(filters: Parameters<typeof fleetUtilizationQuery>[0]) {
-  return apiDownload(`/reports/fleet-utilization/export${fleetUtilizationQuery(filters)}`)
+export async function exportAgingARCustomerPdf(customerId: number) {
+  return apiDownload(`/reports/aging-ar/customers/${customerId}/export/pdf`)
+}
+
+export async function exportProfitLossReport(filters: ProfitLossFilterDto) {
+  return apiDownload(`/reports/profit-loss/export${profitLossQuery(filters)}`)
 }
 
 export const reportsRepository = new MockReportsRepository()

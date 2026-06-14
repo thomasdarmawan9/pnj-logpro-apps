@@ -4,7 +4,7 @@ const express          = require('express')
 const router           = express.Router()
 
 const { authenticate } = require('../middlewares/auth.middleware')
-const { isAnyRole, isFinanceOrAbove } = require('../middlewares/rbac.middleware')
+const { isAnyRole, isSuperAdmin } = require('../middlewares/rbac.middleware')
 const { validate }     = require('../middlewares/validate.middleware')
 const { uuidParam, uuidFilenameParam } = require('../validators/common.validator')
 const {
@@ -30,7 +30,7 @@ router.get('/',
 )
 
 router.post('/',
-  isFinanceOrAbove,
+  isSuperAdmin,
   validate(createInvoiceSchema),
   logActivity('create_invoice', 'invoice'),
   controller.create,
@@ -49,7 +49,7 @@ router.get('/:uuid',
 )
 
 router.put('/:uuid',
-  isFinanceOrAbove,
+  isSuperAdmin,
   validate(uuidParam, 'params'),
   validate(updateInvoiceSchema),
   logActivity('update_invoice', 'invoice'),
@@ -57,21 +57,21 @@ router.put('/:uuid',
 )
 
 router.patch('/:uuid/send',
-  isFinanceOrAbove,
+  isSuperAdmin,
   validate(uuidParam, 'params'),
   logActivity('send_invoice', 'invoice'),
   controller.send,
 )
 
 router.patch('/:uuid/mark-outstanding',
-  isFinanceOrAbove,
+  isSuperAdmin,
   validate(uuidParam, 'params'),
   logActivity('mark_outstanding', 'invoice'),
   controller.markOutstanding,
 )
 
 router.post('/:uuid/payments',
-  isFinanceOrAbove,
+  isSuperAdmin,
   validate(uuidParam, 'params'),
   validate(recordPaymentSchema),
   logActivity('record_payment', 'invoice'),
@@ -79,7 +79,7 @@ router.post('/:uuid/payments',
 )
 
 router.patch('/:uuid/void',
-  isFinanceOrAbove,
+  isSuperAdmin,
   validate(uuidParam, 'params'),
   validate(voidInvoiceSchema),
   logActivity('void_invoice', 'invoice'),
@@ -87,7 +87,7 @@ router.patch('/:uuid/void',
 )
 
 router.post('/:uuid/attach-sj',
-  isFinanceOrAbove,
+  isSuperAdmin,
   validate(uuidParam, 'params'),
   validate(attachSJSchema),
   logActivity('attach_sj', 'invoice'),
@@ -95,7 +95,7 @@ router.post('/:uuid/attach-sj',
 )
 
 router.delete('/:uuid/detach-sj/:sjUuid',
-  isFinanceOrAbove,
+  isSuperAdmin,
   validate(detachSJParamSchema, 'params'),
   logActivity('detach_sj', 'invoice'),
   controller.detachSJ,
@@ -121,7 +121,7 @@ router.post('/:uuid/generate-pdf',
 
 // ── Lampiran ──────────────────────────────────────────────────────────────
 router.post('/:uuid/lampiran',
-  isFinanceOrAbove,
+  isSuperAdmin,
   validate(uuidParam, 'params'),
   uploadLampiran.single('file'),
   processLampiran('invoice-lampiran'),
@@ -129,7 +129,7 @@ router.post('/:uuid/lampiran',
 )
 
 router.delete('/:uuid/lampiran/:filename',
-  isFinanceOrAbove,
+  isSuperAdmin,
   validate(uuidFilenameParam, 'params'),
   controller.deleteLampiran,
 )

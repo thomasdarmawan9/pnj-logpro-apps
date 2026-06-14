@@ -24,13 +24,16 @@ const createReceiptSchema = Joi.object({
   receipt_date:    Joi.date().iso().required(),
   supplier_name:   Joi.string().trim().max(150).allow('', null),
   document_number: Joi.string().trim().max(100).allow('', null),
-  customer_uuid:   Joi.string().uuid({ version: ['uuidv4'] }).allow(null),
-  customer_id:     Joi.number().integer().min(1).allow(null),
+  customer_uuid:   Joi.string().uuid({ version: ['uuidv4'] }),
+  customer_id:     Joi.number().integer().min(1),
   notes:           Joi.string().trim().allow('', null),
   items:           Joi.array().items(receiptItemSchema).min(1).required().messages({
     'array.min':    'Minimal 1 item harus diisi.',
   }),
-}).oxor('customer_uuid', 'customer_id')
+}).xor('customer_uuid', 'customer_id').messages({
+  'object.missing': 'Customer wajib dipilih.',
+  'object.xor':     'Pilih salah satu customer_uuid atau customer_id.',
+})
 
 const updateReceiptSchema = Joi.object({
   receipt_date:    Joi.date().iso(),

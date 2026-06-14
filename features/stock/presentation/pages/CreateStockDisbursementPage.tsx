@@ -10,11 +10,23 @@ import { fetchStockItems, createStockDisbursement } from '@/store/slices/stockSl
 import { fetchCustomers } from '@/store/slices/masterSlice'
 import { useToast } from '@/components/toast/useToast'
 import { validateDisbursement } from '@/features/stock/application/validators/StockDisbursementValidator'
+import { apiRequest } from '@/lib/apiClient'
+import { CustomerStockAvailableItem } from '@/features/stock/application/use-cases/GetCustomerStockDetail'
 
 interface DisbursementItemRow {
   id: string
   stock_item_id: string
+  kategori_name: string | null
   qty: string
+}
+
+interface StockOption {
+  key: string
+  stock_item_id: number
+  name: string
+  unit: string
+  current_stock: number
+  kategori_name: string | null
 }
 
 export default function CreateStockDisbursementPage() {
@@ -23,6 +35,7 @@ export default function CreateStockDisbursementPage() {
   const { push: pushToast } = useToast()
   const { items, isSubmitting } = useSelector((state: RootState) => state.stock)
   const { customers } = useSelector((state: RootState) => state.master)
+  const role = useSelector((state: RootState) => state.auth.user?.role ?? null)
 
   const [form, setForm] = useState({
     disbursement_date: new Date().toISOString().split('T')[0],
@@ -36,21 +49,74 @@ export default function CreateStockDisbursementPage() {
   })
 
   const [itemRows, setItemRows] = useState<DisbursementItemRow[]>([
-    { id: '1', stock_item_id: '', qty: '' },
+    { id: '1', stock_item_id: '', kategori_name: null, qty: '' },
   ])
+  const [customerAvailableItems, setCustomerAvailableItems] = useState<CustomerStockAvailableItem[]>([])
+  const [isLoadingAvailableItems, setIsLoadingAvailableItems] = useState(false)
 
   useEffect(() => {
+    if (role === 'admin_finance') {
+      pushToast({ title: 'Akses Ditolak', description: 'Anda tidak memiliki akses membuat stok keluar.', variant: 'error' })
+      router.replace('/stok')
+      return
+    }
     dispatch(fetchStockItems())
     if (!customers.length) dispatch(fetchCustomers())
-  }, [dispatch, customers.length])
+  }, [dispatch, customers.length, role, router, pushToast])
 
-  const activeItems = items.filter(i => i.is_active)
+  const selectedCustomer = form.customer_id
+    ? customers.find(customer => customer.id === Number(form.customer_id)) || null
+    : null
 
+  useEffect(() => {
+    let cancelled = false
+    if (!selectedCustomer?.uuid) {
+      setCustomerAvailableItems([])
+      setIsLoadingAvailableItems(false)
+      return
+    }
 
-  const selectedItemIds = itemRows.map(r => r.stock_item_id).filter(id => id !== '')
+    setIsLoadingAvailableItems(true)
+    apiRequest<CustomerStockAvailableItem[]>(`/stock/customers/${selectedCustomer.uuid}/available-items`, { method: 'GET' })
+      .then(response => {
+        if (!cancelled) setCustomerAvailableItems(response.data)
+      })
+      .catch(() => {
+        if (!cancelled) setCustomerAvailableItems([])
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingAvailableItems(false)
+      })
+
+    return () => { cancelled = true }
+  }, [selectedCustomer?.uuid])
+
+  const stockOptions: StockOption[] = selectedCustomer
+    ? customerAvailableItems.map(item => ({
+        key: `${item.stockItemId}::${item.categoryName ?? ''}`,
+        stock_item_id: item.stockItemId,
+        name: item.name,
+        unit: item.unit,
+        current_stock: Number(item.availableQty || 0),
+        kategori_name: item.categoryName ?? null,
+      }))
+    : items
+      .filter(i => i.is_active)
+      .map(item => ({
+        key: `${item.id}::`,
+        stock_item_id: item.id,
+        name: item.name,
+        unit: item.unit,
+        current_stock: item.current_stock,
+        kategori_name: null,
+      }))
+
+  const selectedOptionKeys = itemRows
+    .map(r => r.stock_item_id ? `${r.stock_item_id}::${r.kategori_name ?? ''}` : '')
+    .filter(Boolean)
 
   const addRow = () => {
-    setItemRows(prev => [...prev, { id: Date.now().toString(), stock_item_id: '', qty: '' }])
+    setItemRows(prev => [...prev, { id: Date.now().toString(), stock_item_id: '', kategori_name: null, qty: '' }])
   }
 
   const removeRow = (id: string) => {
@@ -62,15 +128,31 @@ export default function CreateStockDisbursementPage() {
     setItemRows(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r))
   }
 
+  const updateItemSelection = (id: string, optionKey: string) => {
+    const option = stockOptions.find(row => row.key === optionKey)
+    setItemRows(prev => prev.map(row => row.id === id
+      ? {
+          ...row,
+          stock_item_id: option ? String(option.stock_item_id) : '',
+          kategori_name: option?.kategori_name ?? null,
+          qty: '',
+        }
+      : row
+    ))
+  }
+
   const handleChange = (field: string, value: string) => {
     setForm(prev => ({
       ...prev,
       [field]: field === 'vehicle_plate' ? value.toUpperCase() : value,
     }))
+    if (field === 'customer_id') {
+      setItemRows([{ id: '1', stock_item_id: '', kategori_name: null, qty: '' }])
+    }
   }
 
   const getRowValidation = (row: DisbursementItemRow) => {
-    const item = activeItems.find(i => i.id === Number(row.stock_item_id))
+    const item = stockOptions.find(i => i.key === `${row.stock_item_id}::${row.kategori_name ?? ''}`)
     const qty = Number(row.qty)
     if (!item || !qty || qty <= 0) return null
     return validateDisbursement(item, qty)
@@ -83,8 +165,8 @@ export default function CreateStockDisbursementPage() {
       const v = getRowValidation(r)
       return v && !v.valid
     })) return false
-    const ids = itemRows.map(r => r.stock_item_id)
-    if (new Set(ids).size !== ids.length) return false
+    const keys = itemRows.map(r => `${r.stock_item_id}::${r.kategori_name ?? ''}`)
+    if (new Set(keys).size !== keys.length) return false
     return true
   }
 
@@ -102,7 +184,7 @@ export default function CreateStockDisbursementPage() {
         disbursement_date: form.disbursement_date,
         stock_item_id: Number(row.stock_item_id),
         qty: Number(row.qty),
-        kategori_name: null,
+        kategori_name: row.kategori_name,
         delivery_order_id: null,
         sj_number_manual: form.sj_number_manual || null,
         invoice_number_manual: form.invoice_number_manual || null,
@@ -155,13 +237,14 @@ export default function CreateStockDisbursementPage() {
 
               <div className="space-y-3">
                 {itemRows.map((row, idx) => {
-                  const selectedItem = activeItems.find(i => i.id === Number(row.stock_item_id))
+                  const rowKey = row.stock_item_id ? `${row.stock_item_id}::${row.kategori_name ?? ''}` : ''
+                  const selectedItem = stockOptions.find(i => i.key === rowKey)
                   const qty = Number(row.qty)
                   const rowValidation = selectedItem && qty > 0 ? validateDisbursement(selectedItem, qty) : null
                   const remainingAfter = selectedItem && qty > 0 && rowValidation?.valid
                     ? selectedItem.current_stock - qty
                     : null
-                  const isDuplicate = itemRows.filter(r => r.stock_item_id === row.stock_item_id && row.stock_item_id !== '').length > 1
+                  const isDuplicate = itemRows.filter(r => r.stock_item_id && `${r.stock_item_id}::${r.kategori_name ?? ''}` === rowKey).length > 1
 
                   return (
                     <div
@@ -185,17 +268,18 @@ export default function CreateStockDisbursementPage() {
                           <label className="block text-xs text-gray-500 mb-1">Pilih Barang *</label>
                           <select
                             className={`form-input w-full text-sm ${isDuplicate ? 'error' : ''}`}
-                            value={row.stock_item_id}
-                            onChange={e => updateRow(row.id, 'stock_item_id', e.target.value)}
+                            value={rowKey}
+                            onChange={e => updateItemSelection(row.id, e.target.value)}
+                            disabled={isLoadingAvailableItems}
                           >
-                            <option value="">— Pilih Barang —</option>
-                            {activeItems.map(item => (
+                            <option value="">{isLoadingAvailableItems ? 'Memuat stok customer...' : '— Pilih Barang —'}</option>
+                            {stockOptions.map(item => (
                               <option
-                                key={item.id}
-                                value={item.id}
-                                disabled={selectedItemIds.includes(String(item.id)) && String(item.id) !== row.stock_item_id}
+                                key={item.key}
+                                value={item.key}
+                                disabled={selectedOptionKeys.includes(item.key) && item.key !== rowKey}
                               >
-                                {item.name} (Stok: {item.current_stock} {item.unit})
+                                {item.name}{item.kategori_name ? ` - ${item.kategori_name}` : ''} (Stok: {item.current_stock} {item.unit})
                               </option>
                             ))}
                           </select>
@@ -256,11 +340,11 @@ export default function CreateStockDisbursementPage() {
                 <div className="mt-4 p-3 bg-red-50 rounded-xl border border-red-100">
                   <div className="text-xs font-semibold text-gray-600 mb-2">Ringkasan Keluar</div>
                   {itemRows.filter(r => r.stock_item_id && r.qty && Number(r.qty) > 0).map(row => {
-                    const item = activeItems.find(i => i.id === Number(row.stock_item_id))
+                    const item = stockOptions.find(i => i.key === `${row.stock_item_id}::${row.kategori_name ?? ''}`)
                     if (!item) return null
                     return (
                       <div key={row.id} className="flex justify-between text-xs text-gray-700 mb-1">
-                        <span>{item.name}</span>
+                        <span>{item.name}{item.kategori_name ? ` - ${item.kategori_name}` : ''}</span>
                         <span className="font-bold text-red-600">−{row.qty} {item.unit}</span>
                       </div>
                     )

@@ -1,11 +1,15 @@
-import { StockItem } from '../../domain/entities/StockItem'
-
 export interface ValidationResult {
   valid: boolean
   message: string
 }
 
-export function validateDisbursement(stockItem: StockItem, qtyRequested: number): ValidationResult {
+interface StockAvailability {
+  name: string
+  current_stock: number
+  unit: string
+}
+
+export function validateDisbursement(stockItem: StockAvailability, qtyRequested: number): ValidationResult {
   if (qtyRequested <= 0) {
     return { valid: false, message: 'Qty harus lebih dari 0' }
   }

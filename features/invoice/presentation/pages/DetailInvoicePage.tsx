@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useDispatch, useSelector } from 'react-redux'
-import { ArrowLeft, Printer, DollarSign, Paperclip, Pencil, Send, AlertTriangle, FileText, Wallet } from 'lucide-react'
+import { ArrowLeft, Printer, DollarSign, Paperclip, Pencil, Send, AlertTriangle, FileText, Wallet, Truck, UserRound } from 'lucide-react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { AppDispatch, RootState } from '@/store'
 import {
@@ -16,6 +16,7 @@ import {
   fetchAttachableSJ, sendInvoice, voidInvoice, attachSJ, detachSJ, updateInvoice,
 } from '@/store/slices/invoiceSlice'
 import { InvoiceStatus } from '../../domain/entities/Invoice'
+import { resolveEffectiveInvoiceServiceType } from '../../domain/services/invoiceServiceType'
 import useInvoiceDetail from '../hooks/useInvoiceDetail'
 import { useToast } from '@/components/toast/useToast'
 import InvoiceStatusBadge from '../components/InvoiceStatusBadge'
@@ -49,6 +50,9 @@ const METHOD_LABELS: Record<string, string> = {
   check: 'Cek/Giro',
 }
 
+const DELIVERY_ADDITIONAL_CHARGE_LABEL = 'Pembiayaan Lainnya'
+const DEFAULT_DELIVERY_FLEET_LABELS = new Set(['Pengiriman', 'Lainnya'])
+
 interface Props { uuid: string }
 
 export default function DetailInvoicePage({ uuid }: Props) {
@@ -57,7 +61,8 @@ export default function DetailInvoicePage({ uuid }: Props) {
   const { push: pushToast } = useToast()
   const { invoice, isLoading } = useInvoiceDetail(uuid)
   const { attachableSJ, modals } = useSelector((state: RootState) => state.invoice)
-  const role = useSelector((state: RootState) => state.auth.user?.role ?? 'super_admin')
+  const role = useSelector((state: RootState) => state.auth.user?.role ?? null)
+  const isReadOnly = role === 'admin_finance'
   const [activeTab, setActiveTab] = useState<'items' | 'sj' | 'payments' | 'lampiran'>('items')
   const [lampiranPaths, setLampiranPaths] = useState<string[]>([])
   const [isSavingLampiran, setIsSavingLampiran] = useState(false)
@@ -82,8 +87,38 @@ export default function DetailInvoicePage({ uuid }: Props) {
 
   const canManage = invoice.status !== InvoiceStatus.PAID && invoice.status !== InvoiceStatus.VOID
   const canEditDownPayment = invoice.status !== InvoiceStatus.VOID &&
-    (role === 'super_admin' || role === 'admin_finance')
-  const isRentalInvoice = invoice.service_type === 'rental'
+    role === 'super_admin'
+  const effectiveInvoiceServiceType = resolveEffectiveInvoiceServiceType(invoice.service_type, invoice.custom_service_name)
+  const isRentalInvoice = effectiveInvoiceServiceType === 'rental'
+  const serviceLabel = isRentalInvoice
+    ? 'Jasa Penyewaan'
+    : invoice.service_type === 'other'
+      ? invoice.custom_service_name || 'Jasa Lainnya'
+      : 'Jasa Pengiriman'
+  const paymentMethodLabel = METHOD_LABELS[invoice.payment_method] ?? invoice.payment_method
+  const paymentAccountLabel = invoice.payment_method === 'transfer'
+    ? invoice.bank_account
+      ? `${invoice.bank_account.bank_name} ${invoice.bank_account.account_number} a.n. ${invoice.bank_account.account_holder}`
+      : 'Rekening belum dipilih'
+    : null
+  const deliveryOperationItems = !isRentalInvoice
+    ? invoice.items.filter(item => item.fleet_label !== DELIVERY_ADDITIONAL_CHARGE_LABEL)
+    : []
+  const defaultFleetLabels = new Set([...DEFAULT_DELIVERY_FLEET_LABELS, invoice.custom_service_name].filter(Boolean))
+  const hasMeaningfulFleet = (item: typeof invoice.items[number]) =>
+    Boolean(item.fleet_id || item.fleet || (item.fleet_label && !defaultFleetLabels.has(item.fleet_label)))
+  const hasMeaningfulDriver = (item: typeof invoice.items[number]) =>
+    Boolean(item.driver_id || item.driver?.name || item.driver_name_manual)
+  const deliveryFleetItem = deliveryOperationItems.find(item => !item.source_sj_id && hasMeaningfulFleet(item)) ||
+    deliveryOperationItems.find(hasMeaningfulFleet)
+  const deliveryDriverItem = deliveryOperationItems.find(item => !item.source_sj_id && hasMeaningfulDriver(item)) ||
+    deliveryOperationItems.find(hasMeaningfulDriver)
+  const deliveryFleetLabel = deliveryFleetItem?.fleet_label && !defaultFleetLabels.has(deliveryFleetItem.fleet_label)
+    ? deliveryFleetItem.fleet_label
+    : deliveryFleetItem?.fleet
+      ? `${deliveryFleetItem.fleet.name}${deliveryFleetItem.fleet.plate_number ? ` (${deliveryFleetItem.fleet.plate_number})` : ''}`
+      : '-'
+  const deliveryDriverLabel = deliveryDriverItem?.driver?.name || deliveryDriverItem?.driver_name_manual || '-'
 
   const handleSaveLampiran = async () => {
     setIsSavingLampiran(true)
@@ -129,17 +164,9 @@ export default function DetailInvoicePage({ uuid }: Props) {
                 <div className="text-3xl font-bold font-mono" style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>
                   Invoice #{invoice.invoice_number}
                 </div>
-                <div className="text-sm text-gray-500 mt-1">{invoice.customer.name} · {invoice.project?.contract_number || 'Tanpa proyek'}</div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => dispatch(openGeneratePDFModal())}
-                  className="flex items-center gap-2 px-3 py-2 rounded-xl border text-sm"
-                  style={{ borderColor: 'var(--border-card)' }}
-                >
-                  <Printer size={14} />
-                  Cetak PDF
-                </button>
+                <div className="text-sm text-gray-500 mt-1">
+                  {invoice.customer.name}{invoice.project?.contract_number ? ` · ${invoice.project.contract_number}` : ''}
+                </div>
               </div>
             </div>
             <div className="flex items-center gap-3 mb-4">
@@ -207,16 +234,64 @@ export default function DetailInvoicePage({ uuid }: Props) {
             <div>
               {/* Info header */}
               <div className="rounded-xl p-4 mb-4 grid grid-cols-2 gap-x-8 gap-y-2 text-sm" style={{ backgroundColor: '#F9FAFB', border: '1px solid var(--border-card)' }}>
-                <div><span className="text-gray-500">Proyek</span><span className="ml-2 font-medium">{invoice.project?.name || 'Tanpa proyek'}</span></div>
+                {invoice.project && (
+                  <div><span className="text-gray-500">Proyek</span><span className="ml-2 font-medium">{invoice.project.name}</span></div>
+                )}
                 <div><span className="text-gray-500">Customer</span><span className="ml-2 font-medium">{invoice.customer.name}</span></div>
-                <div><span className="text-gray-500">No. Kontrak</span><span className="ml-2">{invoice.project?.contract_number || '-'}</span></div>
-                <div><span className="text-gray-500">Jenis Jasa</span><span className="ml-2">{isRentalInvoice ? 'Jasa Penyewaan' : 'Jasa Pengiriman'}</span></div>
+                {invoice.project && (
+                  <div><span className="text-gray-500">No. Kontrak</span><span className="ml-2">{invoice.project.contract_number || '-'}</span></div>
+                )}
+                <div><span className="text-gray-500">Jenis Jasa</span><span className="ml-2">{serviceLabel}</span></div>
+                {!isRentalInvoice && (
+                  <div><span className="text-gray-500">Mode Harga</span><span className="ml-2">{invoice.delivery_pricing_mode === 'item' ? 'Per Barang' : 'Per Pengiriman'}</span></div>
+                )}
                 <div><span className="text-gray-500">Tgl Invoice</span><span className="ml-2">{formatDate(invoice.invoice_date)}</span></div>
                 <div><span className="text-gray-500">Jatuh Tempo</span><span className="ml-2">{formatDate(invoice.due_date)}</span></div>
+                <div>
+                  <span className="text-gray-500">Metode Pembayaran</span>
+                  <span className="ml-2 font-medium">{paymentMethodLabel}</span>
+                </div>
+                {paymentAccountLabel && (
+                  <div>
+                    <span className="text-gray-500">Rekening Tujuan</span>
+                    <span className="ml-2">{paymentAccountLabel}</span>
+                  </div>
+                )}
                 <div><span className="text-gray-500">Catatan</span><span className="ml-2 text-gray-500 italic">{invoice.notes || '(kosong)'}</span></div>
               </div>
+              {!isRentalInvoice && (
+                <div className="bg-white rounded-xl border p-5 mb-4" style={{ borderColor: 'var(--border-card)' }}>
+                  <h3 className="text-sm font-semibold mb-4 text-gray-700">Rute & Muatan</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3 text-sm">
+                    <div>
+                      <div className="text-xs text-gray-500 mb-0.5">Lokasi Asal</div>
+                      <div className="font-medium text-gray-800">{invoice.origin || '-'}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-500 mb-0.5">Lokasi Tujuan</div>
+                      <div className="font-medium text-gray-800">{invoice.destination || '-'}</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Truck size={14} className="text-gray-400" />
+                      <span className="text-gray-500">Armada</span>
+                      <span className="font-medium">{deliveryFleetLabel}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <UserRound size={14} className="text-gray-400" />
+                      <span className="text-gray-500">Supir</span>
+                      <span className="font-medium">{deliveryDriverLabel}</span>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <div className="text-xs text-gray-500 mb-0.5">Deskripsi Muatan</div>
+                      <div className="text-gray-700 whitespace-pre-line">{invoice.cargo_description || '-'}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
               <InvoiceItemsTable
                 items={invoice.items}
+                serviceType={effectiveInvoiceServiceType}
+                deliveryPricingMode={invoice.delivery_pricing_mode}
                 subtotalAmount={invoice.subtotal_amount}
                 taxPercent={invoice.tax_percent}
                 taxAmount={invoice.tax_amount}
@@ -232,7 +307,7 @@ export default function DetailInvoicePage({ uuid }: Props) {
             <AttachedSJList
               attachedSj={invoice.attached_sj}
               invoiceStatus={invoice.status}
-              role={role}
+              role={isReadOnly ? 'viewer' : role ?? 'viewer'}
               onAttach={async () => {
                 const result = await dispatch(fetchAttachableSJ(invoice.uuid))
                 if (fetchAttachableSJ.rejected.match(result)) {
@@ -256,7 +331,7 @@ export default function DetailInvoicePage({ uuid }: Props) {
               paidAmount={invoice.paid_amount}
               downPaymentAmount={invoice.down_payment_amount}
               invoiceStatus={invoice.status}
-              role={role}
+              role={isReadOnly ? 'viewer' : role ?? 'viewer'}
               onAddPayment={() => dispatch(openRecordPaymentModal())}
               isOverdue={isOverdue}
             />
@@ -264,8 +339,13 @@ export default function DetailInvoicePage({ uuid }: Props) {
 
           {activeTab === 'lampiran' && (
             <div className="space-y-4">
-              <InvoiceLampiranUploadZone value={lampiranPaths} onChange={setLampiranPaths} invoiceUuid={uuid} />
-              <div className="flex justify-end">
+              {!isReadOnly && <InvoiceLampiranUploadZone value={lampiranPaths} onChange={setLampiranPaths} invoiceUuid={uuid} />}
+              {isReadOnly && (
+                <div className="text-sm text-gray-500">
+                  {lampiranPaths.length > 0 ? `${lampiranPaths.length} lampiran tersimpan.` : 'Tidak ada lampiran.'}
+                </div>
+              )}
+              {!isReadOnly && <div className="flex justify-end">
                 <button
                   onClick={handleSaveLampiran}
                   disabled={isSavingLampiran}
@@ -274,7 +354,7 @@ export default function DetailInvoicePage({ uuid }: Props) {
                 >
                   {isSavingLampiran ? 'Menyimpan...' : 'Simpan Lampiran'}
                 </button>
-              </div>
+              </div>}
             </div>
           )}
         </div>
@@ -285,7 +365,7 @@ export default function DetailInvoicePage({ uuid }: Props) {
           <div className="bg-white rounded-xl border p-5" style={{ borderColor: 'var(--border-card)' }}>
             <h3 className="text-sm font-semibold mb-3 text-gray-600">Aksi</h3>
             <div className="space-y-2">
-              {invoice.status === InvoiceStatus.DRAFT && (
+              {!isReadOnly && invoice.status === InvoiceStatus.DRAFT && (
                 <>
                   <button onClick={() => dispatch(openSendInvoiceModal())} className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: 'var(--green-primary)' }}>
                     <Send size={14} />Kirim ke Customer
@@ -297,15 +377,21 @@ export default function DetailInvoicePage({ uuid }: Props) {
               )}
               {canEditDownPayment && invoice.status !== InvoiceStatus.DRAFT && (
                 <button onClick={() => router.push(`/invoice/${uuid}/edit`)} className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm border" style={{ borderColor: 'var(--border-card)' }}>
-                  <Wallet size={14} />Edit DP / Uang Muka
+                  {invoice.status === InvoiceStatus.SENT ? <Pencil size={14} /> : <Wallet size={14} />}
+                  {invoice.status === InvoiceStatus.SENT ? 'Edit Invoice' : 'Edit DP / Uang Muka'}
+                </button>
+              )}
+              {(invoice.status === InvoiceStatus.SENT || invoice.status === InvoiceStatus.OUTSTANDING) && (
+                <button onClick={() => dispatch(openGeneratePDFModal())} className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: 'var(--green-primary)' }}>
+                  <Printer size={14} />Cetak PDF
                 </button>
               )}
               {(invoice.status === InvoiceStatus.SENT || invoice.status === InvoiceStatus.OUTSTANDING) && (
                 <>
-                  <button onClick={() => dispatch(openRecordPaymentModal())} className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: 'var(--green-primary)' }}>
+                  {!isReadOnly && <button onClick={() => dispatch(openRecordPaymentModal())} className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: 'var(--green-primary)' }}>
                     <DollarSign size={14} />Catat Pembayaran
-                  </button>
-                  {!isRentalInvoice && <button onClick={async () => {
+                  </button>}
+                  {!isReadOnly && !isRentalInvoice && <button onClick={async () => {
                     const result = await dispatch(fetchAttachableSJ(invoice.uuid))
                     if (fetchAttachableSJ.rejected.match(result)) {
                       pushToast({
@@ -320,9 +406,6 @@ export default function DetailInvoicePage({ uuid }: Props) {
                   }} className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm border" style={{ borderColor: 'var(--border-card)' }}>
                     <Paperclip size={14} />Kelola SJ Terlampir
                   </button>}
-                  <button onClick={() => dispatch(openGeneratePDFModal())} className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm border" style={{ borderColor: 'var(--border-card)' }}>
-                    <Printer size={14} />Cetak PDF
-                  </button>
                 </>
               )}
               {invoice.status === InvoiceStatus.PAID && (
@@ -359,16 +442,17 @@ export default function DetailInvoicePage({ uuid }: Props) {
             </span>
           </div>
 
-          {/* Project info */}
-          <div className="bg-white rounded-xl border p-5" style={{ borderColor: 'var(--border-card)' }}>
-            <h3 className="text-sm font-semibold mb-3 text-gray-600">Info Proyek</h3>
-            <div className="text-sm font-semibold">{invoice.project?.name || 'Tanpa proyek'}</div>
-            <div className="text-xs text-gray-500 mt-1">{invoice.project ? `${invoice.project.code} · ${invoice.project.contract_number}` : 'Invoice customer-only'}</div>
-            <div className="border-t mt-3 pt-3 space-y-1.5 text-xs text-gray-500" style={{ borderColor: 'var(--border-card)' }}>
-              <div>SJ di proyek: {invoice.attached_sj.length} SJ</div>
-              <div>Invoice aktif: 1 outstanding</div>
+          {invoice.project && (
+            <div className="bg-white rounded-xl border p-5" style={{ borderColor: 'var(--border-card)' }}>
+              <h3 className="text-sm font-semibold mb-3 text-gray-600">Info Proyek</h3>
+              <div className="text-sm font-semibold">{invoice.project.name}</div>
+              <div className="text-xs text-gray-500 mt-1">{invoice.project.code} · {invoice.project.contract_number}</div>
+              <div className="border-t mt-3 pt-3 space-y-1.5 text-xs text-gray-500" style={{ borderColor: 'var(--border-card)' }}>
+                <div>SJ di proyek: {invoice.attached_sj.length} SJ</div>
+                <div>Invoice aktif: 1 outstanding</div>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 

@@ -40,7 +40,7 @@ export default function DeleteConfirmModal({
           <p className="text-sm text-gray-600 leading-relaxed">{description}</p>
           <div className="mt-3 p-3 bg-red-50 rounded-xl border border-red-100">
             <p className="text-xs text-red-700 font-medium">
-              Perhatian: Tindakan ini tidak dapat dibatalkan dan akan mempengaruhi saldo stok.
+              Perhatian: Tindakan ini tidak dapat dibatalkan dan akan mempengaruhi saldo (sisa stock).
             </p>
           </div>
         </div>

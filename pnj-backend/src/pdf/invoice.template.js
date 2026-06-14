@@ -23,6 +23,9 @@ const C_GRAY     = '#888888'
 const C_BORDER   = '#555555'
 const C_HEAD_BG  = '#D0D0D0'   // abu-abu header tabel (sesuai gambar)
 const C_LINE     = '#888888'
+const DELIVERY_ADDITIONAL_CHARGE_LABEL = 'Pembiayaan Lainnya'
+const DEFAULT_DELIVERY_FLEET_LABELS = new Set(['Pengiriman', 'Lainnya'])
+const COPY_ROW_BG = [null, '#FFFDE7', '#FCE4EC']
 
 // ── Helper geometry ────────────────────────────────────────────────────────
 function pageGeom(doc) {
@@ -55,14 +58,134 @@ function formatQty(n) {
   return num.toLocaleString('id-ID', { maximumFractionDigits: 2 })
 }
 
+function formatRentalDuration(item) {
+  const parts = [
+    [item.rental_duration_years, 'Tahun'],
+    [item.rental_duration_months, 'Bulan'],
+    [item.rental_duration_days, 'Hari'],
+    [item.rental_duration_hours, 'Jam'],
+  ]
+    .filter(([value]) => Number(value || 0) > 0)
+    .map(([value, label]) => `${Number(value)} ${label}`)
+
+  return parts.length > 0 ? parts.join(' ') : ''
+}
+
+// ── Metode Pembayaran ─────────────────────────────────────────────────────
+/**
+ * Format baris "Metode Pembayaran" sesuai invoice.payment_method:
+ *  - 'transfer' → "Transfer Ke No Rek <bank> : <no.rek> a/n <pemilik>"
+ *    (data diambil dari bank_account terkait invoice; fallback ke
+ *    pengaturan rekening perusahaan jika invoice tidak punya bank_account)
+ *  - 'cash'     → "Tunai"
+ *  - 'check'    → "Cek / Giro"
+ */
+function formatPaymentMethod(invoice, company) {
+  const method = invoice.payment_method || 'transfer'
+
+  if (method === 'cash') return 'Tunai'
+  if (method === 'check') return 'Cek / Giro'
+
+  // transfer (default)
+  const acc = invoice.bank_account || invoice.bank_acc || null
+  const bankName   = acc?.bank_name      || company?.bank?.name   || ''
+  const accNumber  = acc?.account_number || company?.bank?.account || '-'
+  const accHolder  = acc?.account_holder || company?.bank?.holder || company?.name || '-'
+  return `Transfer Ke No Rek ${bankName} : ${accNumber} a/n ${accHolder}`
+}
+
+function formatPricePerUnit(item) {
+  if (Number(item.unit_price || 0) <= 0) return ''
+  return `${formatIDR(item.unit_price)} / ${item.unit || 'Unit'}`
+}
+
+function formatLineSubtotal(item) {
+  if (Number(item.subtotal || 0) <= 0) return ''
+  return formatIDR(item.subtotal)
+}
+
+function deliveryPriceQty(item) {
+  return Number(item.qty || 0)
+}
+
+function deliveryPriceUnit(item) {
+  return item.unit || 'Unit'
+}
+
+function formatDeliveryPricePerUnit(item) {
+  if (Number(item.unit_price || 0) <= 0) return ''
+  return `${formatIDR(item.unit_price)} / ${deliveryPriceUnit(item)}`
+}
+
+function formatDeliveryLineSubtotal(item) {
+  const calculated = deliveryPriceQty(item) * Number(item.unit_price || 0)
+  const subtotal = calculated > 0 ? calculated : Number(item.subtotal || 0)
+  if (subtotal <= 0) return ''
+  return formatIDR(subtotal)
+}
+
+function formatAdditionalChargeLabel(item) {
+  const description = String(item.description || DELIVERY_ADDITIONAL_CHARGE_LABEL)
+    .trim()
+    .replace(/\s*:$/, '')
+    .replace(/\s+\(([^)]+)\)\s*$/, '\n($1)')
+  return `${description} :`
+}
+
+function formatAdditionalChargeAmount(item) {
+  const amount = Number(item.subtotal || item.unit_price || 0)
+  return amount > 0 ? formatIDR(amount) : ''
+}
+
+function formatCargoQty(item) {
+  const qty = item.cargo_qty === null || item.cargo_qty === undefined
+    ? item.qty
+    : item.cargo_qty
+  const unit = item.cargo_unit || item.unit || 'Unit'
+  return `${formatQty(qty || 0)} ${unit}`
+}
+
+function isDeliveryAdditionalCharge(item) {
+  return item.fleet_label === DELIVERY_ADDITIONAL_CHARGE_LABEL &&
+    Number(item.unit_price || 0) > 0 &&
+    (item.cargo_qty === null || item.cargo_qty === undefined)
+}
+
+function effectiveServiceType(invoice) {
+  if (invoice.service_type === 'rental') return 'rental'
+  if (invoice.service_type === 'other') {
+    const name = String(invoice.custom_service_name || '').toLowerCase()
+    if (name.includes('penyewaan') || name.includes('sewa')) return 'rental'
+    if (name.includes('pengiriman')) return 'delivery'
+  }
+  return 'delivery'
+}
+
+function isShipmentPricingOnlyRow(item, invoice) {
+  return invoice.delivery_pricing_mode !== 'item' &&
+    Number(item.unit_price || 0) > 0 &&
+    (item.cargo_qty === null || item.cargo_qty === undefined) &&
+    (item.cargo_weight === null || item.cargo_weight === undefined) &&
+    (item.cargo_volume === null || item.cargo_volume === undefined) &&
+    !item.cargo_notes
+}
+
+function serviceName(invoice) {
+  if (effectiveServiceType(invoice) === 'rental' && invoice.service_type !== 'other') return 'Jasa Penyewaan'
+  if (invoice.service_type === 'other') return invoice.custom_service_name || 'Jasa Lainnya'
+  return 'Jasa Pengiriman'
+}
+
 function serviceRemark(invoice) {
-  return invoice.service_type === 'rental'
-    ? 'Tagihan Biaya Jasa Penyewaan.'
-    : 'Tagihan Biaya Jasa Pengiriman.'
+  return `Tagihan Biaya ${serviceName(invoice)}.`
+}
+
+function isDeliveryItemPricing(invoice) {
+  return effectiveServiceType(invoice) !== 'rental' && invoice.delivery_pricing_mode === 'item'
 }
 
 function findAttachedSjForItem(invoice, item) {
-  const attached = invoice.attachedSJs || invoice.attached_sj || []
+  const attached = getAttachedSJs(invoice)
   if (!Array.isArray(attached) || attached.length === 0) return null
   if (item.source_sj_id) {
     const match = attached.find(sj => Number(sj.id) === Number(item.source_sj_id))
@@ -71,8 +194,26 @@ function findAttachedSjForItem(invoice, item) {
   return attached.length === 1 ? attached[0] : null
 }
 
+function getAttachedSJs(invoice) {
+  return invoice.attachedSJs || invoice.attached_sj || []
+}
+
 function uniqueNonEmpty(values) {
   return [...new Set(values.map(v => String(v || '').trim()).filter(Boolean))]
+}
+
+function getAttachedSjNumbers(invoice) {
+  const manualNumbers = String(invoice.manual_sj_numbers || '')
+    .split(/[,;\n]+/)
+    .map(value => value.trim())
+  return uniqueNonEmpty([...getAttachedSJs(invoice).map(sj => sj.sj_number), ...manualNumbers])
+}
+
+function qtyNoteText(item, invoice) {
+  // Untuk invoice penyewaan, kolom Qty hanya menampilkan qty unit + durasi
+  // pemakaian — teks catatan/keterangan tidak ditampilkan di sini.
+  if (effectiveServiceType(invoice) === 'rental') return ''
+  return String(item.cargo_notes || '').trim()
 }
 
 function buildRentalDescription(item) {
@@ -86,42 +227,108 @@ function buildRentalDescription(item) {
   return lines.join('\n')
 }
 
-function buildDeliveryInfoRows(invoice, items) {
-  const fleets = uniqueNonEmpty(items.map(item => item.fleet_label))
-  const routes = uniqueNonEmpty(items.map(item => {
+function deliveryRouteText(invoice, items) {
+  if (invoice.origin || invoice.destination) {
+    return `Rute Pengiriman :\n${invoice.origin || '-'} - ${invoice.destination || '-'}`
+  }
+  const deliveryItems = items
+    .filter(item => !isDeliveryAdditionalCharge(item))
+    .filter(item => !isShipmentPricingOnlyRow(item, invoice))
+  const routes = uniqueNonEmpty(deliveryItems.map(item => {
     const sj = findAttachedSjForItem(invoice, item)
     if (!sj?.origin && !sj?.destination) return ''
     return `${sj.origin || '-'} - ${sj.destination || '-'}`
   }))
+  return routes.length > 0 ? `Rute Pengiriman :\n${routes.join(', ')}` : ''
+}
+
+function meaningfulFleetLabels(items, invoice) {
+  const ignoredLabels = new Set([...DEFAULT_DELIVERY_FLEET_LABELS, invoice.custom_service_name].filter(Boolean))
+  return uniqueNonEmpty(items
+    .map(item => item.fleet_label)
+    .filter(label => label && !ignoredLabels.has(label)))
+}
+
+function buildDeliveryInfoRows(invoice, items) {
+  const deliveryItems = items
+    .filter(item => !isDeliveryAdditionalCharge(item))
+    .filter(item => !isShipmentPricingOnlyRow(item, invoice))
+  const manualItems = deliveryItems.filter(item => !item.source_sj_id)
+  const manualFleetLabels = meaningfulFleetLabels(manualItems, invoice)
+  const fleets = manualFleetLabels.length > 0
+    ? manualFleetLabels
+    : meaningfulFleetLabels(deliveryItems, invoice)
   const rows = []
   if (fleets.length > 0) {
-    rows.push({ noText: '', descText: `Armada :\n${fleets.join(', ')}` })
-  }
-  if (routes.length > 0) {
-    rows.push({ noText: '', descText: `Rute Pengiriman :\n${routes.join(', ')}` })
+    rows.push({ noText: '', descText: `Armada :\n${fleets.join(', ')}`, isInfoRow: true })
   }
   return rows
 }
 
 function buildInvoiceTableRows(invoice, items) {
-  if (invoice.service_type === 'rental') {
-    return items.map((item, idx) => ({
-      noText:  String(idx + 1),
-      descText: buildRentalDescription(item),
-      qtyText: `${formatQty(item.qty || 1)} ${item.unit || 'Unit'}`,
-      hrgText: formatIDR(item.unit_price),
-      jmlText: formatIDR(item.subtotal),
-    }))
+  if (effectiveServiceType(invoice) === 'rental') {
+    return items.map((item, idx) => {
+      const durationText = formatRentalDuration(item)
+      const noteText = qtyNoteText(item, invoice)
+      const rentedUnitQty = item.cargo_qty === null || item.cargo_qty === undefined
+        ? item.qty || 1
+        : item.cargo_qty
+      const qtyMainText = `${formatQty(rentedUnitQty)} unit`
+      const qtyUsageText = [durationText ? `${durationText}\nPemakaian` : '', noteText].filter(Boolean).join('\n\n')
+      return {
+        noText:  String(idx + 1),
+        descText: buildRentalDescription(item),
+        qtyText: [qtyMainText, qtyUsageText].filter(Boolean).join('\n'),
+        qtyMainText,
+        qtyUsageText,
+        hasQtyDivider: Boolean(qtyUsageText),
+        hrgText: formatPricePerUnit(item),
+        jmlText: formatLineSubtotal(item),
+      }
+    })
   }
 
-  const itemRows = items.map((item, idx) => ({
-    noText:  String(idx + 1),
-    descText: item.description || '-',
-    qtyText: `${formatQty(item.qty || 1)} ${item.unit || 'Unit'}`,
-    hrgText: formatIDR(item.unit_price),
-    jmlText: formatIDR(item.subtotal),
-  }))
-  return [...itemRows, ...buildDeliveryInfoRows(invoice, items)]
+  const deliveryItems = items.filter(item => !isDeliveryAdditionalCharge(item))
+  const shipmentPricingItem = !isDeliveryItemPricing(invoice)
+    ? deliveryItems.find(item => Number(item.subtotal || 0) > 0 || Number(item.unit_price || 0) > 0)
+    : null
+  const cargoItems = isDeliveryItemPricing(invoice)
+    ? deliveryItems
+    : deliveryItems.filter(item => !isShipmentPricingOnlyRow(item, invoice))
+  const additionalChargeRows = items
+    .filter(isDeliveryAdditionalCharge)
+    .map(item => ({
+      noText: '',
+      descText: '',
+      qtyText: '',
+      hrgText: formatAdditionalChargeLabel(item),
+      jmlText: formatAdditionalChargeAmount(item),
+      isAdditionalChargeRow: true,
+    }))
+  const itemRows = cargoItems.map((item, idx) => {
+    const noteText = qtyNoteText(item, invoice)
+    return {
+      noText:  String(idx + 1),
+      descText: item.description || item.cargo_notes || '-',
+      qtyText: [formatCargoQty(item), noteText].filter(Boolean).join('\n\n'),
+      hrgText: isDeliveryItemPricing(invoice)
+        ? formatDeliveryPricePerUnit(item)
+        : idx === 0 && shipmentPricingItem ? formatPricePerUnit(shipmentPricingItem) : '',
+      jmlText: isDeliveryItemPricing(invoice)
+        ? formatDeliveryLineSubtotal(item)
+        : idx === 0 && shipmentPricingItem ? formatLineSubtotal(shipmentPricingItem) : '',
+    }
+  })
+  if (!isDeliveryItemPricing(invoice) && itemRows.length === 0 && shipmentPricingItem) {
+    itemRows.push({
+      noText: '1',
+      descText: '',
+      qtyText: '',
+      hrgText: formatPricePerUnit(shipmentPricingItem),
+      jmlText: formatLineSubtotal(shipmentPricingItem),
+    })
+  }
+  return [...itemRows, ...additionalChargeRows, ...buildDeliveryInfoRows(invoice, items)]
 }
 
 // ── Draw logo (fallback: teks "PNJ" dalam kotak) ──────────────────────────
@@ -199,7 +406,7 @@ function drawHeader(doc, company, options) {
 
 // ── 2. Bar Info Dokumen ────────────────────────────────────────────────────
 function drawDocInfoBar(doc, invoice, startY) {
-  const { L, R, W } = pageGeom(doc)
+  const { L, W } = pageGeom(doc)
 
   const noText      = `No : ${invoice.invoice_number || '-'}`
   const tglText     = `Tanggal :${formatDateShort(invoice.invoice_date)}`
@@ -226,8 +433,11 @@ function drawDocInfoBar(doc, invoice, startY) {
 
 // ── 3. Kepada + No Kontrak ────────────────────────────────────────────────
 function drawRecipientBlock(doc, invoice, startY) {
-  const { L, R, W } = pageGeom(doc)
+  const { L, W } = pageGeom(doc)
   const colW = W / 2
+  const rightX = L + colW
+  const sjNumbers = getAttachedSjNumbers(invoice)
+  const sjText = sjNumbers.length > 0 ? `No SJ : ${sjNumbers.join(', ')}` : ''
 
   let y = startY
 
@@ -237,18 +447,22 @@ function drawRecipientBlock(doc, invoice, startY) {
   y = doc.y
   doc.font('Helvetica-Bold').fontSize(9).fillColor(C_DARK)
      .text(invoice.customer?.name || '-', L, y)
+  const customerNameY = y
   y = doc.y
-  doc.font('Helvetica').fontSize(9).fillColor(C_DARK)
-     .text('Indonesia', L, y)
+
+  if (sjText) {
+    doc.font('Helvetica').fontSize(9).fillColor(C_DARK)
+       .text(sjText, rightX, customerNameY, { width: colW, align: 'right' })
+  }
 
   // No Kontrak (kanan) — ditulis di baris pertama sejajar "Kepada :"
   if (invoice.project?.contract_number || invoice.project?.code) {
     const contractNo = invoice.project.contract_number || invoice.project.code
     doc.font('Helvetica').fontSize(9).fillColor(C_DARK)
-       .text(`No Kontrak : ${contractNo}`, L + colW, startY, { width: colW, align: 'right' })
+       .text(`No Kontrak : ${contractNo}`, rightX, startY, { width: colW, align: 'right' })
   }
 
-  return doc.y + 8
+  return Math.max(doc.y, y) + 8
 }
 
 // ── 4. Tabel Item ─────────────────────────────────────────────────────────
@@ -256,8 +470,9 @@ function drawRecipientBlock(doc, invoice, startY) {
  * Kolom: No | Deskripsi | Keterangan | Qty | Harga | Jumlah
  * Satu baris per item, tinggi baris auto-fit berdasarkan konten terpanjang.
  */
-function drawItemTable(doc, invoice, startY) {
+function drawItemTable(doc, invoice, startY, copyIndex = 0) {
   const { L, W } = pageGeom(doc)
+  const rowBg = COPY_ROW_BG[copyIndex] || null
 
   // Lebar kolom
   const COL_NO    = 24
@@ -276,38 +491,58 @@ function drawItemTable(doc, invoice, startY) {
   const X_JML  = X_HRG  + COL_HARGA
 
   const FONT_SZ  = 8.5
+  const KET_FONT_SZ = 7.2
   const PAD      = 4    // padding horizontal & vertical dalam sel
   const MIN_ROW  = 22   // tinggi baris minimum
 
   const HEADER_H = 18
   let y = startY
 
-  // ── Header row ───────────────────────────────────────────────────────────
-  doc.rect(L, y, W, HEADER_H).fillAndStroke(C_HEAD_BG, C_BORDER)
-  doc.font('Helvetica-Bold').fontSize(FONT_SZ).fillColor(C_DARK)
-  ;[
-    { label: 'No',         x: X_NO,   w: COL_NO,    align: 'center' },
-    { label: 'Deskripsi',  x: X_DESC, w: COL_DESC,  align: 'center' },
-    { label: 'Keterangan', x: X_KET,  w: COL_KET,   align: 'center' },
-    { label: 'Qty',        x: X_QTY,  w: COL_QTY,   align: 'center' },
-    { label: 'Harga',      x: X_HRG,  w: COL_HARGA, align: 'center' },
-    { label: 'Jumlah',     x: X_JML,  w: COL_JML,   align: 'center' },
-  ].forEach(h => doc.text(h.label, h.x + 2, y + 5, { width: h.w - 4, align: h.align }))
-  y += HEADER_H
+  function drawTableHeader(headerY) {
+    doc.rect(L, headerY, W, HEADER_H).fillAndStroke(rowBg || C_HEAD_BG, C_BORDER)
+    doc.font('Helvetica-Bold').fontSize(FONT_SZ).fillColor(C_DARK)
+    ;[
+      { label: 'No',         x: X_NO,   w: COL_NO,    align: 'center' },
+      { label: 'Deskripsi',  x: X_DESC, w: COL_DESC,  align: 'center' },
+      { label: 'Keterangan', x: X_KET,  w: COL_KET,   align: 'center' },
+      { label: 'Qty',        x: X_QTY,  w: COL_QTY,   align: 'center' },
+      { label: 'Harga',      x: X_HRG,  w: COL_HARGA, align: 'center' },
+      { label: 'Jumlah',     x: X_JML,  w: COL_JML,   align: 'center' },
+    ].forEach(h => doc.text(h.label, h.x + 2, headerY + 5, { width: h.w - 4, align: h.align }))
+    return headerY + HEADER_H
+  }
+
+  function drawPageContinuationHeader() {
+    doc.addPage()
+    return drawTableHeader(doc.page.margins.top)
+  }
+
+  y = drawTableHeader(y)
 
   // ── Item rows ─────────────────────────────────────────────────────────────
   const items = invoice.items || []
 
   if (items.length === 0) {
     const rowH = 24
-    borderRect(doc, L, y, W, rowH)
+    if (rowBg) {
+      doc.rect(L, y, W, rowH).fillAndStroke(rowBg, C_BORDER)
+    } else {
+      borderRect(doc, L, y, W, rowH)
+    }
     doc.font('Helvetica').fontSize(FONT_SZ).fillColor(C_GRAY)
        .text('(tidak ada item)', L + 2, y + 7, { width: W - 4, align: 'center' })
     y += rowH
   } else {
-    const ketText  = serviceRemark(invoice)
+    const routeText = effectiveServiceType(invoice) === 'rental' ? '' : deliveryRouteText(invoice, items)
+    const ketParts = [serviceRemark(invoice), routeText].filter(Boolean)
+    const ketText = ketParts.join('\n\n')
+    doc.font('Helvetica').fontSize(KET_FONT_SZ)
+    const ketContentW = COL_KET - PAD * 2
+    const ketPartHeights = ketParts.map(part => doc.heightOfString(part, { width: ketContentW, align: 'center' }))
+    const hKet = ketParts.length > 1
+      ? ketPartHeights.reduce((sum, h) => sum + h, 0) + PAD * 3
+      : doc.heightOfString(ketText, { width: ketContentW, align: 'center' })
     doc.font('Helvetica').fontSize(FONT_SZ)
-    const hKet  = doc.heightOfString(ketText,  { width: COL_KET  - PAD * 2, align: 'center' })
     const itemRows = buildInvoiceTableRows(invoice, items).map((row) => {
       const hNo   = doc.heightOfString(row.noText || '', { width: COL_NO - 4 })
       const hDesc = doc.heightOfString(row.descText || '', { width: COL_DESC - PAD * 2 })
@@ -320,46 +555,177 @@ function drawItemTable(doc, invoice, startY) {
         rowH:    Math.max(MIN_ROW, hNo + PAD * 2, hDesc + PAD * 2, hQty + PAD * 2, hHrg + PAD * 2, hJml + PAD * 2),
       }
     })
-    const detailRowsH = itemRows.reduce((sum, row) => sum + row.rowH, 0)
-    const blockH = Math.max(detailRowsH, hKet + PAD * 2)
-    const blockStartY = y
+    const mergePriceColumns = effectiveServiceType(invoice) !== 'rental' && !isDeliveryItemPricing(invoice)
 
-    doc.rect(X_KET,  blockStartY, COL_KET,  blockH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+    function drawRowsBlock(rows, blockStartY) {
+      const detailRowsH = rows.reduce((sum, row) => sum + row.rowH, 0)
+      const blockH = Math.max(detailRowsH, hKet + PAD * 2)
+      const ketSplit = ketParts.length > 1
+        ? (() => {
+            const halfH = blockH / 2
+            return { upperBoxH: halfH, lowerBoxH: halfH }
+          })()
+        : null
 
-    const centerY = (height) => blockStartY + Math.max(PAD, (blockH - height) / 2)
-    doc.font('Helvetica-Bold').fontSize(FONT_SZ).fillColor(C_DARK)
-       .text(ketText, X_KET + PAD, centerY(hKet), { width: COL_KET - PAD * 2, align: 'center' })
-    doc.font('Helvetica').fillColor(C_DARK)
+      if (ketSplit) {
+        if (rowBg) {
+          doc.rect(X_KET, blockStartY, COL_KET, blockH).fill(rowBg)
+        }
+      } else if (rowBg) {
+        doc.rect(X_KET, blockStartY, COL_KET, blockH).fill(rowBg)
+      }
+      if (mergePriceColumns) {
+        const mergeRowsH = rows.reduce((sum, row) => row.isInfoRow || row.isAdditionalChargeRow ? sum : sum + row.rowH, 0)
+        const hasNonMergedRows = rows.some(row => row.isInfoRow || row.isAdditionalChargeRow)
+        const mergedBlockH = hasNonMergedRows ? mergeRowsH : blockH
+        const mergedHrgText = rows.find(row => row.hrgText && !row.isAdditionalChargeRow)?.hrgText || ''
+        const mergedJmlText = rows.find(row => row.jmlText && !row.isAdditionalChargeRow)?.jmlText || ''
+        const hMergedHrg = doc.heightOfString(mergedHrgText, { width: COL_HARGA - PAD * 2 })
+        const hMergedJml = doc.heightOfString(mergedJmlText, { width: COL_JML - PAD * 2 })
 
-    let rowY = blockStartY
-    itemRows.forEach((row) => {
-      const textY = (height) => rowY + Math.max(PAD, (row.rowH - height) / 2)
-      doc.rect(X_NO, rowY, COL_NO, row.rowH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
-      doc.rect(X_DESC, rowY, COL_DESC, row.rowH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
-      doc.rect(X_QTY, rowY, COL_QTY, row.rowH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
-      doc.rect(X_HRG, rowY, COL_HARGA, row.rowH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
-      doc.rect(X_JML, rowY, COL_JML, row.rowH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
-      doc.text(row.noText || '', X_NO + 2, textY(row.heights.no), { width: COL_NO - 4, align: 'center', lineBreak: false })
-      doc.text(row.descText || '', X_DESC + PAD, textY(row.heights.desc), { width: COL_DESC - PAD * 2 })
-      doc.text(row.qtyText || '', X_QTY + PAD, textY(row.heights.qty), { width: COL_QTY - PAD * 2, align: 'center' })
-      doc.text(row.hrgText || '', X_HRG + PAD, textY(row.heights.hrg), { width: COL_HARGA - PAD * 2, align: 'right' })
-      doc.text(row.jmlText || '', X_JML + PAD, textY(row.heights.jml), { width: COL_JML - PAD * 2, align: 'right' })
-      rowY += row.rowH
-    })
-    if (rowY < blockStartY + blockH) {
-      const fillerH = blockStartY + blockH - rowY
-      doc.rect(X_NO, rowY, COL_NO, fillerH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
-      doc.rect(X_DESC, rowY, COL_DESC, fillerH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
-      doc.rect(X_QTY, rowY, COL_QTY, fillerH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
-      doc.rect(X_HRG, rowY, COL_HARGA, fillerH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
-      doc.rect(X_JML, rowY, COL_JML, fillerH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+        if (mergedBlockH > 0) {
+          if (rowBg) {
+            doc.rect(X_HRG, blockStartY, COL_HARGA, mergedBlockH).fillAndStroke(rowBg, C_BORDER)
+            doc.rect(X_JML, blockStartY, COL_JML, mergedBlockH).fillAndStroke(rowBg, C_BORDER)
+          } else {
+            doc.rect(X_HRG, blockStartY, COL_HARGA, mergedBlockH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+            doc.rect(X_JML, blockStartY, COL_JML, mergedBlockH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+          }
+          doc.font('Helvetica').fillColor(C_DARK)
+          doc.text(mergedHrgText, X_HRG + PAD, blockStartY + Math.max(PAD, (mergedBlockH - hMergedHrg) / 2), { width: COL_HARGA - PAD * 2, align: 'right' })
+          doc.text(mergedJmlText, X_JML + PAD, blockStartY + Math.max(PAD, (mergedBlockH - hMergedJml) / 2), { width: COL_JML - PAD * 2, align: 'right' })
+        }
+      }
+
+      const centerY = (height) => blockStartY + Math.max(PAD, (blockH - height) / 2)
+      doc.font('Helvetica').fontSize(KET_FONT_SZ).fillColor(C_DARK)
+      if (ketSplit) {
+        const dividerY = blockStartY + ketSplit.upperBoxH
+        const upperTextY = blockStartY + Math.max(PAD, (ketSplit.upperBoxH - ketPartHeights[0]) / 2)
+        const lowerTextY = dividerY + Math.max(PAD, (ketSplit.lowerBoxH - ketPartHeights[1]) / 2)
+        doc.text(ketParts[0], X_KET + PAD, upperTextY, { width: ketContentW, align: 'center' })
+        doc.font('Helvetica').fontSize(KET_FONT_SZ).fillColor(C_DARK)
+        doc.text(ketParts[1], X_KET + PAD, lowerTextY, { width: ketContentW, align: 'center' })
+      } else {
+        doc.text(ketText, X_KET + PAD, centerY(hKet), { width: ketContentW, align: 'center' })
+      }
+      doc.font('Helvetica').fontSize(FONT_SZ).fillColor(C_DARK)
+
+      let rowY = blockStartY
+      rows.forEach((row) => {
+        const textY = (height) => rowY + Math.max(PAD, (row.rowH - height) / 2)
+        const drawQtyCellText = () => {
+          doc.font('Helvetica').fontSize(FONT_SZ).fillColor(C_DARK)
+          if (!row.hasQtyDivider) {
+            doc.text(row.qtyText || '', X_QTY + PAD, textY(row.heights.qty), { width: COL_QTY - PAD * 2, align: 'center' })
+            return
+          }
+
+          const qtyWidth = COL_QTY - PAD * 2
+          const hMain = doc.heightOfString(row.qtyMainText || '', { width: qtyWidth, align: 'center' })
+          const hUsage = doc.heightOfString(row.qtyUsageText || '', { width: qtyWidth, align: 'center' })
+          const minDividerY = rowY + PAD + hMain + 2
+          const preferredDividerY = rowY + PAD + hMain + PAD
+          const maxDividerY = rowY + row.rowH - PAD - hUsage - PAD
+          const dividerY = Math.max(minDividerY, Math.min(maxDividerY, preferredDividerY))
+          const lowerY = dividerY + PAD
+          doc.text(row.qtyMainText || '', X_QTY + PAD, rowY + PAD, { width: qtyWidth, align: 'center' })
+          doc.moveTo(X_QTY, dividerY).lineTo(X_QTY + COL_QTY, dividerY).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+          doc.font('Helvetica').fontSize(FONT_SZ).fillColor(C_DARK)
+          doc.text(row.qtyUsageText || '', X_QTY + PAD, lowerY, { width: qtyWidth, align: 'center' })
+        }
+        if (rowBg) {
+          doc.rect(X_NO, rowY, COL_NO, row.rowH).fillAndStroke(rowBg, C_BORDER)
+          doc.rect(X_DESC, rowY, COL_DESC, row.rowH).fillAndStroke(rowBg, C_BORDER)
+          doc.rect(X_QTY, rowY, COL_QTY, row.rowH).fillAndStroke(rowBg, C_BORDER)
+        } else {
+          doc.rect(X_NO, rowY, COL_NO, row.rowH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+          doc.rect(X_DESC, rowY, COL_DESC, row.rowH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+          doc.rect(X_QTY, rowY, COL_QTY, row.rowH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+        }
+        if (!mergePriceColumns || row.isInfoRow || row.isAdditionalChargeRow) {
+          if (rowBg) {
+            doc.rect(X_HRG, rowY, COL_HARGA, row.rowH).fillAndStroke(rowBg, C_BORDER)
+            doc.rect(X_JML, rowY, COL_JML, row.rowH).fillAndStroke(rowBg, C_BORDER)
+          } else {
+            doc.rect(X_HRG, rowY, COL_HARGA, row.rowH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+            doc.rect(X_JML, rowY, COL_JML, row.rowH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+          }
+        }
+        doc.font('Helvetica').fontSize(FONT_SZ).fillColor(C_DARK)
+        doc.text(row.noText || '', X_NO + 2, textY(row.heights.no), { width: COL_NO - 4, align: 'center', lineBreak: false })
+        doc.text(row.descText || '', X_DESC + PAD, textY(row.heights.desc), { width: COL_DESC - PAD * 2 })
+        drawQtyCellText()
+        doc.font('Helvetica').fontSize(FONT_SZ).fillColor(C_DARK)
+        if (!mergePriceColumns || row.isInfoRow || row.isAdditionalChargeRow) {
+          doc.text(row.hrgText || '', X_HRG + PAD, textY(row.heights.hrg), { width: COL_HARGA - PAD * 2, align: 'right' })
+          doc.text(row.jmlText || '', X_JML + PAD, textY(row.heights.jml), { width: COL_JML - PAD * 2, align: 'right' })
+        }
+        rowY += row.rowH
+      })
+      if (rowY < blockStartY + blockH) {
+        const fillerH = blockStartY + blockH - rowY
+        if (rowBg) {
+          doc.rect(X_NO, rowY, COL_NO, fillerH).fillAndStroke(rowBg, C_BORDER)
+          doc.rect(X_DESC, rowY, COL_DESC, fillerH).fillAndStroke(rowBg, C_BORDER)
+          doc.rect(X_QTY, rowY, COL_QTY, fillerH).fillAndStroke(rowBg, C_BORDER)
+        } else {
+          doc.rect(X_NO, rowY, COL_NO, fillerH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+          doc.rect(X_DESC, rowY, COL_DESC, fillerH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+          doc.rect(X_QTY, rowY, COL_QTY, fillerH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+        }
+        if (!mergePriceColumns || rows.some(row => row.isInfoRow || row.isAdditionalChargeRow)) {
+          if (rowBg) {
+            doc.rect(X_HRG, rowY, COL_HARGA, fillerH).fillAndStroke(rowBg, C_BORDER)
+            doc.rect(X_JML, rowY, COL_JML, fillerH).fillAndStroke(rowBg, C_BORDER)
+          } else {
+            doc.rect(X_HRG, rowY, COL_HARGA, fillerH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+            doc.rect(X_JML, rowY, COL_JML, fillerH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+          }
+        }
+      }
+      if (ketSplit) {
+        const dividerY = blockStartY + ketSplit.upperBoxH
+        doc.rect(X_KET, blockStartY, COL_KET, blockH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+        doc.moveTo(X_KET, dividerY).lineTo(X_KET + COL_KET, dividerY).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+      } else {
+        doc.rect(X_KET, blockStartY, COL_KET, blockH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+      }
+      return blockStartY + blockH
     }
-    y += blockH
+
+    const pageBottom = () => doc.page.height - doc.page.margins.bottom - 18
+    let pageRows = []
+    let pageRowsH = 0
+
+    for (const row of itemRows) {
+      const nextRowsH = pageRowsH + row.rowH
+      const nextBlockH = Math.max(nextRowsH, hKet + PAD * 2)
+      if (pageRows.length > 0 && y + nextBlockH > pageBottom()) {
+        y = drawRowsBlock(pageRows, y)
+        y = drawPageContinuationHeader()
+        pageRows = []
+        pageRowsH = 0
+      }
+      pageRows.push(row)
+      pageRowsH += row.rowH
+    }
+
+    if (pageRows.length > 0) {
+      y = drawRowsBlock(pageRows, y)
+    }
   }
 
   // Baris spacer bawah tabel
   const spacerH = 14
-  doc.rect(L, y, W, spacerH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+  if (y + spacerH > doc.page.height - doc.page.margins.bottom) {
+    y = drawPageContinuationHeader()
+  }
+  if (rowBg) {
+    doc.rect(L, y, W, spacerH).fillAndStroke(rowBg, C_BORDER)
+  } else {
+    doc.rect(L, y, W, spacerH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+  }
   y += spacerH
 
   return y
@@ -382,16 +748,15 @@ function drawFooter(doc, invoice, company, startY) {
      .text('Metode Pembayaran :', L, leftY)
   leftY = doc.y + 2
   doc.font('Helvetica').fontSize(9).fillColor(C_DARK)
-  const bankLine = `Transfer Ke no Rek ${company.bank.name || ''} : ${company.bank.account || '-'} a/n ${company.bank.holder || company.name || '-'}`
-  doc.text(bankLine, L, leftY, { width: COL_LEFT_W - PAD })
+  doc.text(formatPaymentMethod(invoice, company), L, leftY, { width: COL_LEFT_W - PAD })
   leftY = doc.y + 4
 
   doc.font('Helvetica-Bold').fontSize(9).fillColor(C_DARK)
      .text('Note :', L, leftY)
   leftY = doc.y + 2
-  const defaultNote = 'Setelah Pembayaran dilakukan, mohon kirimkan bukti transfer ke email kami atau hubungi admin kami melalui WhatsApp'
-  const invoiceNote = String(invoice.notes || '').trim()
-  const noteText = invoiceNote ? `${invoiceNote},\n${defaultNote}` : defaultNote
+  // Catatan internal (invoice.notes) tidak ditampilkan di PDF — hanya pesan
+  // standar pembayaran.
+  const noteText = 'Setelah Pembayaran dilakukan, mohon kirimkan bukti transfer ke email kami atau hubungi admin kami melalui WhatsApp'
   doc.font('Helvetica').fontSize(8).fillColor(C_DARK)
      .text(noteText, L, leftY, { width: COL_LEFT_W - PAD })
   leftY = doc.y + 6
@@ -469,12 +834,21 @@ function drawSignatures(doc, invoice, company, startY) {
      .text(invoice.customer?.name || '(___________________)', L, y + 3, { width: colW, align: 'center' })
   doc.font('Helvetica').fontSize(9).fillColor(C_DARK)
      .text(company.name || 'PT. Pelangi Nuansa Jaya', L + colW, y + 3, { width: colW, align: 'center' })
+
+  // y posisi setelah baris nama (untuk penempatan footer "Dicetak pada")
+  return y + 16
 }
 
 // ── Footer page (nomor + tanggal cetak) ─────────────────────────────────
-function drawPageFooter(doc, invoice) {
+// contentY: posisi Y setelah konten terakhir (mis. tanda tangan). Footer
+// diletakkan tepat di bawah konten tersebut, tapi tidak melewati batas
+// bawah halaman.
+function drawPageFooter(doc, invoice, contentY = null) {
   const { L, W } = pageGeom(doc)
-  const footerY  = doc.page.height - doc.page.margins.bottom - 10
+  const maxFooterY = doc.page.height - doc.page.margins.bottom - 10
+  const footerY = contentY != null
+    ? Math.min(contentY + 10, maxFooterY)
+    : maxFooterY
   doc.font('Helvetica').fontSize(7).fillColor(C_GRAY)
      .text(
        `Dicetak pada ${formatDateShort(new Date())} — ${invoice.invoice_number || ''}`,
@@ -486,6 +860,7 @@ function drawPageFooter(doc, invoice) {
 // ── Lampiran SJ (halaman terakhir jika includeSJ) ─────────────────────────
 function drawSJAppendix(doc, invoice, company, options) {
   const { L, R, W } = pageGeom(doc)
+  const attachedSJs = getAttachedSJs(invoice)
 
   doc.addPage()
   drawHeader(doc, company, options)
@@ -515,7 +890,7 @@ function drawSJAppendix(doc, invoice, company, options) {
   y += 18
 
   doc.fillColor(C_DARK).font('Helvetica').fontSize(9)
-  ;(invoice.attachedSJs || []).forEach((sj, idx) => {
+  attachedSJs.forEach((sj, idx) => {
     if (y + 18 > doc.page.height - doc.page.margins.bottom - 30) {
       doc.addPage()
       y = doc.page.margins.top
@@ -533,7 +908,7 @@ function drawSJAppendix(doc, invoice, company, options) {
     y += 18
   })
 
-  drawPageFooter(doc, invoice)
+  drawPageFooter(doc, invoice, y + 4)
 }
 
 // ── Render satu salinan Invoice ───────────────────────────────────────────
@@ -542,7 +917,7 @@ function drawSJAppendix(doc, invoice, company, options) {
  * Jika konten melebihi satu halaman, fungsi ini akan memanggil doc.addPage()
  * sendiri (perilaku sama dengan sebelumnya).
  */
-function renderOneCopy(doc, invoice, company, options = {}) {
+function renderOneCopy(doc, invoice, company, options = {}, copyIndex = 0) {
   const {
     includeLogo = true,
     includeSig  = true,
@@ -558,7 +933,7 @@ function renderOneCopy(doc, invoice, company, options = {}) {
   y = drawRecipientBlock(doc, invoice, y)
 
   // 4. Tabel
-  y = drawItemTable(doc, invoice, y)
+  y = drawItemTable(doc, invoice, y, copyIndex)
   y += 4
 
   // 5. Footer (pembayaran + totals)
@@ -570,17 +945,19 @@ function renderOneCopy(doc, invoice, company, options = {}) {
   y = drawFooter(doc, invoice, company, y)
 
   // 6. Tanda tangan
+  let contentEndY = y
   if (includeSig) {
     const sigH = 100
     if (y + sigH > doc.page.height - doc.page.margins.bottom) {
       doc.addPage()
       y = doc.page.margins.top
     }
-    drawSignatures(doc, invoice, company, y)
+    contentEndY = drawSignatures(doc, invoice, company, y)
   }
 
-  // Page footer (nomor + tanggal cetak) pada halaman terakhir copy ini
-  drawPageFooter(doc, invoice)
+  // Page footer (nomor + tanggal cetak) pada halaman terakhir copy ini —
+  // diletakkan tepat di bawah konten terakhir (tanda tangan / footer totals).
+  drawPageFooter(doc, invoice, contentEndY)
 }
 
 // ── Lampiran foto (halaman terakhir invoice) ──────────────────────────────
@@ -599,7 +976,7 @@ function drawInvoiceLampiranPage(doc, invoice, company, options) {
 
   // Judul
   doc.font('Helvetica-Bold').fontSize(12).fillColor(C_DARK)
-     .text('LAMPIRAN FOTO INVOICE', L, y, { width: W, align: 'center' })
+     .text('LAMPIRAN INVOICE', L, y, { width: W, align: 'center' })
   doc.font('Helvetica').fontSize(9).fillColor(C_GRAY)
      .text(invoice.invoice_number || '', L, y + 16, { width: W, align: 'center' })
   doc.fillColor(C_BLACK)
@@ -663,7 +1040,7 @@ function render(doc, invoice, company, options = {}) {
 
   for (let i = 0; i < copies; i++) {
     if (i > 0) doc.addPage()
-    renderOneCopy(doc, invoice, company, options)
+    renderOneCopy(doc, invoice, company, options, i)
 
     // Opsional: label lembar di sudut kanan bawah tiap salinan
     if (options.copyLabel) {
@@ -676,7 +1053,8 @@ function render(doc, invoice, company, options = {}) {
   }
 
   // Lampiran SJ dicetak sekali di akhir (bukan per salinan)
-  if (includeSJ && Array.isArray(invoice.attachedSJs) && invoice.attachedSJs.length > 0) {
+  const attachedSJs = getAttachedSJs(invoice)
+  if (includeSJ && Array.isArray(attachedSJs) && attachedSJs.length > 0) {
     drawSJAppendix(doc, invoice, company, options)
   }
 

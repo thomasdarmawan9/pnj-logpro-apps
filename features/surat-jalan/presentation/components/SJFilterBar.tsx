@@ -1,14 +1,26 @@
-import { Search, Download, Filter, ChevronDown, RotateCcw } from 'lucide-react'
+import { Search, Download, Filter, RotateCcw } from 'lucide-react'
 import { SJFilterState, StatusLampiran, StatusOperasional } from '../../domain/entities/SuratJalan'
 
 interface SJFilterBarProps {
   filters: SJFilterState
   onChange: (filters: Partial<SJFilterState>) => void
   onReset: () => void
+  onExport: () => void
   resultCount: number
+  isExporting?: boolean
+  customerOptions: { value: string; label: string }[]
+  projectOptions: { value: string; label: string }[]
 }
 
-export default function SJFilterBar({ filters, onChange, onReset }: SJFilterBarProps) {
+export default function SJFilterBar({
+  filters,
+  onChange,
+  onReset,
+  onExport,
+  isExporting = false,
+  customerOptions,
+  projectOptions,
+}: SJFilterBarProps) {
   return (
     <div className="rounded-xl px-5 py-4 shadow-sm mb-5 bg-white border" style={{ borderColor: 'var(--border-card)' }}>
       <div className="flex flex-wrap items-center gap-3">
@@ -24,11 +36,13 @@ export default function SJFilterBar({ filters, onChange, onReset }: SJFilterBarP
         </div>
         <div className="flex items-center gap-2 ml-auto">
           <button
+            onClick={onExport}
+            disabled={isExporting}
             className="flex items-center gap-2 text-sm px-3 py-2 rounded-lg border"
             style={{ borderColor: 'var(--border-card)', color: 'var(--text-secondary)' }}
           >
             <Download size={14} />
-            Export Excel
+            {isExporting ? 'Mengekspor...' : 'Export Excel'}
           </button>
         </div>
       </div>
@@ -63,7 +77,6 @@ export default function SJFilterBar({ filters, onChange, onReset }: SJFilterBarP
               <option value={StatusOperasional.DELIVERED}>Terkirim</option>
               <option value={StatusOperasional.VOID}>Dibatalkan</option>
             </select>
-            <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           </div>
         </div>
 
@@ -79,7 +92,6 @@ export default function SJFilterBar({ filters, onChange, onReset }: SJFilterBarP
               <option value={StatusLampiran.NO_INVOICE}>Belum Ada Invoice</option>
               <option value={StatusLampiran.ATTACHED}>Terlampir di Invoice</option>
             </select>
-            <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           </div>
         </div>
 
@@ -91,14 +103,10 @@ export default function SJFilterBar({ filters, onChange, onReset }: SJFilterBarP
               value={filters.proyek}
               onChange={e => onChange({ proyek: e.target.value })}
             >
-              <option value="all">Semua</option>
-              <option value="PRJ-2026-001">PRJ-2026-001</option>
-              <option value="PRJ-2026-002">PRJ-2026-002</option>
-              <option value="PRJ-2026-003">PRJ-2026-003</option>
-              <option value="PRJ-2026-004">PRJ-2026-004</option>
-              <option value="PRJ-2026-005">PRJ-2026-005</option>
+              {projectOptions.map(option => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
             </select>
-            <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           </div>
         </div>
 
@@ -110,14 +118,10 @@ export default function SJFilterBar({ filters, onChange, onReset }: SJFilterBarP
               value={filters.customer}
               onChange={e => onChange({ customer: e.target.value })}
             >
-              <option value="all">Semua</option>
-              <option value="PT. ATP BIO">PT. ATP BIO</option>
-              <option value="PT. Borneo Maju">PT. Borneo Maju</option>
-              <option value="PT. Kalbar Energi">PT. Kalbar Energi</option>
-              <option value="PT. Sawit Borneo">PT. Sawit Borneo</option>
-              <option value="PT. Singkawang Trans">PT. Singkawang Trans</option>
+              {customerOptions.map(option => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
             </select>
-            <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           </div>
         </div>
 
@@ -135,7 +139,6 @@ export default function SJFilterBar({ filters, onChange, onReset }: SJFilterBarP
               <option value="last_month">Bulan Lalu</option>
               <option value="all">Semua</option>
             </select>
-            <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           </div>
         </div>
       </div>

@@ -20,10 +20,6 @@ export function useAuditTrail() {
     dispatch(fetchAuditTrail())
   }, [dispatch])
 
-  useEffect(() => {
-    load()
-  }, [load])
-
   const setFilters = useCallback(
     (partial: Partial<AuditTrailFilterState>) => {
       dispatch(setAuditTrailFilters(partial))
@@ -34,15 +30,13 @@ export function useAuditTrail() {
   const setPage = useCallback(
     (page: number) => {
       dispatch(setAuditTrailPage(page))
-      dispatch(fetchAuditTrail())
     },
     [dispatch]
   )
 
   useEffect(() => {
     load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters, pagination.page])
+  }, [load, filters, pagination.page])
 
   return { logs, filters, pagination, isLoading, setFilters, setPage }
 }

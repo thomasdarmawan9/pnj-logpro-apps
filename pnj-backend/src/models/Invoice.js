@@ -40,8 +40,20 @@ module.exports = (sequelize) => {
       type:         DataTypes.STRING(20),
       allowNull:    false,
       defaultValue: 'delivery',
-      validate:     { isIn: [['delivery', 'rental']] },
-      comment:      'delivery = jasa pengiriman, rental = jasa penyewaan',
+      validate:     { isIn: [['delivery', 'rental', 'other']] },
+      comment:      'delivery = jasa pengiriman, rental = jasa penyewaan, other = jasa lainnya',
+    },
+    custom_service_name: {
+      type:      DataTypes.STRING(100),
+      allowNull: true,
+      comment:   'Nama jasa manual untuk service_type=other',
+    },
+    delivery_pricing_mode: {
+      type:         DataTypes.STRING(20),
+      allowNull:    false,
+      defaultValue: 'shipment',
+      validate:     { isIn: [['shipment', 'item']] },
+      comment:      'shipment = satu harga per pengiriman, item = harga per barang/muatan',
     },
     subtotal_amount: {
       type:         DataTypes.DECIMAL(15, 2),
@@ -89,6 +101,26 @@ module.exports = (sequelize) => {
     notes: {
       type:      DataTypes.TEXT,
       allowNull: true,
+    },
+    origin: {
+      type:      DataTypes.STRING(200),
+      allowNull: true,
+      comment:   'Lokasi asal untuk invoice pengiriman tanpa/di luar SJ',
+    },
+    destination: {
+      type:      DataTypes.STRING(200),
+      allowNull: true,
+      comment:   'Lokasi tujuan untuk invoice pengiriman tanpa/di luar SJ',
+    },
+    cargo_description: {
+      type:      DataTypes.TEXT,
+      allowNull: true,
+      comment:   'Deskripsi muatan global invoice pengiriman',
+    },
+    manual_sj_numbers: {
+      type:      DataTypes.TEXT,
+      allowNull: true,
+      comment:   'Nomor SJ manual untuk invoice pengiriman jika tidak dikaitkan ke SJ database.',
     },
     sent_at: {
       type:      DataTypes.DATE,

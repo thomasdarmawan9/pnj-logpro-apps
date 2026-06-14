@@ -1,6 +1,6 @@
 'use client'
 
-import { Search, RotateCcw, Download, Filter, ChevronDown } from 'lucide-react'
+import { Search, RotateCcw, Download, Filter } from 'lucide-react'
 import { InvoiceFilterState } from '../../domain/entities/Invoice'
 
 interface Props {
@@ -8,32 +8,17 @@ interface Props {
   onChange: (f: Partial<InvoiceFilterState>) => void
   onReset: () => void
   onExport?: () => void
+  customerOptions: { value: string; label: string }[]
+  projectOptions: { value: string; label: string }[]
 }
 
 const STATUS_OPTIONS = [
   { value: 'all', label: 'Semua Status' },
   { value: 'draft', label: 'Draft' },
-  { value: 'sent', label: 'Terkirim' },
+  { value: 'sent', label: 'Terbit' },
   { value: 'outstanding', label: 'Outstanding' },
   { value: 'paid', label: 'Lunas' },
   { value: 'void', label: 'Void' },
-]
-
-const CUSTOMER_OPTIONS = [
-  { value: 'all', label: 'Semua Customer' },
-  { value: 'PT. ATP BIO', label: 'PT. ATP BIO' },
-  { value: 'PT. Borneo Maju', label: 'PT. Borneo Maju' },
-  { value: 'PT. Sawit Borneo', label: 'PT. Sawit Borneo' },
-  { value: 'PT. Kaltim Prima', label: 'PT. Kaltim Prima' },
-  { value: 'PT. Anugrah Tambang', label: 'PT. Anugrah Tambang' },
-]
-
-const PROYEK_OPTIONS = [
-  { value: 'all', label: 'Semua Proyek' },
-  { value: 'PRJ-2026-001', label: 'Proyek Sewa Kendaraan Maret' },
-  { value: 'PRJ-2026-002', label: 'Logistik Q1 2026' },
-  { value: 'PRJ-2026-003', label: 'Pengiriman Batubara Februari' },
-  { value: 'PRJ-2026-004', label: 'Proyek Alat Berat Q1' },
 ]
 
 const PERIODE_OPTIONS = [
@@ -42,7 +27,7 @@ const PERIODE_OPTIONS = [
   { value: 'last_month', label: 'Bulan Lalu' },
 ]
 
-export default function InvoiceFilterBar({ filters, onChange, onReset, onExport }: Props) {
+export default function InvoiceFilterBar({ filters, onChange, onReset, onExport, customerOptions, projectOptions }: Props) {
   return (
     <div className="bg-white rounded-xl border shadow-sm px-5 py-4" style={{ borderColor: 'var(--border-card)' }}>
       <div className="flex flex-wrap items-center gap-3">
@@ -87,25 +72,22 @@ export default function InvoiceFilterBar({ filters, onChange, onReset, onExport 
             <select className="form-input text-sm w-full pr-8" value={filters.status} onChange={e => onChange({ status: e.target.value })}>
               {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
-            <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           </div>
         </div>
         <div>
           <div className="text-xs text-gray-600">Customer</div>
           <div className="relative mt-1">
             <select className="form-input text-sm w-full pr-8" value={filters.customer} onChange={e => onChange({ customer: e.target.value })}>
-              {CUSTOMER_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              {customerOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
-            <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           </div>
         </div>
         <div>
           <div className="text-xs text-gray-600">Proyek</div>
           <div className="relative mt-1">
             <select className="form-input text-sm w-full pr-8" value={filters.proyek} onChange={e => onChange({ proyek: e.target.value })}>
-              {PROYEK_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              {projectOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
-            <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           </div>
         </div>
         <div>
@@ -114,7 +96,6 @@ export default function InvoiceFilterBar({ filters, onChange, onReset, onExport 
             <select className="form-input text-sm w-full pr-8" value={filters.periode} onChange={e => onChange({ periode: e.target.value })}>
               {PERIODE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
-            <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           </div>
         </div>
       </div>

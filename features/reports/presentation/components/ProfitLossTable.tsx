@@ -48,7 +48,7 @@ export default function ProfitLossTable({ data, isLoading }: ProfitLossTableProp
         </thead>
         <tbody>
           {data.projects.map((project, i) => (
-            <ProfitLossProjectRow key={project.project_id} project={project} index={i} />
+            <ProfitLossProjectRow key={project.project_uuid ?? `customer-only-${project.customer_name}-${i}`} project={project} index={i} />
           ))}
         </tbody>
         <tfoot>

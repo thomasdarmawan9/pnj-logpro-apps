@@ -14,7 +14,7 @@
 
 const fs   = require('fs')
 const path = require('path')
-const { formatDateShort, formatIDR } = require('./utils')
+const { formatDateShort } = require('./utils')
 
 // ── Warna ──────────────────────────────────────────────────────────────────
 const C_BLACK   = '#000000'
@@ -29,9 +29,11 @@ const PAGE_H    = 841.89
 const MARGIN_H  = 32   // left & right margin
 
 const COPY_W    = PAGE_W - MARGIN_H * 2          // 531.28
-const COPY_H    = 410                             // tinggi setiap salinan (naik dari 390 untuk accommodate baris total)
+const COPY_H    = 410
 const TOP_COPY_Y  = 12
 const BOT_COPY_Y  = TOP_COPY_Y + COPY_H + 14     // 416
+const SAME_PAGE_GAP = 12
+const SIGN_SPACE = 48
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 function hLine(doc, x, y, w, lw = 0.5, color = C_BORDER) {
@@ -39,6 +41,60 @@ function hLine(doc, x, y, w, lw = 0.5, color = C_BORDER) {
 }
 function vLine(doc, x, y1, y2, lw = 0.5, color = C_BORDER) {
   doc.moveTo(x, y1).lineTo(x, y2).strokeColor(color).lineWidth(lw).stroke()
+}
+
+function formatDecimal(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n) || n <= 0) return ''
+  return new Intl.NumberFormat('id-ID', { maximumFractionDigits: 2 }).format(n)
+}
+
+function formatItemName(item) {
+  const baseName = item.source_type === 'stock'
+    ? item.stock_item_name || item.description || ''
+    : item.description || item.stock_item_name || ''
+  const category = item.source_type === 'stock' ? item.stock_kategori_name || '' : ''
+  const code = item.source_type === 'stock' ? item.stock_item_code || '' : ''
+
+  return [
+    baseName,
+    category ? `- ${category}` : '',
+    code ? `(${code})` : '',
+  ].filter(Boolean).join(' ').trim()
+}
+
+function buildRowData(sj) {
+  const hasItems = Array.isArray(sj.items) && sj.items.length > 0
+  if (hasItems) {
+    return sj.items.map(item => ({
+      nama:      formatItemName(item),
+      qty:       item.qty ? `${item.qty} ${item.unit || ''}`.trim() : '',
+      weight:    formatDecimal(item.weight),
+      volume:    formatDecimal(item.volume),
+    }))
+  }
+
+  return (sj.cargo_description || '').split('\n').filter(Boolean)
+    .map(line => ({ nama: line, qty: '', weight: '', volume: '' }))
+}
+
+function printableRowCount(sj) {
+  return Math.max(6, buildRowData(sj).length)
+}
+
+function estimateCopyBottom(sj, y0, includeSign = true) {
+  const rowCount = printableRowCount(sj)
+  const tableY = y0 + 131
+  const extraStart = tableY + 14 + rowCount * 14
+  const spareBottom = extraStart + 14 + 14 + 14 + 14 + 18
+  return includeSign ? spareBottom + 10 + SIGN_SPACE : spareBottom
+}
+
+function canRenderTwoCopiesSamePage(sj, options) {
+  if (buildRowData(sj).length > 8) return false
+  const firstBottom = estimateCopyBottom(sj, TOP_COPY_Y, options.includeSign !== false)
+  const secondBottom = estimateCopyBottom(sj, BOT_COPY_Y, options.includeSign !== false)
+  return firstBottom + SAME_PAGE_GAP <= BOT_COPY_Y && secondBottom <= PAGE_H - 12
 }
 
 // ── Logo ───────────────────────────────────────────────────────────────────
@@ -174,26 +230,24 @@ function renderCopy(doc, sj, company, options, Y0, copyIndex = 0) {
   const TABLE_Y = INTRO_Y + 13
   const ROW_H   = 14
 
-  // Kolom: No | Nama Barang | Qty & Satuan | Harga Satuan | Subtotal | [kanan: Sopir/Pol]
+  // Kolom: No | Nama Barang | Qty & Satuan | Berat/kg | Volume/m3 | [kanan: Sopir/Pol]
   const COL_NO       = 20
-  const COL_NAMA     = 185
-  const COL_QTY      = 55
-  const COL_PRICE    = 72
-  const COL_SUBTOTAL = 74
-  const RIGHT_W      = W - COL_NO - COL_NAMA - COL_QTY - COL_PRICE - COL_SUBTOTAL  // ~93.28
-
-  const TABLE_ROWS = 11
+  const COL_NAMA     = 230
+  const COL_QTY      = 70
+  const COL_WEIGHT   = 55
+  const COL_VOLUME   = 60
+  const RIGHT_W      = W - COL_NO - COL_NAMA - COL_QTY - COL_WEIGHT - COL_VOLUME
 
   // X positions
   const X_NO       = L
   const X_NAMA     = X_NO       + COL_NO
   const X_QTY      = X_NAMA     + COL_NAMA
-  const X_PRICE    = X_QTY      + COL_QTY
-  const X_SUBTOTAL = X_PRICE    + COL_PRICE
-  const X_RGT      = X_SUBTOTAL + COL_SUBTOTAL   // start kolom kanan
+  const X_WEIGHT   = X_QTY      + COL_QTY
+  const X_VOLUME   = X_WEIGHT   + COL_WEIGHT
+  const X_RGT      = X_VOLUME   + COL_VOLUME
 
   // --- Header row ---
-  const MAIN_W = COL_NO + COL_NAMA + COL_QTY + COL_PRICE + COL_SUBTOTAL
+  const MAIN_W = COL_NO + COL_NAMA + COL_QTY + COL_WEIGHT + COL_VOLUME
   const rowBg  = COPY_ROW_BG[copyIndex] || null
   doc.rect(X_NO, TABLE_Y, MAIN_W, ROW_H).fillAndStroke(rowBg || C_HEAD_BG, C_BORDER)
   doc.rect(X_RGT, TABLE_Y, RIGHT_W, ROW_H).fillAndStroke(rowBg || C_HEAD_BG, C_BORDER)
@@ -202,42 +256,29 @@ function renderCopy(doc, sj, company, options, Y0, copyIndex = 0) {
   doc.text('No',           X_NO       + 2, TABLE_Y + 3, { width: COL_NO       - 4, align: 'center' })
   doc.text('Nama Barang',  X_NAMA     + 2, TABLE_Y + 3, { width: COL_NAMA     - 4, align: 'center' })
   doc.text('Qty & Satuan', X_QTY      + 2, TABLE_Y + 3, { width: COL_QTY      - 4, align: 'center' })
-  doc.text('Harga Satuan', X_PRICE    + 2, TABLE_Y + 3, { width: COL_PRICE    - 4, align: 'right'  })
-  doc.text('Subtotal',     X_SUBTOTAL + 2, TABLE_Y + 3, { width: COL_SUBTOTAL - 4, align: 'right'  })
+  doc.text('Berat/kg',     X_WEIGHT   + 2, TABLE_Y + 3, { width: COL_WEIGHT   - 4, align: 'center' })
+  doc.text('Volume/m3', X_VOLUME   + 2, TABLE_Y + 3, { width: COL_VOLUME   - 4, align: 'center' })
 
   // --- Build row data ---
   // Pakai sj.items (array) kalau ada, fallback ke cargo_description split baris
-  let rowData = []
-  const hasItems = Array.isArray(sj.items) && sj.items.length > 0
-  if (hasItems) {
-    rowData = sj.items.map(item => ({
-      nama:      item.description || '',
-      qty:       item.qty ? `${item.qty} ${item.unit || ''}`.trim() : '',
-      unitPrice: Number(item.unit_price) || 0,
-      subtotal:  (Number(item.qty) || 0) * (Number(item.unit_price) || 0),
-    }))
-  } else {
-    rowData = (sj.cargo_description || '').split('\n').filter(Boolean)
-      .map(line => ({ nama: line, qty: '', unitPrice: 0, subtotal: 0 }))
-  }
-
-  const grandTotal = rowData.reduce((s, r) => s + r.subtotal, 0)
+  const rowData = buildRowData(sj)
+  const TABLE_ROWS = Math.max(6, rowData.length)
 
   for (let i = 0; i < TABLE_ROWS; i++) {
     const rowY = TABLE_Y + ROW_H + i * ROW_H
     if (rowBg) {
-      doc.rect(X_NO, rowY, COL_NO + COL_NAMA + COL_QTY + COL_PRICE + COL_SUBTOTAL, ROW_H)
+      doc.rect(X_NO, rowY, MAIN_W, ROW_H)
          .fillAndStroke(rowBg, C_BORDER)
       doc.rect(X_RGT, rowY, RIGHT_W, ROW_H).fillAndStroke(rowBg, C_BORDER)
       // vertical dividers kembali setelah fill
-      ;[X_NAMA, X_QTY, X_PRICE, X_SUBTOTAL].forEach(x =>
+      ;[X_NAMA, X_QTY, X_WEIGHT, X_VOLUME].forEach(x =>
         vLine(doc, x, rowY, rowY + ROW_H))
     } else {
       doc.rect(X_NO,       rowY, COL_NO,       ROW_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
       doc.rect(X_NAMA,     rowY, COL_NAMA,     ROW_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
       doc.rect(X_QTY,      rowY, COL_QTY,      ROW_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
-      doc.rect(X_PRICE,    rowY, COL_PRICE,    ROW_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
-      doc.rect(X_SUBTOTAL, rowY, COL_SUBTOTAL, ROW_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+      doc.rect(X_WEIGHT,   rowY, COL_WEIGHT,   ROW_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+      doc.rect(X_VOLUME,   rowY, COL_VOLUME,   ROW_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
       doc.rect(X_RGT,      rowY, RIGHT_W,      ROW_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
     }
 
@@ -251,29 +292,13 @@ function renderCopy(doc, sj, company, options, Y0, copyIndex = 0) {
       if (r.qty) {
         doc.text(r.qty, X_QTY + 2, rowY + 3, { width: COL_QTY - 4, align: 'center', lineBreak: false })
       }
-      if (r.unitPrice > 0) {
-        doc.text(formatIDR(r.unitPrice), X_PRICE + 2, rowY + 3, { width: COL_PRICE - 4, align: 'right', lineBreak: false })
-        doc.font('Helvetica-Bold')
-           .text(formatIDR(r.subtotal), X_SUBTOTAL + 2, rowY + 3, { width: COL_SUBTOTAL - 4, align: 'right', lineBreak: false })
-        doc.font('Helvetica')
+      if (r.weight) {
+        doc.text(r.weight, X_WEIGHT + 2, rowY + 3, { width: COL_WEIGHT - 4, align: 'center', lineBreak: false })
+      }
+      if (r.volume) {
+        doc.text(r.volume, X_VOLUME + 2, rowY + 3, { width: COL_VOLUME - 4, align: 'center', lineBreak: false })
       }
     }
-  }
-
-  // --- Baris total (di bawah data rows, sebelum extra rows) ---
-  const TOTAL_ROW_Y = TABLE_Y + ROW_H + TABLE_ROWS * ROW_H
-  doc.rect(X_NO,       TOTAL_ROW_Y, COL_NO + COL_NAMA + COL_QTY + COL_PRICE, ROW_H)
-     .fillAndStroke(rowBg || C_HEAD_BG, C_BORDER)
-  doc.rect(X_SUBTOTAL, TOTAL_ROW_Y, COL_SUBTOTAL, ROW_H)
-     .fillAndStroke(rowBg || C_HEAD_BG, C_BORDER)
-  doc.rect(X_RGT,      TOTAL_ROW_Y, RIGHT_W, ROW_H)
-     .fillAndStroke(rowBg || C_HEAD_BG, C_BORDER)
-
-  doc.font('Helvetica-Bold').fontSize(7.5).fillColor(C_DARK)
-     .text('TOTAL', X_NO + 2, TOTAL_ROW_Y + 3, { width: COL_NO + COL_NAMA + COL_QTY + COL_PRICE - 4, align: 'right' })
-  if (grandTotal > 0) {
-    doc.font('Helvetica-Bold').fontSize(7.5).fillColor(C_DARK)
-       .text(formatIDR(grandTotal), X_SUBTOTAL + 2, TOTAL_ROW_Y + 3, { width: COL_SUBTOTAL - 4, align: 'right', lineBreak: false })
   }
 
   // --- Extra rows kanan bawah (Nama Sopir / No Pol) — stacked layout ---
@@ -281,12 +306,11 @@ function renderCopy(doc, sj, company, options, Y0, copyIndex = 0) {
   const platNomor  = fleetIsTbd ? '-' : (sj.fleet.plate_number || '-')
   const namaSopir  = sj.driver?.name || sj.driver_name_manual || '-'
 
-  // +1 ROW_H untuk baris total yang baru ditambahkan
-  const EXTRA_START = TABLE_Y + ROW_H + TABLE_ROWS * ROW_H + ROW_H
+  const EXTRA_START = TABLE_Y + ROW_H + TABLE_ROWS * ROW_H
   const FONT_SZ = 8.5
   const LBL_H  = 14   // tinggi baris label
   const VAL_PAD = 4   // padding vertikal dalam value row
-  const LEFT_W = COL_NO + COL_NAMA + COL_QTY + COL_PRICE + COL_SUBTOTAL
+  const LEFT_W = MAIN_W
 
   // Render satu field stacked: [label row] + [value row], return total height
   function stackedRow(y, label, value) {
@@ -342,13 +366,15 @@ function renderCopy(doc, sj, company, options, Y0, copyIndex = 0) {
   }
 
   // ── 6. Tanda tangan ──────────────────────────────────────────────────────
+  const SIG_Y = rSpare + hSpare + 10
   if (includeSign) {
-    const SIG_Y = rSpare + hSpare + 6
     doc.font('Helvetica-Bold').fontSize(9).fillColor(C_DARK)
        .text('Tanda Terima,', L + 4, SIG_Y, { width: W / 2, align: 'left' })
     doc.font('Helvetica-Bold').fontSize(9).fillColor(C_DARK)
        .text('Hormat Kami,', L + W / 2, SIG_Y, { width: W / 2, align: 'right' })
   }
+
+  return includeSign ? SIG_Y + SIGN_SPACE : SIG_Y
 }
 
 // ── Lampiran foto + Foto Pengiriman (halaman terakhir) ───────────────────
@@ -466,16 +492,21 @@ function render(doc, sj, company, options = {}) {
   const copies    = typeof options.copies === 'number' && options.copies > 0
     ? options.copies
     : 3
+  const twoCopiesSamePage = canRenderTwoCopiesSamePage(sj, options)
 
   for (let i = 0; i < copies; i++) {
-    if (i > 0) doc.addPage()
-    renderCopy(doc, sj, company, options, TOP_COPY_Y, i)
+    const isSecondCopyOnSamePage = twoCopiesSamePage && i % 2 === 1
+    if (i > 0 && !isSecondCopyOnSamePage) doc.addPage()
+
+    const y0 = isSecondCopyOnSamePage ? BOT_COPY_Y : TOP_COPY_Y
+    renderCopy(doc, sj, company, options, y0, i)
 
     // Opsional: label lembar di sudut kanan bawah
     if (options.copyLabel) {
       const labelText = `Lembar ${i + 1} / ${copies}`
+      const labelY = isSecondCopyOnSamePage ? PAGE_H - 18 : TOP_COPY_Y + COPY_H - 12
       doc.font('Helvetica').fontSize(7).fillColor('#AAAAAA')
-         .text(labelText, 0, PAGE_H - 18, { width: PAGE_W - MARGIN_H, align: 'right' })
+         .text(labelText, 0, labelY, { width: PAGE_W - MARGIN_H, align: 'right' })
       doc.fillColor(C_BLACK)
     }
   }

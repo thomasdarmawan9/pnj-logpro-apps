@@ -13,7 +13,7 @@ import { useToast } from '@/components/toast/useToast'
 import { formatRupiah, formatDate } from '@/lib/formatters'
 import { Project, ProjectStatus } from '@/features/master/domain/entities/Project'
 import { StatusLampiran, StatusOperasional } from '@/features/surat-jalan/domain/entities/SuratJalan'
-import { apiRequest } from '@/lib/apiClient'
+import { apiRequestAllPages } from '@/lib/apiClient'
 import TablePagination from '../components/TablePagination'
 
 const OPERATIONAL_COST_ROWS_PER_PAGE = 5
@@ -60,10 +60,10 @@ export default function ProjectDetailPage({ uuid }: Props) {
     if (!project?.uuid) return
     setIsLoadingSjs(true)
     try {
-      const response = await apiRequest<ApiProjectSJ[]>(`/surat-jalan?status=all&invoice_status=all&period=all&project_uuid=${project.uuid}&page=1&limit=100`, {
+      const data = await apiRequestAllPages<ApiProjectSJ>(`/surat-jalan?status=all&invoice_status=all&period=all&project_uuid=${project.uuid}`, {
         method: 'GET',
       })
-      const rows = response.data.map(sj => ({
+      const rows = data.map(sj => ({
         uuid: sj.uuid,
         sj_number: sj.sj_number,
         sj_date: sj.sj_date,

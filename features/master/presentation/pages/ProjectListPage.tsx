@@ -10,6 +10,8 @@ import { useToast } from '@/components/toast/useToast'
 import { formatRupiah, formatDate } from '@/lib/formatters'
 import { Project, ProjectStatus } from '@/features/master/domain/entities/Project'
 import TablePagination from '../components/TablePagination'
+import { useSelector } from 'react-redux'
+import { RootState } from '@/store'
 
 const ROWS_PER_PAGE = 10
 
@@ -37,6 +39,8 @@ export default function ProjectListPage() {
   const { customers } = useCustomer()
   const { push: pushToast } = useToast()
   const router = useRouter()
+  const user = useSelector((s: RootState) => s.auth.user)
+  const canEdit = user?.role === 'super_admin' || user?.role === 'admin_ops'
 
   const [search, setSearch] = useState('')
   const [filterCustomer, setFilterCustomer] = useState<string>('all')
@@ -95,9 +99,11 @@ export default function ProjectListPage() {
           </nav>
           <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Proyek & Kontrak</h1>
         </div>
-        <button data-tour="proyek-add-btn" onClick={() => openForm(null)} className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: 'var(--green-primary)' }}>
-          <Plus size={15} /> Tambah Proyek
-        </button>
+        {canEdit && (
+          <button data-tour="proyek-add-btn" onClick={() => openForm(null)} className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: 'var(--green-primary)' }}>
+            <Plus size={15} /> Tambah Proyek
+          </button>
+        )}
       </div>
 
       {/* Summary Cards */}
@@ -231,14 +237,18 @@ export default function ProjectListPage() {
                       <button onClick={() => router.push(`/master/proyek/${p.uuid}`)} className="p-1.5 rounded-lg hover:bg-gray-100" title="Lihat Detail">
                         <Eye size={13} style={{ color: 'var(--text-secondary)' }} />
                       </button>
-                      <button onClick={() => openForm(p)} className="p-1.5 rounded-lg hover:bg-blue-50" title="Edit">
-                        <Pencil size={13} className="text-blue-600" />
-                      </button>
-                      {p.status === 'active' && (
-                        <button onClick={() => handleMarkDone(p)} className="p-1.5 rounded-lg hover:bg-green-50" title="Tandai Selesai">
-                          <CheckCircle size={13} className="text-green-600" />
-                        </button>
-                      )}
+	                      {canEdit && (
+	                        <>
+	                          <button onClick={() => openForm(p)} className="p-1.5 rounded-lg hover:bg-blue-50" title="Edit">
+	                            <Pencil size={13} className="text-blue-600" />
+	                          </button>
+	                          {p.status === 'active' && (
+	                            <button onClick={() => handleMarkDone(p)} className="p-1.5 rounded-lg hover:bg-green-50" title="Tandai Selesai">
+	                              <CheckCircle size={13} className="text-green-600" />
+	                            </button>
+	                          )}
+	                        </>
+	                      )}
                     </div>
                   </td>
                 </tr>

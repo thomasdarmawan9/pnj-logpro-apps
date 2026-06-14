@@ -21,7 +21,7 @@ export default function DetachSJConfirmModal({ open, invoice, sj, onClose, onCon
           </p>
         </div>
         <div className="rounded-xl p-3 border text-sm text-gray-600" style={{ borderColor: 'var(--border-card)', backgroundColor: '#F9FAFB' }}>
-          SJ ini tetap ada dan bisa dilampirkan ke invoice lain. Total invoice tidak berubah.
+          SJ ini tetap ada dan bisa dilampirkan ke invoice lain. Rincian item dari SJ ini akan dilepas dari invoice.
         </div>
         <div className="flex justify-end gap-3 pt-2">
           <button onClick={onClose} className="px-4 py-2 rounded-xl border text-sm" style={{ borderColor: 'var(--border-card)' }}>Batal</button>

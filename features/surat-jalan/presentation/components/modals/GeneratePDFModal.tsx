@@ -18,7 +18,6 @@ export default function GeneratePDFModal({ open, sj, onClose }: GeneratePDFModal
   const [includeNotes, setIncludeNotes] = useState(false)
   const [includeLampiran, setIncludeLampiran] = useState(true)
   const [copies, setCopies] = useState(3)
-  const [copyLabel, setCopyLabel] = useState(false)
 
   const hasLampiranFoto = (sj?.lampiran_paths ?? []).filter(p => !p.endsWith('.pdf')).length > 0
   const hasPod = !!sj?.pod_photo_path
@@ -37,7 +36,6 @@ export default function GeneratePDFModal({ open, sj, onClose }: GeneratePDFModal
       setIncludeNotes(false)
       setIncludeLampiran(true)
       setCopies(3)
-      setCopyLabel(false)
     }
   }, [open])
 
@@ -47,7 +45,7 @@ export default function GeneratePDFModal({ open, sj, onClose }: GeneratePDFModal
     setError(null)
 
     try {
-      const job = await generateSuratJalanPdf(sj.uuid, { includeHeader, includeSign, includeNotes, includeLampiran: hasAnyFoto ? includeLampiran : false, copies, copyLabel })
+      const job = await generateSuratJalanPdf(sj.uuid, { includeHeader, includeSign, includeNotes, includeLampiran: hasAnyFoto ? includeLampiran : false, copies })
       setJobUuid(job.uuid)
 
       let latestStatus = job.status
@@ -140,7 +138,7 @@ export default function GeneratePDFModal({ open, sj, onClose }: GeneratePDFModal
                 ))}
               </div>
               <p className="text-xs text-gray-400 mt-1.5">
-                Menghasilkan {copies} halaman identik (1 tabel per halaman)
+                Menghasilkan {copies} rangkap surat jalan
               </p>
             </div>
 
@@ -166,16 +164,6 @@ export default function GeneratePDFModal({ open, sj, onClose }: GeneratePDFModal
                       <span className="text-gray-400 ml-1">
                         ({[hasPod ? 'POD' : '', hasLampiranFoto ? `${(sj?.lampiran_paths ?? []).filter(p => !p.endsWith('.pdf')).length} lampiran` : ''].filter(Boolean).join(', ')}, halaman terakhir)
                       </span>
-                    </span>
-                  </label>
-                )}
-                {/* Label lembar — hanya tampil jika rangkap > 1 */}
-                {copies > 1 && (
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input type="checkbox" checked={copyLabel} onChange={e => setCopyLabel(e.target.checked)} className="rounded" />
-                    <span className="text-sm text-gray-700">
-                      Tambah label lembar
-                      <span className="text-gray-400 ml-1">(Lembar 1/{copies}, 2/{copies}, …)</span>
                     </span>
                   </label>
                 )}

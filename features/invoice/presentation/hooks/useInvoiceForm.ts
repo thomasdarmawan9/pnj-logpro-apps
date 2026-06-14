@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { apiRequest } from '@/lib/apiClient'
+import { apiRequestAllPages } from '@/lib/apiClient'
 
 interface InvoiceProjectOption {
   id: number
@@ -61,9 +61,9 @@ export default function useInvoiceForm(initial?: Partial<InvoiceFormHeader>) {
 
   useEffect(() => {
     let alive = true
-    apiRequest<ApiProjectOption[]>('/projects?status=active&page=1&limit=100', { method: 'GET' })
-      .then(response => {
-        if (alive) setProjects(response.data.map(normalizeProject))
+    apiRequestAllPages<ApiProjectOption>('/projects?status=active', { method: 'GET' })
+      .then(data => {
+        if (alive) setProjects(data.map(normalizeProject))
       })
       .catch(() => {
         if (alive) setProjects([])

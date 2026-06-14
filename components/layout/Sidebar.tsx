@@ -12,36 +12,34 @@ import { useDispatch, useSelector } from 'react-redux'
 import { logout } from '@/store/slices/authSlice'
 import { RootState } from '@/store'
 import { clearAuthSession } from '@/lib/apiClient'
+import { logoutSession } from '@/lib/authApi'
 import { StatusLampiran, StatusOperasional } from '@/features/surat-jalan/domain/entities/SuratJalan'
-import { MOCK_SURAT_JALAN } from '@/lib/mockData/suratJalan'
-import { MOCK_DRIVERS } from '@/features/master/domain/entities/Driver'
 
 const mainNavItems = [
-  { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
-  { icon: FileText, label: 'Surat Jalan', href: '/surat-jalan' },
-  { icon: Receipt, label: 'Invoice', href: '/invoice' },
-  { icon: Package, label: 'Manajemen Stok', href: '/stok' },
+  { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard', roles: ['super_admin', 'admin_ops', 'admin_finance'] },
+  { icon: FileText, label: 'Surat Jalan', href: '/surat-jalan', roles: ['super_admin', 'admin_ops', 'admin_finance'] },
+  { icon: Receipt, label: 'Invoice', href: '/invoice', roles: ['super_admin', 'admin_ops', 'admin_finance'] },
+  { icon: Package, label: 'Manajemen Stok', href: '/stok', roles: ['super_admin', 'admin_ops', 'admin_finance'] },
 ]
 
 const masterChildren = [
-  { icon: Users,      label: 'Customer',        href: '/master/customer' },
-  { icon: Truck,      label: 'Armada',           href: '/master/armada'   },
-  { icon: User,       label: 'Supir',            href: '/master/supir'    },
-  { icon: FolderOpen, label: 'Proyek & Kontrak', href: '/master/proyek'   },
+  { icon: Users,      label: 'Customer',        href: '/master/customer', roles: ['super_admin', 'admin_ops', 'admin_finance'] },
+  { icon: Truck,      label: 'Armada',           href: '/master/armada',   roles: ['super_admin', 'admin_ops', 'admin_finance'] },
+  { icon: User,       label: 'Supir',            href: '/master/supir',    roles: ['super_admin', 'admin_ops', 'admin_finance'] },
+  { icon: FolderOpen, label: 'Proyek & Kontrak', href: '/master/proyek',   roles: ['super_admin', 'admin_ops', 'admin_finance'] },
 ]
 
 const laporanChildren = [
   { icon: CreditCard,  label: 'Aging AR',         href: '/laporan/aging-ar',    roles: ['super_admin', 'admin_finance'] },
   { icon: TrendingUp,  label: 'Profit & Loss',     href: '/laporan/profit-loss', roles: ['super_admin'] },
-  { icon: Truck,       label: 'Utilisasi Armada',  href: '/laporan/utilisasi',   roles: ['super_admin'] },
   { icon: Activity,    label: 'Audit Trail',       href: '/laporan/audit-trail', roles: ['super_admin'] },
-  { icon: Package,     label: 'Rekap Stok',        href: '/stok/laporan',        roles: ['super_admin', 'admin_ops'] },
+  { icon: Package,     label: 'Rekap Stok',        href: '/stok/laporan',        roles: ['super_admin'] },
 ]
 
 const settingsChildren = [
   { icon: UserCog,   label: 'User Management',  href: '/settings/users',     roles: ['super_admin'] },
   { icon: Hash,      label: 'Nomor Otomatis',   href: '/settings/numbering', roles: ['super_admin'] },
-  { icon: Building2, label: 'Profil Perusahaan', href: '/settings/company',  roles: ['super_admin'] },
+  { icon: Building2, label: 'Profil Perusahaan', href: '/settings/company',  roles: ['super_admin', 'admin_finance'] },
 ]
 
 type NavChild = { icon: React.ElementType; label: string; href: string; roles?: string[]; badge?: number; badgeColor?: string }
@@ -108,7 +106,7 @@ interface CollapsibleGroupProps {
 
 function CollapsibleGroup({ icon: Icon, label, isActive, isOpen, onToggle, items, isCollapsed, pathname, userRole }: CollapsibleGroupProps) {
   const router = useRouter()
-  const visible = items.filter(c => !c.roles || !userRole || c.roles.includes(userRole))
+  const visible = items.filter(c => !c.roles || (userRole ? c.roles.includes(userRole) : false))
   if (visible.length === 0) return null
 
   if (isCollapsed) {
@@ -188,15 +186,16 @@ export default function Sidebar({ isCollapsed, onToggleCollapse, onClose }: Side
   const dispatch = useDispatch()
   const user = useSelector((state: RootState) => state.auth.user)
   const sjList = useSelector((state: RootState) => state.suratJalan.list)
+  const invoiceSummary = useSelector((state: RootState) => state.invoice.summary)
   const drivers = useSelector((state: RootState) => state.master.drivers)
 
-  const badgeCountSource = sjList.length ? sjList : MOCK_SURAT_JALAN
-  const sjBadgeCount = badgeCountSource.filter(
+  const sjBadgeCount = sjList.filter(
     sj => sj.status === StatusOperasional.DELIVERED && sj.invoice_attachment_status === StatusLampiran.NO_INVOICE
   ).length
 
-  const driverSource = drivers.length ? drivers : MOCK_DRIVERS
-  const simAlertCount = driverSource.filter(
+  const invoiceBadgeCount = invoiceSummary.countOutstanding || 0
+
+  const simAlertCount = drivers.filter(
     d => d.status === 'active' && (d.sim_status === 'expired' || d.sim_status === 'expiring_soon')
   ).length
 
@@ -208,7 +207,12 @@ export default function Sidebar({ isCollapsed, onToggleCollapse, onClose }: Side
   const [laporanOpen, setLaporanOpen] = useState(isLaporanActive)
   const [settingsOpen, setSettingsOpen] = useState(isSettingsActive)
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await logoutSession()
+    } catch {
+      // Tetap bersihkan sesi lokal walaupun server logout gagal.
+    }
     clearAuthSession()
     dispatch(logout())
     document.cookie = 'pnj_auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
@@ -220,9 +224,9 @@ export default function Sidebar({ isCollapsed, onToggleCollapse, onClose }: Side
 
   const navWithBadges = mainNavItems.map(item => {
     if (item.href === '/surat-jalan') return { ...item, badge: sjBadgeCount || undefined, badgeColor: '#DC2626' }
-    if (item.href === '/invoice') return { ...item, badge: 8, badgeColor: '#D97706' }
+    if (item.href === '/invoice') return { ...item, badge: invoiceBadgeCount || undefined, badgeColor: '#D97706' }
     return item
-  })
+  }).filter(item => !item.roles || (user?.role ? item.roles.includes(user.role) : false))
 
   const masterChildrenWithBadge = masterChildren.map(c =>
     c.href === '/master/supir' ? { ...c, badge: simAlertCount || undefined, badgeColor: '#DC2626' } : c

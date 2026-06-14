@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { useRouter } from 'next/navigation'
 import DashboardLayout from '@/components/layout/DashboardLayout'
-import { ArrowLeft, ArrowRightLeft } from 'lucide-react'
+import { ArrowLeft, ArrowRightLeft, Check, ChevronDown, Search } from 'lucide-react'
 import { AppDispatch, RootState } from '@/store'
 import { createSuratJalan } from '@/store/slices/suratJalanSlice'
 import { fetchCustomers, fetchDrivers, fetchFleets, fetchProjects } from '@/store/slices/masterSlice'
@@ -26,6 +26,7 @@ export default function CreateSuratJalanPage() {
   const dispatch = useDispatch<AppDispatch>()
   const { push: pushToast } = useToast()
   const { projects, customers, fleets, drivers, isLoading: isMasterLoading } = useSelector((state: RootState) => state.master)
+  const role = useSelector((state: RootState) => state.auth.user?.role ?? null)
 
   const { form, updateField, errors, validate, isDirty } = useSuratJalanForm({ mode: 'create' })
   const [scopeMode, setScopeMode] = useState<'project' | 'customer'>('project')
@@ -37,13 +38,31 @@ export default function CreateSuratJalanPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [availableStockItems, setAvailableStockItems] = useState<CustomerStockAvailableItem[]>([])
   const [isLoadingStockItems, setIsLoadingStockItems] = useState(false)
+  const customerPickerRef = useRef<HTMLDivElement>(null)
+  const [customerSearch, setCustomerSearch] = useState('')
+  const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false)
 
   useEffect(() => {
+    if (role === 'admin_finance') {
+      pushToast({ title: 'Akses Ditolak', description: 'Anda tidak memiliki akses membuat Surat Jalan.', variant: 'error' })
+      router.replace('/surat-jalan')
+      return
+    }
     if (!projects.length) dispatch(fetchProjects())
     if (!customers.length) dispatch(fetchCustomers())
     if (!fleets.length) dispatch(fetchFleets())
     if (!drivers.length) dispatch(fetchDrivers())
-  }, [dispatch, projects.length, customers.length, fleets.length, drivers.length])
+  }, [dispatch, projects.length, customers.length, fleets.length, drivers.length, role, router, pushToast])
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!customerPickerRef.current?.contains(event.target as Node)) {
+        setCustomerDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const projectOptionsFromApi = useMemo<ProjectOption[]>(() => {
     return projects
@@ -108,6 +127,18 @@ export default function CreateSuratJalanPage() {
       }))
   }, [drivers])
 
+  const filteredCustomers = useMemo(() => {
+    const q = customerSearch.trim().toLowerCase()
+    const list = q
+      ? customers.filter(customer =>
+          customer.name.toLowerCase().includes(q) ||
+          (customer.npwp || '').toLowerCase().includes(q) ||
+          (customer.address || '').toLowerCase().includes(q)
+        )
+      : customers
+    return list.slice(0, 25)
+  }, [customers, customerSearch])
+
   const canPublish = !!selectedArmada && (
     driverMode === 'tbd' ||
     (driverMode === 'master' && !!selectedDriver)
@@ -122,7 +153,6 @@ export default function CreateSuratJalanPage() {
     rute: `${form.origin || '-'} → ${form.destination || '-'}`,
     tanggal: formatLongDate(form.sj_date),
     jumlahItem: form.items.length,
-    totalNilai: form.items.reduce((s, i) => s + i.qty * i.unit_price, 0),
   }), [form, selectedArmada, selectedDriver, selectedProject, selectedCustomer, driverMode, scopeMode])
 
   const handleSubmit = async (publish: boolean) => {
@@ -177,6 +207,17 @@ export default function CreateSuratJalanPage() {
     ))
   }
 
+  const selectCustomer = (customer: Customer | null) => {
+    const customerChanged = selectedCustomer?.uuid !== customer?.uuid
+    setSelectedCustomer(customer)
+    setCustomerSearch(customer?.name ?? '')
+    setCustomerDropdownOpen(false)
+    setSelectedProject(null)
+    updateField('project_id', null)
+    updateField('customer_id', customer?.id ?? null)
+    if (customerChanged) clearStockItems()
+  }
+
   return (
     <DashboardLayout>
       <div className="flex items-center justify-between mb-6">
@@ -206,6 +247,8 @@ export default function CreateSuratJalanPage() {
                       setScopeMode(mode)
                       setSelectedProject(null)
                       setSelectedCustomer(null)
+                      setCustomerSearch('')
+                      setCustomerDropdownOpen(false)
                       updateField('project_id', null)
                       updateField('customer_id', null)
                       clearStockItems()
@@ -239,24 +282,59 @@ export default function CreateSuratJalanPage() {
             ) : (
               <label className="text-xs font-medium block" style={{ color: '#374151' }}>
                 Customer *
-                <select
-                  className={`form-input w-full mt-1 ${errors?.project_id ? 'error' : ''}`}
-                  value={selectedCustomer?.id ?? ''}
-                  onChange={e => {
-                    const customer = customers.find(c => c.id === Number(e.target.value)) || null
-                    const customerChanged = selectedCustomer?.uuid !== customer?.uuid
-                    setSelectedCustomer(customer)
-                    setSelectedProject(null)
-                    updateField('project_id', null)
-                    updateField('customer_id', customer?.id ?? null)
-                    if (customerChanged) clearStockItems()
-                  }}
-                >
-                  <option value="">Pilih customer</option>
-                  {customers.map(customer => (
-                    <option key={customer.uuid} value={customer.id}>{customer.name}</option>
-                  ))}
-                </select>
+                <div ref={customerPickerRef} className="relative mt-1">
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+                      <Search size={15} />
+                    </span>
+                    <input
+                      className={`form-input w-full ${errors?.project_id ? 'error' : ''}`}
+                      style={{ paddingLeft: 42, paddingRight: 40 }}
+                      value={customerSearch}
+                      placeholder="Ketik nama customer..."
+                      onFocus={() => setCustomerDropdownOpen(true)}
+                      onChange={event => {
+                        setCustomerSearch(event.target.value)
+                        setSelectedCustomer(null)
+                        updateField('customer_id', null)
+                        setCustomerDropdownOpen(true)
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setCustomerDropdownOpen(open => !open)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-gray-100"
+                      aria-label="Buka daftar customer"
+                    >
+                      <ChevronDown size={16} className="text-gray-400" />
+                    </button>
+                  </div>
+                  {customerDropdownOpen && (
+                    <div className="absolute z-30 mt-1 w-full rounded-lg border bg-white shadow-lg overflow-hidden" style={{ borderColor: 'var(--border-card)' }}>
+                      <div className="max-h-64 overflow-y-auto">
+                        {filteredCustomers.length > 0 ? filteredCustomers.map(customer => {
+                          const selected = selectedCustomer?.id === customer.id
+                          return (
+                            <button
+                              key={customer.uuid}
+                              type="button"
+                              onClick={() => selectCustomer(customer)}
+                              className="w-full px-3 py-2.5 text-left text-sm hover:bg-green-50 flex items-start gap-2"
+                            >
+                              <span className="mt-0.5 w-4 text-green-600">{selected && <Check size={14} />}</span>
+                              <span className="min-w-0">
+                                <span className="block font-medium text-gray-800 truncate">{customer.name}</span>
+                                <span className="block text-xs text-gray-500 truncate">{customer.npwp ? `NPWP: ${customer.npwp}` : customer.address || 'Non-NPWP'}</span>
+                              </span>
+                            </button>
+                          )
+                        }) : (
+                          <div className="px-3 py-3 text-sm text-gray-500">Customer tidak ditemukan</div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
                 {errors?.project_id && <div className="text-xs text-red-600 mt-1">{errors.project_id}</div>}
               </label>
             )}
@@ -372,7 +450,7 @@ export default function CreateSuratJalanPage() {
             items={form.items}
             onChange={(items: SJItem[]) => updateField('items', items)}
             availableStockItems={availableStockItems}
-            selectedCustomerName={selectedProject?.customer}
+            selectedCustomerName={scopeMode === 'project' ? selectedProject?.customer : selectedCustomer?.name}
             isLoadingStockItems={isLoadingStockItems}
             error={errors.items}
           />
@@ -434,14 +512,6 @@ export default function CreateSuratJalanPage() {
             <div className="text-sm">{summary.tanggal}</div>
             <div className="text-xs text-gray-500 mt-2">Rincian Item</div>
             <div className="text-sm">{summary.jumlahItem > 0 ? `${summary.jumlahItem} item` : '-'}</div>
-            {summary.totalNilai > 0 && (
-              <>
-                <div className="text-xs text-gray-500 mt-2">Total Nilai</div>
-                <div className="text-sm font-semibold" style={{ color: '#166534' }}>
-                  {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(summary.totalNilai)}
-                </div>
-              </>
-            )}
             <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-gray-100 text-gray-700 px-2.5 py-0.5 text-xs font-semibold">DRAFT</div>
           </div>
 

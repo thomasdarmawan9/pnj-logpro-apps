@@ -137,6 +137,17 @@ function buildCategorySummaryRows(data) {
   })
 }
 
+function sortTransactionsOldestFirst(transactions) {
+  return [...(transactions || [])].sort((a, b) => {
+    const da = new Date(a.date).getTime()
+    const db = new Date(b.date).getTime()
+    if (Number.isFinite(da) && Number.isFinite(db) && da !== db) return da - db
+    if (Number.isFinite(da) !== Number.isFinite(db)) return Number.isFinite(da) ? -1 : 1
+    if (a.type !== b.type) return a.type === 'masuk' ? -1 : 1
+    return String(a.number || '').localeCompare(String(b.number || ''))
+  })
+}
+
 function renderSummary(doc, data, y) {
   const margin = 28
   const pageW = doc.page.width
@@ -150,7 +161,7 @@ function renderSummary(doc, data, y) {
 
   drawCell(doc, margin, y, tableW, 16, 'Ringkasan Stok per Barang dan Kategori', { fill: C_SUBHEAD, bold: true, align: 'left' })
   y += 16
-  ;['Kode', 'Barang', 'Kategori', 'Masuk', 'Keluar', 'Saldo'].forEach((h, i) => {
+  ;['Kode', 'Barang', 'Kategori', 'Masuk', 'Keluar', 'Saldo (sisa stock)'].forEach((h, i) => {
     drawCell(doc, xs[i], y, widths[i], 15, h, { fill: C_SUBHEAD, bold: true, align: i >= 3 ? 'right' : 'left' })
   })
   y += 15
@@ -189,7 +200,7 @@ function renderSummary(doc, data, y) {
   const summary = [
     `Total Masuk: ${formatQty(data.totalIn)}`,
     `Total Keluar: ${formatQty(data.totalOut)}`,
-    `Saldo: ${formatQty(data.totalAsset)}`,
+    `Saldo (sisa stock): ${formatQty(data.totalAsset)}`,
   ].join('    ')
   doc.font('Helvetica-Bold').fontSize(7).fillColor(C_BLACK).text(summary, margin, y, { width: tableW, align: 'right' })
   return y + 20
@@ -199,7 +210,7 @@ function renderTransactions(doc, data, y) {
   const margin = 28
   const pageW = doc.page.width
   const tableW = pageW - margin * 2
-  const widths = [50, 36, 56, 96, 58, 50, 92, 62, 58, 46, 48, 36]
+  const widths = [50, 36, 56, 94, 58, 50, 112, 58, 96, 52, 52]
   const xs = [margin]
   for (let i = 0; i < widths.length - 1; i++) xs.push(xs[i] + widths[i])
   widths[widths.length - 1] += tableW - widths.reduce((s, w) => s + w, 0)
@@ -212,31 +223,32 @@ function renderTransactions(doc, data, y) {
 
   drawCell(doc, margin, y, tableW, 16, 'Detail Transaksi', { fill: C_SUBHEAD, bold: true, align: 'left' })
   y += 16
-  ;['Tanggal', 'Tipe', 'Nomor', 'Barang', 'Kategori', 'Qty', 'Alamat Tujuan', 'Partner', 'Sopir', 'No Pol', 'Invoice', 'SJ'].forEach((h, i) => {
-    drawCell(doc, xs[i], y, widths[i], 15, h, { fill: C_SUBHEAD, bold: true, align: i === 5 ? 'right' : 'left' })
+  ;['Tanggal', 'Tipe', 'Nomor SPAL', 'Barang', 'Kategori', 'Qty', 'Alamat Tujuan', 'Sopir', 'No /\nNama Kendaraan', 'Invoice', 'SJ'].forEach((h, i) => {
+    drawCell(doc, xs[i], y, widths[i], 22, h, { fill: C_SUBHEAD, bold: true, align: i === 5 ? 'right' : 'left' })
   })
-  y += 15
+  y += 22
 
-  for (const row of data.transactions || []) {
+  for (const row of sortTransactionsOldestFirst(data.transactions)) {
     const qty = `${row.type === 'keluar' ? '-' : '+'}${formatQty(row.qty)} ${row.unit || ''}`.trim()
     const typeLabel = row.type === 'keluar' ? 'Keluar' : 'Masuk'
     const destinationLabel = row.destination || '-'
-    const partnerLabel = row.partner || '-'
     const driverLabel = row.driverName || (row.type === 'keluar' ? row.partner : null) || '-'
-    const vehiclePlateLabel = row.vehiclePlate || '-'
+    const vehiclePlateLabel = row.type === 'masuk'
+      ? row.partner || '-'
+      : row.vehiclePlate || '-'
+    const spalNumber = row.type === 'masuk' ? row.reference || '' : ''
     const cells = [
       { text: formatDate(row.date), width: widths[0], options: { fontSize: 6.5 } },
       { text: typeLabel, width: widths[1], options: { fontSize: 6.5, bold: true } },
-      { text: row.number || '', width: widths[2], options: { fontSize: 6.5 } },
+      { text: spalNumber, width: widths[2], options: { fontSize: 6.5 } },
       { text: row.itemName || '', width: widths[3], options: { fontSize: 6.5 } },
       { text: row.category || '-', width: widths[4], options: { fontSize: 6.5 } },
       { text: qty, width: widths[5], options: { align: 'right', fontSize: 6.5, bold: true } },
       { text: destinationLabel, width: widths[6], options: { fontSize: 6.5 } },
-      { text: partnerLabel, width: widths[7], options: { fontSize: 6.5 } },
-      { text: driverLabel, width: widths[8], options: { fontSize: 6.5 } },
-      { text: vehiclePlateLabel, width: widths[9], options: { fontSize: 6.5 } },
-      { text: row.invoiceNumber || '-', width: widths[10], options: { fontSize: 6.5 } },
-      { text: row.sjNumber || '-', width: widths[11], options: { fontSize: 6.5 } },
+      { text: driverLabel, width: widths[7], options: { fontSize: 6.5 } },
+      { text: vehiclePlateLabel, width: widths[8], options: { fontSize: 6.5 } },
+      { text: row.invoiceNumber || '-', width: widths[9], options: { fontSize: 6.5 } },
+      { text: row.sjNumber || '-', width: widths[10], options: { fontSize: 6.5 } },
     ]
     const h = rowHeight(doc, cells, 16)
 
@@ -247,16 +259,15 @@ function renderTransactions(doc, data, y) {
     }
     drawCell(doc, xs[0], y, widths[0], h, formatDate(row.date), { fontSize: 6.5 })
     drawCell(doc, xs[1], y, widths[1], h, typeLabel, { fontSize: 6.5, color: row.type === 'keluar' ? C_RED : C_GREEN, bold: true })
-    drawCell(doc, xs[2], y, widths[2], h, row.number || '', { fontSize: 6.5 })
+    drawCell(doc, xs[2], y, widths[2], h, spalNumber, { fontSize: 6.5 })
     drawCell(doc, xs[3], y, widths[3], h, row.itemName || '', { fontSize: 6.5 })
     drawCell(doc, xs[4], y, widths[4], h, row.category || '-', { fontSize: 6.5 })
     drawCell(doc, xs[5], y, widths[5], h, qty, { align: 'right', fontSize: 6.5, bold: true })
     drawCell(doc, xs[6], y, widths[6], h, destinationLabel, { fontSize: 6.5 })
-    drawCell(doc, xs[7], y, widths[7], h, partnerLabel, { fontSize: 6.5 })
-    drawCell(doc, xs[8], y, widths[8], h, driverLabel, { fontSize: 6.5 })
-    drawCell(doc, xs[9], y, widths[9], h, vehiclePlateLabel, { fontSize: 6.5 })
-    drawCell(doc, xs[10], y, widths[10], h, row.invoiceNumber || '-', { fontSize: 6.5 })
-    drawCell(doc, xs[11], y, widths[11], h, row.sjNumber || '-', { fontSize: 6.5 })
+    drawCell(doc, xs[7], y, widths[7], h, driverLabel, { fontSize: 6.5 })
+    drawCell(doc, xs[8], y, widths[8], h, vehiclePlateLabel, { fontSize: 6.5 })
+    drawCell(doc, xs[9], y, widths[9], h, row.invoiceNumber || '-', { fontSize: 6.5 })
+    drawCell(doc, xs[10], y, widths[10], h, row.sjNumber || '-', { fontSize: 6.5 })
     y += h
   }
 }

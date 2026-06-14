@@ -21,4 +21,5 @@ export interface ISuratJalanRepository {
   void(uuid: string, reason: string): Promise<SuratJalan>
   delete(uuid: string): Promise<void>
   attachToInvoice(sjUuid: string, invoiceId: number, invoiceUuid: string, invoiceNumber: string): Promise<SuratJalan>
+  exportXlsx(filters: SJFilterState, uuids?: string[]): Promise<Blob>
 }

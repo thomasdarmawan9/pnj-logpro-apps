@@ -38,11 +38,14 @@ export default function CreateStockReceiptPage() {
   const { push: pushToast } = useToast()
   const { items, isSubmitting } = useSelector((state: RootState) => state.stock)
   const { customers } = useSelector((state: RootState) => state.master)
+  const role = useSelector((state: RootState) => state.auth.user?.role ?? null)
 
   const [form, setForm] = useState({
     receipt_date: new Date().toISOString().split('T')[0],
     supplier_name: '',
     document_number: '',
+    sj_number_manual: '',
+    invoice_number_manual: '',
     customer_id: '',
     notes: '',
   })
@@ -54,9 +57,14 @@ export default function CreateStockReceiptPage() {
   const [newItemModal, setNewItemModal] = useState<{ open: boolean; rowId: string | null }>({ open: false, rowId: null })
 
   useEffect(() => {
+    if (role === 'admin_finance') {
+      pushToast({ title: 'Akses Ditolak', description: 'Anda tidak memiliki akses membuat stok masuk.', variant: 'error' })
+      router.replace('/stok')
+      return
+    }
     dispatch(fetchStockItems())
     if (!customers.length) dispatch(fetchCustomers())
-  }, [dispatch, customers.length])
+  }, [dispatch, customers.length, role, router, pushToast])
 
   const activeItems = items.filter(i => i.is_active)
 
@@ -89,7 +97,8 @@ export default function CreateStockReceiptPage() {
       return {
         ...r,
         use_kategorisasi: enabling,
-        kategorisasi: enabling && r.kategorisasi.length === 0 ? [newKategoriRow()] : r.kategorisasi,
+        qty: enabling ? '' : r.qty,
+        kategorisasi: enabling ? (r.kategorisasi.length === 0 ? [newKategoriRow()] : r.kategorisasi) : [],
       }
     }))
   }
@@ -105,6 +114,9 @@ export default function CreateStockReceiptPage() {
     setItemRows(prev => prev.map(r => {
       if (r.id !== rowId) return r
       const updated = r.kategorisasi.filter(k => k.id !== katId)
+      if (updated.length === 0) {
+        return { ...r, use_kategorisasi: false, kategorisasi: [], qty: '' }
+      }
       return { ...r, kategorisasi: updated }
     }))
   }
@@ -135,26 +147,31 @@ export default function CreateStockReceiptPage() {
   const selectedItemIds = itemRows.map(r => r.stock_item_id).filter(id => id !== '')
 
   // --- Validasi ---
-  const isValid = () => {
-    if (!form.receipt_date) return false
-    const ids = itemRows.map(r => r.stock_item_id)
-    if (new Set(ids).size !== ids.length) return false
-    for (const r of itemRows) {
-      if (!r.stock_item_id) return false
+  const validateForm = () => {
+    if (!form.receipt_date) return 'Tanggal penerimaan wajib diisi.'
+    if (!form.customer_id) return 'Customer wajib dipilih.'
+    const ids = itemRows.map(r => r.stock_item_id).filter(id => id !== '')
+    if (new Set(ids).size !== ids.length) return 'Barang tidak boleh duplikat.'
+    for (const [idx, r] of itemRows.entries()) {
+      if (!r.stock_item_id) return `Barang ${idx + 1} wajib dipilih.`
       if (r.use_kategorisasi) {
-        if (r.kategorisasi.length === 0) return false
-        if (r.kategorisasi.some(k => !k.name.trim() || !k.qty || Number(k.qty) <= 0)) return false
+        if (r.kategorisasi.length === 0) return `Minimal satu kategori wajib diisi untuk barang ${idx + 1}.`
+        for (const [kIdx, k] of r.kategorisasi.entries()) {
+          if (!k.name.trim()) return `Nama kategori ${kIdx + 1} pada barang ${idx + 1} wajib diisi.`
+          if (!k.qty || Number(k.qty) <= 0) return `Qty kategori ${kIdx + 1} pada barang ${idx + 1} harus lebih dari 0.`
+        }
       } else {
-        if (!r.qty || Number(r.qty) <= 0) return false
+        if (!r.qty || Number(r.qty) <= 0) return `Qty barang ${idx + 1} harus lebih dari 0.`
       }
     }
-    return true
+    return null
   }
 
   // --- Submit ---
   const handleSubmit = async () => {
-    if (!isValid()) {
-      pushToast({ title: 'Form Tidak Lengkap', description: 'Harap isi semua kolom yang wajib dan pastikan tidak ada barang duplikat.', variant: 'error' })
+    const validationError = validateForm()
+    if (validationError) {
+      pushToast({ title: 'Form Tidak Valid', description: validationError, variant: 'error' })
       return
     }
 
@@ -179,6 +196,8 @@ export default function CreateStockReceiptPage() {
       receipt_date: form.receipt_date,
       supplier_name: form.supplier_name || null,
       document_number: form.document_number || null,
+      sj_number_manual: form.sj_number_manual || null,
+      invoice_number_manual: form.invoice_number_manual || null,
       customer_id: form.customer_id ? Number(form.customer_id) : null,
       notes: form.notes || null,
       items: flatItems,
@@ -210,7 +229,7 @@ export default function CreateStockReceiptPage() {
         </div>
       </div>
 
-      <div className="max-w-3xl space-y-5">
+      <div className="max-w-5xl space-y-5">
         {/* Section A: Receipt info */}
         <div className="bg-white rounded-xl border shadow-sm p-5" style={{ borderColor: 'var(--border-card)' }}>
           <h2 className="font-bold text-base mb-4">Informasi Penerimaan</h2>
@@ -256,7 +275,29 @@ export default function CreateStockReceiptPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Customer</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">No. SJ (Manual)</label>
+              <input
+                type="text"
+                className="form-input w-full"
+                placeholder="Contoh: SJ-0354 atau 354"
+                value={form.sj_number_manual}
+                onChange={e => setForm(prev => ({ ...prev, sj_number_manual: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">No. Invoice (Manual)</label>
+              <input
+                type="text"
+                className="form-input w-full"
+                placeholder="Contoh: INV-2650 atau 2650"
+                value={form.invoice_number_manual}
+                onChange={e => setForm(prev => ({ ...prev, invoice_number_manual: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Customer <span className="text-red-500">*</span>
+              </label>
               <select
                 className="form-input w-full"
                 value={form.customer_id}
@@ -306,7 +347,7 @@ export default function CreateStockReceiptPage() {
                   className={`rounded-xl border ${isDuplicate ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-gray-50'}`}
                 >
                   {/* Baris utama barang */}
-                  <div className="grid grid-cols-12 gap-2 items-start p-3">
+                  <div className="grid grid-cols-12 gap-3 items-start p-3 min-w-[820px]">
                     {/* Pilih barang */}
                     <div className="col-span-5">
                       <label className="block text-xs text-gray-500 mb-1">Barang {idx + 1} *</label>
@@ -355,11 +396,11 @@ export default function CreateStockReceiptPage() {
                             placeholder="0"
                           />
                         </div>
-                        <div className="col-span-1">
+                        <div className="col-span-2">
                           <label className="block text-xs text-gray-500 mb-1">Satuan</label>
-                          <div className="form-input w-full text-sm text-gray-400 bg-gray-100">{selectedItem?.unit ?? '—'}</div>
+                          <div className="form-input w-full text-sm text-gray-400 bg-gray-100 whitespace-nowrap overflow-hidden text-ellipsis">{selectedItem?.unit ?? '—'}</div>
                         </div>
-                        <div className="col-span-3">
+                        <div className="col-span-2">
                           <label className="block text-xs text-gray-500 mb-1">Catatan</label>
                           <input
                             type="text"
@@ -371,7 +412,7 @@ export default function CreateStockReceiptPage() {
                         </div>
                       </>
                     ) : (
-                      <div className="col-span-6 flex items-end pb-0.5">
+                      <div className="col-span-7 flex items-end pb-0.5">
                         <span className="text-xs text-blue-600 font-medium italic px-2">
                           Qty & catatan diatur per kategorisasi
                         </span>
@@ -379,7 +420,7 @@ export default function CreateStockReceiptPage() {
                     )}
 
                     {/* Actions */}
-                    <div className="col-span-1 flex items-end gap-1 pb-0.5">
+                    <div className="col-span-1 flex items-end justify-end gap-1 pb-0.5">
                       <button
                         type="button"
                         onClick={() => toggleKategorisasi(row.id)}
@@ -408,7 +449,7 @@ export default function CreateStockReceiptPage() {
                       </div>
 
                       {row.kategorisasi.map((kat, kIdx) => (
-                        <div key={kat.id} className="grid grid-cols-12 gap-2 items-start bg-blue-50 border border-blue-100 rounded-lg p-2.5">
+                        <div key={kat.id} className="grid grid-cols-12 gap-3 items-start bg-blue-50 border border-blue-100 rounded-lg p-2.5 min-w-[760px]">
                           <div className="col-span-4">
                             <label className="block text-xs text-gray-500 mb-1">Nama Kategori {kIdx + 1} *</label>
                             <input
@@ -430,11 +471,11 @@ export default function CreateStockReceiptPage() {
                               placeholder="0"
                             />
                           </div>
-                          <div className="col-span-1">
+                          <div className="col-span-2">
                             <label className="block text-xs text-gray-500 mb-1">Satuan</label>
-                            <div className="form-input w-full text-sm text-gray-400 bg-white border-gray-200">{selectedItem?.unit ?? '—'}</div>
+                            <div className="form-input w-full text-sm text-gray-400 bg-white border-gray-200 whitespace-nowrap overflow-hidden text-ellipsis">{selectedItem?.unit ?? '—'}</div>
                           </div>
-                          <div className="col-span-4">
+                          <div className="col-span-3">
                             <label className="block text-xs text-gray-500 mb-1">Catatan</label>
                             <input
                               type="text"
@@ -448,8 +489,8 @@ export default function CreateStockReceiptPage() {
                             <button
                               type="button"
                               onClick={() => removeKategoriRow(row.id, kat.id)}
-                              disabled={row.kategorisasi.length === 1}
-                              className="p-2 rounded-lg hover:bg-red-50 transition-colors text-red-400 disabled:opacity-30"
+                              className="p-2 rounded-lg hover:bg-red-50 transition-colors text-red-400"
+                              title="Hapus kategori"
                             >
                               <Trash2 size={13} />
                             </button>
@@ -518,7 +559,7 @@ export default function CreateStockReceiptPage() {
           </button>
           <button
             onClick={handleSubmit}
-            disabled={isSubmitting || !isValid()}
+            disabled={isSubmitting}
             className="px-5 py-2.5 text-sm font-medium text-white rounded-xl disabled:opacity-60 transition-colors"
             style={{ backgroundColor: 'var(--green-primary)' }}
           >

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Eye, Package, PackageMinus, PackagePlus, Rows3 } from 'lucide-react'
+import { ArrowLeft, Eye, Package, PackageMinus, PackagePlus, Pencil, Rows3 } from 'lucide-react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { AppDispatch, RootState } from '@/store'
 import { clearSelectedCustomerStock, fetchCustomerStockDetail } from '@/store/slices/stockSlice'
@@ -18,7 +18,9 @@ export default function CustomerStockDetailPage({ uuid }: Props) {
   const router = useRouter()
   const dispatch = useDispatch<AppDispatch>()
   const { selectedCustomerStock: detail, isDetailLoading } = useSelector((state: RootState) => state.stock)
+  const role = useSelector((state: RootState) => state.auth.user?.role ?? null)
   const [hasLoaded, setHasLoaded] = useState(false)
+  const isReadOnly = role === 'admin_finance'
 
   useEffect(() => {
     let mounted = true
@@ -119,7 +121,8 @@ export default function CustomerStockDetailPage({ uuid }: Props) {
                   <th className="px-4 py-3 text-left">Kategori</th>
                   <th className="px-4 py-3 text-right">Masuk</th>
                   <th className="px-4 py-3 text-right">Keluar</th>
-                  <th className="px-4 py-3 text-right">Saldo</th>
+                  <th className="px-4 py-3 text-right">Saldo (sisa stock)</th>
+                  {!isReadOnly && <th className="px-4 py-3 text-right">Aksi</th>}
                 </tr>
               </thead>
               <tbody>
@@ -149,6 +152,18 @@ export default function CustomerStockDetailPage({ uuid }: Props) {
                     <td className={`px-4 py-3 text-right font-bold ${row.balance < 0 ? 'text-red-600' : 'text-gray-900'}`}>
                       {row.balance.toLocaleString('id-ID')} <span className="text-xs font-normal text-gray-400">{row.unit}</span>
                     </td>
+                    {!isReadOnly && (
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          type="button"
+                          onClick={() => router.push(`/stok/customer/${detail.customerUuid}/barang/${encodeURIComponent(row.code)}`)}
+                          className="inline-flex items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-100 transition-colors"
+                          title="Edit saldo (sisa stock) barang"
+                        >
+                          <Pencil size={14} className="text-gray-500" />
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

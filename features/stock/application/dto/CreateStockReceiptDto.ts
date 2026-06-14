@@ -9,6 +9,8 @@ export interface CreateStockReceiptDto {
   receipt_date: string
   supplier_name: string | null
   document_number: string | null
+  sj_number_manual: string | null
+  invoice_number_manual: string | null
   customer_id: number | null
   notes: string | null
   items: CreateStockReceiptItemDto[]

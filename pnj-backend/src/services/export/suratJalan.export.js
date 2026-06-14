@@ -10,6 +10,34 @@ const STATUS_LABEL = {
   void:      'Void',
 }
 
+function formatItemName(item) {
+  const baseName = item.source_type === 'stock'
+    ? item.stock_item_name || item.description || ''
+    : item.description || item.stock_item_name || ''
+  const category = item.source_type === 'stock' ? item.stock_kategori_name || '' : ''
+  return [baseName, category].filter(Boolean).join(', ')
+}
+
+function formatQty(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return ''
+  return new Intl.NumberFormat('id-ID', { maximumFractionDigits: 2 }).format(n)
+}
+
+function formatCargo(sj) {
+  if (!Array.isArray(sj.items) || sj.items.length === 0) return sj.cargo_description || '-'
+
+  const rows = sj.items
+    .map((item) => {
+      const name = formatItemName(item)
+      const qty = item.qty ? `${formatQty(item.qty)} ${item.unit || ''}`.trim() : ''
+      return [name, qty].filter(Boolean).join(' - ')
+    })
+    .filter(Boolean)
+
+  return rows.length > 0 ? rows.join('\n') : sj.cargo_description || '-'
+}
+
 /**
  * Export daftar Surat Jalan ke .xlsx.
  *
@@ -36,6 +64,10 @@ async function exportXlsx(filters, res) {
   ]
   if (filters.search)        meta.push(['Filter Search', filters.search])
   if (filters.status && filters.status !== 'all') meta.push(['Status', filters.status])
+  if (filters.invoice_status && filters.invoice_status !== 'all') meta.push(['Status Invoice', filters.invoice_status])
+  if (filters.project_code && filters.project_code !== 'all') meta.push(['Project', filters.project_code])
+  if (filters.customer_name && filters.customer_name !== 'all') meta.push(['Customer', filters.customer_name])
+  if (filters.uuids) meta.push(['Mode Export', 'Baris terpilih'])
   if (filters.from || filters.to) meta.push(['Periode', `${filters.from || '-'} → ${filters.to || '-'}`])
 
   const columns = [
@@ -47,10 +79,9 @@ async function exportXlsx(filters, res) {
     { header: 'Tujuan',           key: 'destination',    width: 18 },
     { header: 'Armada',           key: 'fleet',          width: 22 },
     { header: 'Driver',           key: 'driver',         width: 18 },
-    { header: 'Muatan',           key: 'cargo',          width: 30 },
+    { header: 'Muatan',           key: 'cargo',          width: 42, wrapText: true },
     { header: 'Status',           key: 'status',         width: 12, align: 'center' },
     { header: 'Invoice',          key: 'invoice_number', width: 14, align: 'center' },
-    { header: 'Biaya Operasional', key: 'operational_cost', width: 18, align: 'right', format: FMT.IDR },
   ]
 
   const rows = allRows.map(sj => {
@@ -67,14 +98,11 @@ async function exportXlsx(filters, res) {
       destination:      sj.destination || '-',
       fleet:            fleetLabel,
       driver:           sj.driver?.name || sj.driver_name_manual || '-',
-      cargo:            sj.cargo_description || '-',
+      cargo:            formatCargo(sj),
       status:           STATUS_LABEL[sj.status] || sj.status,
       invoice_number:   sj.invoice?.invoice_number || '-',
-      operational_cost: Number(sj.operational_cost || 0),
     }
   })
-
-  const totalCost = rows.reduce((s, r) => s + r.operational_cost, 0)
 
   addSheet(wb, 'Surat Jalan', {
     title:    'DAFTAR SURAT JALAN',
@@ -82,9 +110,6 @@ async function exportXlsx(filters, res) {
     meta,
     columns,
     rows,
-    summary: [
-      ['Total Biaya Operasional', totalCost, { format: FMT.IDR }],
-    ],
   })
 
   const filename = `surat_jalan_${new Date().toISOString().slice(0, 10)}.xlsx`

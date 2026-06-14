@@ -1,17 +1,26 @@
-import { apiDownload, apiRequest } from '@/lib/apiClient'
-import { Invoice, InvoiceStatus, InvoiceFilterState, PaginationState, AttachedSJ, AvailableInvoice, Payment, InvoiceItem, DownPayment } from '../../domain/entities/Invoice'
+import { apiDownload, apiRequest, apiRequestAllPages } from '@/lib/apiClient'
+import { Invoice, InvoiceStatus, InvoiceFilterState, PaginationState, AttachedSJ, AvailableInvoice, Payment, InvoiceItem, DownPayment, InvoiceSummaryStats } from '../../domain/entities/Invoice'
 import { IInvoiceRepository, PaginatedResult } from './IInvoiceRepository'
 import { CreateInvoiceDto, CreateInvoiceItemDto } from '../../application/dto/CreateInvoiceDto'
 import { UpdateInvoiceDto } from '../../application/dto/UpdateInvoiceDto'
 import { RecordPaymentDto } from '../../application/dto/RecordPaymentDto'
+import { resolveEffectiveInvoiceServiceType } from '../../domain/services/invoiceServiceType'
 
 type ApiId = number | string | null
 
-type ApiInvoiceItem = Omit<InvoiceItem, 'id' | 'invoice_id' | 'fleet_id' | 'qty' | 'unit_price' | 'subtotal' | 'sort_order' | 'source_sj_id'> & {
+type ApiInvoiceItem = Omit<InvoiceItem, 'id' | 'invoice_id' | 'fleet_id' | 'driver_id' | 'qty' | 'unit_price' | 'subtotal' | 'sort_order' | 'source_sj_id' | 'cargo_qty' | 'cargo_weight' | 'cargo_volume' | 'rental_duration_years' | 'rental_duration_months' | 'rental_duration_days' | 'rental_duration_hours'> & {
   id?: ApiId
   invoice_id?: ApiId
   fleet_id?: ApiId
+  driver_id?: ApiId
+  rental_duration_years?: number | string | null
+  rental_duration_months?: number | string | null
+  rental_duration_days?: number | string | null
+  rental_duration_hours?: number | string | null
   qty: number | string
+  cargo_qty?: number | string | null
+  cargo_weight?: number | string | null
+  cargo_volume?: number | string | null
   unit_price: number | string
   subtotal: number | string
   sort_order: number | string
@@ -132,7 +141,19 @@ function normalizeItem(item: ApiInvoiceItem): InvoiceItem {
     invoice_id: toNumber(item.invoice_id),
     fleet_id: toNullableNumber(item.fleet_id),
     fleet: item.fleet ? { ...item.fleet, id: toNumber(item.fleet.id) } : null,
+    driver_id: toNullableNumber(item.driver_id),
+    driver: item.driver ? { ...item.driver, id: toNumber(item.driver.id) } : null,
+    driver_name_manual: item.driver_name_manual ?? null,
+    rental_duration_years: Number(item.rental_duration_years || 0),
+    rental_duration_months: Number(item.rental_duration_months || 0),
+    rental_duration_days: Number(item.rental_duration_days || 0),
+    rental_duration_hours: Number(item.rental_duration_hours || 0),
     qty: Number(item.qty || 0),
+    cargo_qty: item.cargo_qty === null || item.cargo_qty === undefined ? null : Number(item.cargo_qty || 0),
+    cargo_unit: item.cargo_unit ?? null,
+    cargo_weight: item.cargo_weight === null || item.cargo_weight === undefined ? null : Number(item.cargo_weight || 0),
+    cargo_volume: item.cargo_volume === null || item.cargo_volume === undefined ? null : Number(item.cargo_volume || 0),
+    cargo_notes: item.cargo_notes ?? null,
     unit_price: Number(item.unit_price || 0),
     subtotal: Number(item.subtotal || 0),
     sort_order: Number(item.sort_order || 0),
@@ -153,6 +174,8 @@ function normalizeInvoice(inv: ApiInvoice): Invoice {
     ...inv,
     payment_method: inv.payment_method ?? 'transfer',
     service_type: inv.service_type ?? 'delivery',
+    custom_service_name: inv.custom_service_name ?? null,
+    delivery_pricing_mode: inv.delivery_pricing_mode ?? 'shipment',
     id: toNumber(inv.id),
     project_id: projectId,
     project: inv.project ? {
@@ -215,15 +238,56 @@ function applyFrontendFilters(list: Invoice[], filters: InvoiceFilterState): Inv
   })
 }
 
+function buildSummary(list: Invoice[]): InvoiceSummaryStats {
+  const now = new Date()
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+  const activeReceivables = list.filter(inv =>
+    [InvoiceStatus.SENT, InvoiceStatus.OUTSTANDING].includes(inv.status) &&
+    inv.remaining_amount > 0
+  )
+  const overdue = activeReceivables.filter(inv => new Date(inv.due_date) < now)
+  const paidThisMonth = list.filter(inv =>
+    inv.status === InvoiceStatus.PAID &&
+    new Date(inv.updated_at ?? inv.created_at ?? '') >= startOfMonth
+  )
+  const drafts = list.filter(inv => inv.status === InvoiceStatus.DRAFT)
+
+  return {
+    totalPiutang: activeReceivables.reduce((sum, inv) => sum + inv.remaining_amount, 0),
+    jatuhTempo: overdue.length,
+    terbayarBulanIni: paidThisMonth.reduce((sum, inv) => sum + inv.paid_amount, 0),
+    draftBelumDikirim: drafts.length,
+    countOutstanding: activeReceivables.length,
+    countPaidThisMonth: paidThisMonth.length,
+  }
+}
+
+async function fetchAllInvoices() {
+  return apiRequestAllPages<ApiInvoice>('/invoices?status=all&period=all', { method: 'GET' })
+}
+
 function toItemPayload(item: CreateInvoiceItemDto) {
   return {
+    uuid: item.uuid ?? null,
+    source_sj_id: item.source_sj_id ?? null,
     fleet_id: item.fleet_id ?? null,
+    driver_id: item.driver_id ?? null,
+    driver_name_manual: item.driver_name_manual || null,
     fleet_label: item.fleet_label,
     description: item.description,
     period_start: item.period_start,
     period_end: item.period_end,
+    rental_duration_years: item.rental_duration_years ?? 0,
+    rental_duration_months: item.rental_duration_months ?? 0,
+    rental_duration_days: item.rental_duration_days ?? 0,
+    rental_duration_hours: item.rental_duration_hours ?? 0,
     qty: item.qty,
     unit: item.unit,
+    cargo_qty: item.cargo_qty ?? null,
+    cargo_unit: item.cargo_unit ?? null,
+    cargo_weight: item.cargo_weight ?? null,
+    cargo_volume: item.cargo_volume ?? null,
+    cargo_notes: item.cargo_notes ?? null,
     unit_price: item.unit_price,
     sort_order: item.sort_order,
   }
@@ -231,16 +295,14 @@ function toItemPayload(item: CreateInvoiceItemDto) {
 
 export class MockInvoiceRepository implements IInvoiceRepository {
   async getList(filters: InvoiceFilterState, pagination: PaginationState): Promise<PaginatedResult<Invoice>> {
-    const response = await apiRequest<ApiInvoice[]>(`/invoices?status=all&period=all&page=1&limit=100`, {
-      method: 'GET',
-    })
-    const filtered = applyFrontendFilters(response.data.map(normalizeInvoice), filters)
+    const filtered = applyFrontendFilters((await fetchAllInvoices()).map(normalizeInvoice), filters)
     const start = (pagination.page - 1) * pagination.perPage
     return {
       data: filtered.slice(start, start + pagination.perPage),
       total: filtered.length,
       page: pagination.page,
       perPage: pagination.perPage,
+      summary: buildSummary(filtered),
     }
   }
 
@@ -258,11 +320,19 @@ export class MockInvoiceRepository implements IInvoiceRepository {
         invoice_date: dto.invoice_date,
         due_date: dto.due_date,
         service_type: dto.service_type,
+        custom_service_name: dto.service_type === 'other' ? dto.custom_service_name ?? null : null,
+        delivery_pricing_mode: dto.delivery_pricing_mode ?? 'shipment',
         payment_method: dto.payment_method,
+        bank_account_id: dto.payment_method === 'transfer' ? dto.bank_account_id ?? null : null,
         tax_percent: dto.tax_percent,
         pph_percent: dto.pph_percent,
         insurance_amount: dto.insurance_amount ?? 0,
         notes: dto.notes,
+        origin: dto.origin ?? null,
+        destination: dto.destination ?? null,
+        cargo_description: dto.cargo_description ?? null,
+        manual_sj_numbers: dto.manual_sj_numbers ?? null,
+        linked_sj_uuids: dto.linked_sj_uuids ?? [],
         items: dto.items.map(toItemPayload),
         send_immediately: dto.send_immediately,
         down_payment: dto.down_payment ?? undefined,
@@ -327,16 +397,14 @@ export class MockInvoiceRepository implements IInvoiceRepository {
   }
 
   async getAvailableForAttachment(projectId: number | null, customerId: number, sjUuid: string): Promise<AvailableInvoice[]> {
-    const response = await apiRequest<ApiInvoice[]>('/invoices?status=all&period=all&page=1&limit=100', {
-      method: 'GET',
-    })
-    return response.data
+    const invoices = await fetchAllInvoices()
+    return invoices
       .map(normalizeInvoice)
       .filter(inv =>
         (projectId
           ? Number(inv.project_id) === projectId
           : !inv.project_id && Number(inv.customer_id) === customerId) &&
-        inv.service_type !== 'rental' &&
+        resolveEffectiveInvoiceServiceType(inv.service_type, inv.custom_service_name) !== 'rental' &&
         [InvoiceStatus.DRAFT, InvoiceStatus.SENT, InvoiceStatus.OUTSTANDING].includes(inv.status) &&
         !inv.attached_sj.some(s => s.uuid === sjUuid)
       )
@@ -358,7 +426,7 @@ export class MockInvoiceRepository implements IInvoiceRepository {
 }
 
 export async function exportInvoices() {
-  return apiDownload('/invoices/export?status=all&period=all&page=1&limit=100')
+  return apiDownload('/invoices/export?status=all&period=all')
 }
 
 export async function uploadInvoiceLampiran(uuid: string, file: File): Promise<Invoice> {

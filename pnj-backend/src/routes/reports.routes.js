@@ -14,7 +14,6 @@ const {
   agingARQuery,
   agingARIdParam,
   profitLossQuery,
-  fleetUtilizationQuery,
   auditTrailQuery,
 } = require('../validators/reports.validator')
 
@@ -38,6 +37,18 @@ router.get('/aging-ar/customers/:id',
   isFinanceOrAbove,
   validate(agingARIdParam, 'params'),
   controller.getAgingARCustomer,
+)
+
+router.get('/aging-ar/customers/:id/export/excel',
+  isFinanceOrAbove,
+  validate(agingARIdParam, 'params'),
+  controller.exportAgingARCustomerExcel,
+)
+
+router.get('/aging-ar/customers/:id/export/pdf',
+  isFinanceOrAbove,
+  validate(agingARIdParam, 'params'),
+  controller.exportAgingARCustomerPdf,
 )
 
 router.get('/aging-ar/projects/:id',
@@ -68,19 +79,6 @@ router.get('/profit-loss/export',
   isFinanceOrAbove,
   validate(profitLossQuery, 'query'),
   controller.exportProfitLoss,
-)
-
-// ── Fleet Utilization (Super Admin only — sesuai FE redirect) ─────────────
-router.get('/fleet-utilization',
-  isSuperAdmin,
-  validate(fleetUtilizationQuery, 'query'),
-  controller.getFleetUtilization,
-)
-
-router.get('/fleet-utilization/export',
-  isSuperAdmin,
-  validate(fleetUtilizationQuery, 'query'),
-  controller.exportFleetUtilization,
 )
 
 // ── Audit Trail ───────────────────────────────────────────────────────────

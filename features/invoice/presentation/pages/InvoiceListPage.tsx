@@ -26,17 +26,22 @@ import SendInvoiceModal from '../components/modals/SendInvoiceModal'
 import VoidInvoiceModal from '../components/modals/VoidInvoiceModal'
 import RecordPaymentModal from '../components/modals/RecordPaymentModal'
 import AttachSJModal from '../components/modals/AttachSJModal'
+import { resolveEffectiveInvoiceServiceType } from '../../domain/services/invoiceServiceType'
 import DetachSJConfirmModal from '../components/modals/DetachSJConfirmModal'
 import GeneratePDFModal from '../components/modals/GeneratePDFModal'
 import { exportInvoices } from '../../infrastructure/repositories/MockInvoiceRepository'
+import { fetchCustomers, fetchProjects } from '@/store/slices/masterSlice'
+import TablePagination from '@/features/master/presentation/components/TablePagination'
 
 export default function InvoiceListPage() {
   const router = useRouter()
   const dispatch = useDispatch<AppDispatch>()
   const { push: pushToast } = useToast()
-  const { list, filters, pagination, isLoading, error, setFilters, resetFilters, setPage, setPerPage } = useInvoiceList()
+  const { list, summary, filters, pagination, isLoading, error, setFilters, resetFilters, setPage, setPerPage } = useInvoiceList()
   const { selectedInvoice, attachableSJ, modals } = useSelector((state: RootState) => state.invoice)
-  const role = useSelector((state: RootState) => state.auth.user?.role ?? 'super_admin')
+  const { customers, projects } = useSelector((state: RootState) => state.master)
+  const role = useSelector((state: RootState) => state.auth.user?.role ?? null)
+  const isReadOnly = role === 'admin_finance'
   const [selectedRows, setSelectedRows] = useState<string[]>([])
   const [activeUuid, setActiveUuid] = useState<string | null>(null)
 
@@ -46,27 +51,28 @@ export default function InvoiceListPage() {
     if (error) pushToast({ title: 'Kesalahan', description: error, variant: 'error' })
   }, [error, pushToast])
 
-  const stats = useMemo(() => {
-    const now = new Date()
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-    const outstanding = list.filter(i => i.status === InvoiceStatus.OUTSTANDING)
-    const overdue = outstanding.filter(i => new Date(i.due_date) < now)
-    const paidThisMonth = list.filter(i => i.status === InvoiceStatus.PAID && new Date(i.updated_at ?? '') >= startOfMonth)
-    const drafts = list.filter(i => i.status === InvoiceStatus.DRAFT)
-    return {
-      totalPiutang: outstanding.reduce((s, i) => s + i.remaining_amount, 0),
-      jatuhTempo: overdue.length,
-      terbayarBulanIni: paidThisMonth.reduce((s, i) => s + i.paid_amount, 0),
-      draftBelumDikirim: drafts.length,
-      countOutstanding: outstanding.length,
-      countPaidThisMonth: paidThisMonth.length,
-    }
-  }, [list])
+  useEffect(() => {
+    dispatch(fetchCustomers())
+    dispatch(fetchProjects())
+  }, [dispatch])
 
-  const totalPages = Math.ceil(pagination.total / pagination.perPage) || 1
+  const customerOptions = useMemo(() => [
+    { value: 'all', label: 'Semua Customer' },
+    ...customers
+      .map(customer => ({ value: customer.name, label: customer.name }))
+      .sort((a, b) => a.label.localeCompare(b.label)),
+  ], [customers])
+
+  const projectOptions = useMemo(() => [
+    { value: 'all', label: 'Semua Proyek' },
+    ...projects
+      .map(project => ({ value: project.code, label: `${project.code} - ${project.name}` }))
+      .sort((a, b) => a.label.localeCompare(b.label)),
+  ], [projects])
 
   const handleAction = async (action: string, uuid: string) => {
     if (action === 'detail') return router.push(`/invoice/${uuid}`)
+    if (isReadOnly && action !== 'print') return
     if (action === 'edit') return router.push(`/invoice/${uuid}/edit`)
     if (action === 'print') {
       setActiveUuid(uuid)
@@ -94,7 +100,7 @@ export default function InvoiceListPage() {
       const invoice = fetchInvoiceDetail.fulfilled.match(detail)
         ? detail.payload
         : list.find(i => i.uuid === uuid)
-      if (invoice?.service_type === 'rental') {
+      if (resolveEffectiveInvoiceServiceType(invoice?.service_type, invoice?.custom_service_name) === 'rental') {
         pushToast({
           title: 'SJ tidak tersedia',
           description: 'Invoice jasa penyewaan tidak dapat dikaitkan dengan Surat Jalan.',
@@ -132,7 +138,7 @@ export default function InvoiceListPage() {
           <div className="text-xs text-gray-500">Dashboard / Invoice</div>
           <h1 className="text-2xl font-bold">Invoice</h1>
         </div>
-        {(role === 'super_admin' || role === 'admin_finance') && (
+        {role === 'super_admin' && (
           <button
             onClick={() => router.push('/invoice/create')}
             className="flex items-center gap-2 px-4 py-2 rounded-xl text-white"
@@ -144,10 +150,17 @@ export default function InvoiceListPage() {
         )}
       </div>
 
-      <InvoiceSummaryCards stats={stats} />
+      <InvoiceSummaryCards stats={summary} />
 
       <div className="mt-6">
-        <InvoiceFilterBar filters={filters} onChange={setFilters} onReset={resetFilters} onExport={handleExport} />
+        <InvoiceFilterBar
+          filters={filters}
+          onChange={setFilters}
+          onReset={resetFilters}
+          onExport={handleExport}
+          customerOptions={customerOptions}
+          projectOptions={projectOptions}
+        />
       </div>
 
       <div className="mt-4 rounded-xl overflow-hidden shadow-sm border bg-white" style={{ borderColor: 'var(--border-card)' }}>
@@ -157,6 +170,7 @@ export default function InvoiceListPage() {
               <th className="px-4 py-3 text-left w-8">□</th>
               <th className="px-4 py-3 text-left">No. Invoice</th>
               <th className="px-4 py-3 text-left">Tgl Invoice</th>
+              <th className="px-4 py-3 text-left">Tipe Jasa</th>
               <th className="px-4 py-3 text-left">Customer</th>
               <th className="px-4 py-3 text-right">Total</th>
               <th className="px-4 py-3 text-left">Status</th>
@@ -167,14 +181,14 @@ export default function InvoiceListPage() {
           <tbody className="text-sm">
             {isLoading && Array.from({ length: 5 }).map((_, idx) => (
               <tr key={idx} className="border-t" style={{ borderColor: 'var(--border-card)' }}>
-                <td colSpan={8} className="px-4 py-4">
+                <td colSpan={9} className="px-4 py-4">
                   <div className="h-4 bg-gray-100 rounded w-full animate-pulse" />
                 </td>
               </tr>
             ))}
             {!isLoading && list.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-12 text-center text-gray-500">
+                <td colSpan={9} className="px-4 py-12 text-center text-gray-500">
                   Tidak ada invoice yang cocok dengan filter ini.
                 </td>
               </tr>
@@ -186,7 +200,7 @@ export default function InvoiceListPage() {
                 checked={selectedRows.includes(inv.uuid)}
                 onToggle={uuid => setSelectedRows(prev => prev.includes(uuid) ? prev.filter(u => u !== uuid) : [...prev, uuid])}
                 onAction={handleAction}
-                role={role}
+                role={role ?? 'viewer'}
               />
             ))}
           </tbody>
@@ -195,16 +209,15 @@ export default function InvoiceListPage() {
 
       {/* Pagination */}
       <div className="flex flex-wrap items-center justify-between mt-6 text-sm">
-        <div className="text-gray-500">
-          Menampilkan {Math.min((pagination.page - 1) * pagination.perPage + 1, pagination.total)}–{Math.min(pagination.page * pagination.perPage, pagination.total)} dari {pagination.total} invoice
-        </div>
-        <div className="flex items-center gap-2">
-          <button disabled={pagination.page === 1} onClick={() => setPage(pagination.page - 1)} className="px-3 py-1.5 rounded-lg border disabled:opacity-40" style={{ borderColor: 'var(--border-card)' }}>← Sebelumnya</button>
-          {Array.from({ length: totalPages }).map((_, i) => (
-            <button key={i} onClick={() => setPage(i + 1)} className={`px-3 py-1.5 rounded-lg border ${pagination.page === i + 1 ? 'bg-green-50 text-green-700' : ''}`} style={{ borderColor: 'var(--border-card)' }}>{i + 1}</button>
-          ))}
-          <button disabled={pagination.page === totalPages} onClick={() => setPage(pagination.page + 1)} className="px-3 py-1.5 rounded-lg border disabled:opacity-40" style={{ borderColor: 'var(--border-card)' }}>Berikutnya →</button>
-        </div>
+        <TablePagination
+          page={pagination.page}
+          perPage={pagination.perPage}
+          total={pagination.total}
+          label="invoice"
+          onPageChange={setPage}
+          showBorderTop={false}
+          className="flex-1 px-0 py-0"
+        />
         <div className="flex items-center gap-2">
           <span className="text-gray-500">Tampilkan:</span>
           <select className="form-input text-sm" value={pagination.perPage} onChange={e => setPerPage(Number(e.target.value))}>

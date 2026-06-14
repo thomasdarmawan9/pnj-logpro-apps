@@ -2,6 +2,7 @@
 
 const { Op } = require('sequelize')
 const {
+  sequelize,
   StockItem,
   StockReceipt,
   StockReceiptItem,
@@ -12,9 +13,13 @@ const {
   Fleet,
   Driver,
 } = require('../models')
-const { NotFoundError } = require('../utils/AppError')
+const { BadRequestError, ConflictError, NotFoundError } = require('../utils/AppError')
 const { computeStockLevel } = require('./stockItem.service')
-const { round2 } = require('../utils/stockBalance')
+const { applyStockDelta, round2 } = require('../utils/stockBalance')
+const {
+  generateStockDisbursementNumber,
+  generateStockReceiptNumber,
+} = require('../utils/numberGenerator')
 
 const PERIODS = ['this_month', 'last_month', 'all', 'custom']
 
@@ -78,6 +83,7 @@ function ensureCustomerItemRow(summary, item) {
     name:          plainItem.name,
     unit:          plainItem.unit,
     categories:    [],
+    categoryRows:  [],
     totalIn:       0,
     totalOut:      0,
     balance:       0,
@@ -86,11 +92,37 @@ function ensureCustomerItemRow(summary, item) {
   return row
 }
 
+function ensureCustomerCategoryRow(itemRow, kategoriName) {
+  const categoryName = kategoriName || null
+  let row = itemRow.categoryRows.find(r => r.categoryName === categoryName)
+  if (row) return row
+
+  row = {
+    categoryName,
+    totalIn:  0,
+    totalOut: 0,
+    balance:  0,
+  }
+  itemRow.categoryRows.push(row)
+  return row
+}
+
 function finalizeCustomerSummary(summary, includeTransactions) {
   summary.itemRows = summary.itemRows
     .map(row => ({
       ...row,
-      categories: [...row.categories].sort((a, b) => a.localeCompare(b)),
+      categoryRows: row.categoryRows
+        .map(categoryRow => ({
+          ...categoryRow,
+          totalIn:  round2(categoryRow.totalIn),
+          totalOut: round2(categoryRow.totalOut),
+          balance:  round2(categoryRow.totalIn - categoryRow.totalOut),
+        }))
+        .sort((a, b) => (a.categoryName || '').localeCompare(b.categoryName || '')),
+      categories: row.categoryRows
+        .map(categoryRow => categoryRow.categoryName)
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b)),
       totalIn:    round2(row.totalIn),
       totalOut:   round2(row.totalOut),
       balance:    round2(row.totalIn - row.totalOut),
@@ -100,7 +132,9 @@ function finalizeCustomerSummary(summary, includeTransactions) {
   summary.totalIn        = round2(summary.itemRows.reduce((s, row) => s + row.totalIn, 0))
   summary.totalOut       = round2(summary.itemRows.reduce((s, row) => s + row.totalOut, 0))
   summary.totalAsset     = round2(summary.itemRows.reduce((s, row) => s + row.balance, 0))
-  summary.totalItemTypes = summary.itemRows.length
+  summary.totalItemTypes = summary.itemRows.reduce((sum, row) => (
+    sum + Math.max(row.categoryRows.length, 1)
+  ), 0)
   summary.transactions.sort((a, b) => {
     const byDate = b.date.localeCompare(a.date)
     if (byDate !== 0) return byDate
@@ -140,6 +174,7 @@ async function buildCustomerStockSummaries({ customerUuid = null, includeTransac
         model:      StockItem,
         as:         'stock_item',
         attributes: ['id', 'uuid', 'code', 'name', 'unit', 'category'],
+        paranoid:   false,
       },
     ],
   })
@@ -152,10 +187,9 @@ async function buildCustomerStockSummaries({ customerUuid = null, includeTransac
 
     const summary = ensureCustomerSummary(map, customer)
     const itemRow = ensureCustomerItemRow(summary, receiptItem.stock_item)
+    const categoryRow = ensureCustomerCategoryRow(itemRow, receiptItem.kategori_name || null)
     itemRow.totalIn = round2(itemRow.totalIn + Number(receiptItem.qty || 0))
-    if (receiptItem.kategori_name && !itemRow.categories.includes(receiptItem.kategori_name)) {
-      itemRow.categories.push(receiptItem.kategori_name)
-    }
+    categoryRow.totalIn = round2(categoryRow.totalIn + Number(receiptItem.qty || 0))
 
     if (includeTransactions) {
       summary.transactions.push({
@@ -186,6 +220,7 @@ async function buildCustomerStockSummaries({ customerUuid = null, includeTransac
         model:      StockItem,
         as:         'stock_item',
         attributes: ['id', 'uuid', 'code', 'name', 'unit', 'category'],
+        paranoid:   false,
       },
       {
         model:      DeliveryOrder,
@@ -208,10 +243,9 @@ async function buildCustomerStockSummaries({ customerUuid = null, includeTransac
 
     const summary = ensureCustomerSummary(map, customer)
     const itemRow = ensureCustomerItemRow(summary, disbursement.stock_item)
+    const categoryRow = ensureCustomerCategoryRow(itemRow, disbursement.kategori_name || null)
     itemRow.totalOut = round2(itemRow.totalOut + Number(disbursement.qty || 0))
-    if (disbursement.kategori_name && !itemRow.categories.includes(disbursement.kategori_name)) {
-      itemRow.categories.push(disbursement.kategori_name)
-    }
+    categoryRow.totalOut = round2(categoryRow.totalOut + Number(disbursement.qty || 0))
 
     if (includeTransactions) {
       summary.transactions.push({
@@ -267,6 +301,152 @@ async function customerDetail(customerUuid) {
     }
   }
   return summaries[0]
+}
+
+async function customerStockItemDetail(customerUuid, stockItemCode) {
+  const customer = await Customer.findOne({ where: { uuid: customerUuid }, attributes: ['id', 'uuid', 'name'] })
+  if (!customer) throw new NotFoundError('Customer tidak ditemukan.')
+
+  const stockItem = await StockItem.findOne({
+    where:      { code: stockItemCode },
+    attributes: ['id', 'uuid', 'code', 'name', 'unit', 'category', 'current_stock', 'peak_stock', 'is_active'],
+    paranoid:   false,
+  })
+  if (!stockItem) throw new NotFoundError('Stock item tidak ditemukan.')
+
+  const summary = await customerDetail(customerUuid)
+  const item = summary.itemRows.find(row => row.code === stockItem.code)
+  const plainStockItem = decorateItem(stockItem)
+
+  return {
+    customerId:   Number(customer.id),
+    customerUuid: customer.uuid,
+    customerName: customer.name,
+    stockItem:    plainStockItem,
+    item:         item || {
+      stockItemId:   Number(stockItem.id),
+      stockItemUuid: stockItem.uuid,
+      code:          stockItem.code,
+      name:          stockItem.name,
+      unit:          stockItem.unit,
+      categories:    [],
+      categoryRows:  [],
+      totalIn:       0,
+      totalOut:      0,
+      balance:       0,
+    },
+    transactions: summary.transactions.filter(row => row.itemCode === stockItem.code),
+  }
+}
+
+async function sumCustomerStockByCategory(customerId, stockItemId, categoryName, t) {
+  const receiptItems = await StockReceiptItem.findAll({
+    where: {
+      stock_item_id: stockItemId,
+      kategori_name: categoryName || null,
+    },
+    include: [{
+      model:      StockReceipt,
+      as:         'receipt',
+      where:      { customer_id: customerId },
+      required:   true,
+      attributes: [],
+    }],
+    transaction: t,
+  })
+
+  const disbursements = await StockDisbursement.findAll({
+    where: {
+      customer_id:    customerId,
+      stock_item_id: stockItemId,
+      kategori_name: categoryName || null,
+    },
+    transaction: t,
+  })
+
+  const totalIn = round2(receiptItems.reduce((sum, row) => sum + Number(row.qty || 0), 0))
+  const totalOut = round2(disbursements.reduce((sum, row) => sum + Number(row.qty || 0), 0))
+  return {
+    totalIn,
+    totalOut,
+    balance: round2(totalIn - totalOut),
+  }
+}
+
+async function adjustCustomerStockItemBalance(customerUuid, stockItemCode, payload, actor) {
+  const targetQty = round2(payload.qty)
+  if (targetQty < 0) throw new BadRequestError('Qty saldo (sisa stock) tidak boleh negatif.')
+  const categoryName = payload.category_name?.trim() || null
+
+  await sequelize.transaction(async (t) => {
+    const customer = await Customer.findOne({ where: { uuid: customerUuid }, transaction: t })
+    if (!customer) throw new NotFoundError('Customer tidak ditemukan.')
+
+    const stockItem = await StockItem.findOne({
+      where:       { code: stockItemCode },
+      transaction: t,
+      lock:        t.LOCK.UPDATE,
+    })
+    if (!stockItem) throw new NotFoundError('Stock item tidak ditemukan.')
+    if (!stockItem.is_active) {
+      throw new ConflictError(`Stock item ${stockItem.code} tidak aktif. Tidak bisa di-adjust.`)
+    }
+
+    const current = await sumCustomerStockByCategory(customer.id, stockItem.id, categoryName, t)
+    const delta = round2(targetQty - current.balance)
+    if (delta === 0) return
+
+    const today = new Date().toISOString().slice(0, 10)
+    const categoryLabel = categoryName ? ` kategori ${categoryName}` : ' tanpa kategori'
+    const notes = payload.notes?.trim()
+      || `Adjustment saldo (sisa stock) customer ${customer.name} untuk ${stockItem.code}${categoryLabel}. Saldo (sisa stock) ${current.balance} -> ${targetQty}.`
+
+    if (delta > 0) {
+      await applyStockDelta(stockItem, delta, t)
+      const receiptNumber = await generateStockReceiptNumber(t)
+      const receipt = await StockReceipt.create({
+        receipt_number:  receiptNumber,
+        receipt_date:    today,
+        supplier_name:   'Adjustment Stok',
+        document_number: `ADJ-${receiptNumber}`,
+        customer_id:     customer.id,
+        notes,
+        created_by:      actor?.id || null,
+      }, { transaction: t })
+
+      await StockReceiptItem.create({
+        receipt_id:    receipt.id,
+        stock_item_id: stockItem.id,
+        qty:           delta,
+        kategori_name: categoryName,
+        notes,
+      }, { transaction: t })
+      return
+    }
+
+    const qtyOut = Math.abs(delta)
+    await applyStockDelta(stockItem, -qtyOut, t)
+    const disbursementNumber = await generateStockDisbursementNumber(t)
+    await StockDisbursement.create({
+      disbursement_number:   disbursementNumber,
+      disbursement_date:     today,
+      stock_item_id:         stockItem.id,
+      qty:                   qtyOut,
+      kategori_name:         categoryName,
+      source_type:           'manual',
+      delivery_order_id:     null,
+      sj_number_manual:      null,
+      invoice_number_manual: null,
+      driver_name:           null,
+      vehicle_plate:         null,
+      destination:           'Adjustment Stok',
+      customer_id:           customer.id,
+      notes,
+      created_by:            actor?.id || null,
+    }, { transaction: t })
+  })
+
+  return customerStockItemDetail(customerUuid, stockItemCode)
 }
 
 async function customerAvailableItems(customerUuid) {
@@ -532,4 +712,14 @@ function decorateItem(item) {
   return plain
 }
 
-module.exports = { PERIODS, recap, summary, customerSummary, customerDetail, customerAvailableItems, periodToRange }
+module.exports = {
+  PERIODS,
+  recap,
+  summary,
+  customerSummary,
+  customerDetail,
+  customerStockItemDetail,
+  adjustCustomerStockItemBalance,
+  customerAvailableItems,
+  periodToRange,
+}

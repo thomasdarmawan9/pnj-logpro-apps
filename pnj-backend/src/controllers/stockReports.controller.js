@@ -53,6 +53,21 @@ const customerDetail = asyncHandler(async (req, res) => {
   res.json(success(data))
 })
 
+const customerStockItemDetail = asyncHandler(async (req, res) => {
+  const data = await service.customerStockItemDetail(req.params.uuid, req.params.stockItemCode)
+  res.json(success(data))
+})
+
+const adjustCustomerStockItemBalance = asyncHandler(async (req, res) => {
+  const data = await service.adjustCustomerStockItemBalance(
+    req.params.uuid,
+    req.params.stockItemCode,
+    req.body,
+    req.user,
+  )
+  res.json(success(data, 'Saldo (sisa stock) customer berhasil diperbarui.'))
+})
+
 const customerAvailableItems = asyncHandler(async (req, res) => {
   const data = await service.customerAvailableItems(req.params.uuid)
   res.json(success(data))
@@ -77,14 +92,14 @@ const exportXlsx = asyncHandler(async (req, res) => {
       { header: 'Kategori', key: 'kategori_name', width: 18 },
       { header: 'Masuk', key: 'qty_in', width: 12 },
       { header: 'Keluar', key: 'qty_out', width: 12 },
-      { header: 'Saldo', key: 'balance', width: 12 },
+      { header: 'Saldo (sisa stock)', key: 'balance', width: 20 },
       { header: 'Catatan', key: 'notes', width: 30 },
     ]
     data.rows.forEach(row => sheet.addRow(row))
     sheet.addRow({})
     sheet.addRow({ reference_number: 'Total Masuk', qty_in: data.totals.total_in })
     sheet.addRow({ reference_number: 'Total Keluar', qty_out: data.totals.total_out })
-    sheet.addRow({ reference_number: 'Saldo Saat Ini', balance: data.totals.current_balance })
+    sheet.addRow({ reference_number: 'Saldo (sisa stock) Saat Ini', balance: data.totals.current_balance })
   } else {
     const rows = await service.summary(req.query)
     const sheet = workbook.addWorksheet('Ringkasan Stok')
@@ -165,4 +180,15 @@ const exportCustomerPdf = asyncHandler(async (req, res) => {
   doc.end()
 })
 
-module.exports = { recap, summary, customerSummary, customerDetail, customerAvailableItems, exportXlsx, exportPdf, exportCustomerPdf }
+module.exports = {
+  recap,
+  summary,
+  customerSummary,
+  customerDetail,
+  customerStockItemDetail,
+  adjustCustomerStockItemBalance,
+  customerAvailableItems,
+  exportXlsx,
+  exportPdf,
+  exportCustomerPdf,
+}

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { GripVertical, Trash2 } from 'lucide-react'
 import { InvoiceItem } from '../../domain/entities/Invoice'
 import type { InvoiceServiceType } from '../../domain/entities/Invoice'
-import { apiRequest } from '@/lib/apiClient'
+import { apiRequestAllPages } from '@/lib/apiClient'
 
 type PartialItem = Omit<InvoiceItem, 'id' | 'invoice_id'>
 
@@ -18,6 +18,8 @@ interface Props {
   onDrop: () => void
   errors?: Record<string, string>
   serviceType?: InvoiceServiceType
+  readOnlyStructure?: boolean
+  sourceLabel?: string | null
 }
 
 const UNIT_OPTIONS = [
@@ -29,6 +31,7 @@ const UNIT_OPTIONS = [
   'Meter Kubik',
   'Kilogram',
   'Ton',
+  'Collie',
   'Karton',
   'Lembar',
   'Liter',
@@ -68,7 +71,24 @@ function calcDuration(start: string | null, end: string | null): string | null {
   return parts.join(' ') || null
 }
 
-export default function InvoiceItemRow({ item, index, onChange, onRemove, onDragStart, onDragOver, onDrop, errors = {}, serviceType = 'delivery' }: Props) {
+function toNonNegativeInteger(value: string): number {
+  if (value === '') return 0
+  return Math.max(0, Math.floor(Number(value) || 0))
+}
+
+export default function InvoiceItemRow({
+  item,
+  index,
+  onChange,
+  onRemove,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  errors = {},
+  serviceType = 'delivery',
+  readOnlyStructure = false,
+  sourceLabel = null,
+}: Props) {
   const [fleetOptions, setFleetOptions] = useState<FleetOption[]>([])
   const duration = calcDuration(item.period_start, item.period_end)
   const subtotalFormatted = item.subtotal > 0 ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(item.subtotal) : '—'
@@ -76,10 +96,10 @@ export default function InvoiceItemRow({ item, index, onChange, onRemove, onDrag
 
   useEffect(() => {
     let alive = true
-    apiRequest<ApiFleetOption[]>('/fleets?status=active&page=1&limit=100', { method: 'GET' })
-      .then(response => {
+    apiRequestAllPages<ApiFleetOption>('/fleets?status=active', { method: 'GET' })
+      .then(data => {
         if (!alive) return
-        setFleetOptions(response.data
+        setFleetOptions(data
           .filter(fleet => fleet.plate_number !== 'TBD' && fleet.rental_status !== 'rented')
           .map(fleet => ({
             id: Number(fleet.id),
@@ -96,21 +116,34 @@ export default function InvoiceItemRow({ item, index, onChange, onRemove, onDrag
     <div
       className="border rounded-xl p-4 bg-white invoice-item-enter"
       style={{ borderColor: 'var(--border-card)' }}
-      draggable
+      draggable={!readOnlyStructure}
       onDragStart={() => onDragStart(index)}
-      onDragOver={e => { e.preventDefault(); onDragOver(index) }}
+      onDragOver={e => {
+        if (readOnlyStructure) return
+        e.preventDefault()
+        onDragOver(index)
+      }}
       onDrop={onDrop}
     >
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <button className="text-gray-400 cursor-grab hover:text-gray-600">
-            <GripVertical size={16} />
-          </button>
+          {!readOnlyStructure && (
+            <button className="text-gray-400 cursor-grab hover:text-gray-600">
+              <GripVertical size={16} />
+            </button>
+          )}
           <span className="text-sm font-semibold text-gray-600">Baris {index + 1}</span>
+          {sourceLabel && (
+            <span className="text-[11px] px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
+              {sourceLabel}
+            </span>
+          )}
         </div>
-        <button onClick={() => onRemove(item.uuid)} className="text-red-400 hover:text-red-600 p-1 rounded">
-          <Trash2 size={16} />
-        </button>
+        {!readOnlyStructure && (
+          <button onClick={() => onRemove(item.uuid)} className="text-red-400 hover:text-red-600 p-1 rounded">
+            <Trash2 size={16} />
+          </button>
+        )}
       </div>
 
       {/* Armada */}
@@ -177,10 +210,54 @@ export default function InvoiceItemRow({ item, index, onChange, onRemove, onDrag
         {duration && <p className="text-xs text-gray-500 mt-1">Durasi: {duration}</p>}
       </div>
 
-      {/* Qty, Satuan, Harga, Subtotal */}
+      {serviceType === 'rental' && (
+        <div className="mb-3">
+          <label className="text-xs font-medium text-gray-600 mb-1 block">Durasi Pemakaian</label>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {([
+              ['rental_duration_years', 'Tahun'],
+              ['rental_duration_months', 'Bulan'],
+              ['rental_duration_days', 'Hari'],
+              ['rental_duration_hours', 'Jam'],
+            ] as const).map(([field, label]) => (
+              <div key={field}>
+                <label className="text-[11px] text-gray-500 mb-1 block">{label}</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  inputMode="numeric"
+                  className="form-input w-full text-sm text-center"
+                  value={item[field] ?? 0}
+                  onChange={event => onChange(item.uuid, field, toNonNegativeInteger(event.target.value))}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Jumlah tagihan, unit sewa, harga, subtotal */}
+      {serviceType === 'rental' && (
+        <div className="mb-3">
+          <label className="text-xs font-medium text-gray-600 mb-1 block">Qty Unit</label>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min="1"
+              step="1"
+              inputMode="numeric"
+              className="form-input w-32 text-sm"
+              value={item.cargo_qty ?? 1}
+              onChange={e => onChange(item.uuid, 'cargo_qty', Math.max(1, Math.floor(Number(e.target.value) || 1)))}
+            />
+            <span className="text-sm text-gray-600">unit</span>
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-4 gap-3 items-end">
         <div>
-          <label className="text-xs font-medium text-gray-600 mb-1 block">Qty *</label>
+          <label className="text-xs font-medium text-gray-600 mb-1 block">Jumlah *</label>
           <input
             type="number"
             min="0.01"

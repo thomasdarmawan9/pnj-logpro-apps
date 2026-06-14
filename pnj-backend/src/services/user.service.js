@@ -5,6 +5,7 @@ const { Op } = require('sequelize')
 
 const { User } = require('../models')
 const userRepo = require('../repositories/user.repository')
+const authService = require('./auth.service')
 const {
   NotFoundError,
   ConflictError,
@@ -101,7 +102,9 @@ async function toggleActive({ uuid, actor }) {
   if (actor.id === user.id) {
     throw new BadRequestError('Tidak dapat mengubah status akun sendiri.')
   }
-  await user.update({ is_active: !user.is_active })
+  const nextActive = !user.is_active
+  await user.update({ is_active: nextActive })
+  if (!nextActive) await authService.revokeUserRefreshTokens(user.id)
   return sanitize(user)
 }
 
@@ -125,6 +128,7 @@ async function resetPassword({ uuid, newPassword, actor }) {
     login_attempt: 0,
     locked_until:  null,
   })
+  await authService.revokeUserRefreshTokens(user.id)
   return { success: true }
 }
 
@@ -134,6 +138,7 @@ async function softDelete({ uuid, actor }) {
   if (actor.id === user.id) {
     throw new BadRequestError('Tidak dapat menghapus akun sendiri.')
   }
+  await authService.revokeUserRefreshTokens(user.id)
   await user.destroy()
   return { success: true }
 }

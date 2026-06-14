@@ -9,6 +9,17 @@ import { useAuditTrail } from '../hooks/useAuditTrail'
 import AuditTrailTable from '../components/AuditTrailTable'
 import { MODULE_LABELS, ACTION_BADGE_CONFIG } from '@/features/reports/domain/entities/AuditLog'
 
+const today = new Date().toISOString().split('T')[0]
+
+const PERIOD_OPTIONS = [
+  { value: 'today', label: 'Hari Ini' },
+  { value: 'yesterday', label: 'Kemarin' },
+  { value: 'this_week', label: 'Minggu Ini' },
+  { value: 'this_month', label: 'Bulan Ini' },
+  { value: 'all', label: 'Semua' },
+  { value: 'custom', label: 'Custom' },
+] as const
+
 export default function AuditTrailPage() {
   const router = useRouter()
   const user = useSelector((state: RootState) => state.auth.user)
@@ -32,7 +43,12 @@ export default function AuditTrailPage() {
     ...Object.entries(ACTION_BADGE_CONFIG).map(([value, cfg]) => ({ value, label: cfg.label })),
   ]
 
-  const hasActiveFilter = filters.search || filters.module !== 'all' || filters.action !== 'all'
+  const hasActiveFilter = (
+    filters.search ||
+    filters.module !== 'all' ||
+    filters.action !== 'all' ||
+    filters.periodPreset !== 'today'
+  )
 
   return (
     <div className="animate-fadeIn space-y-5">
@@ -70,12 +86,55 @@ export default function AuditTrailPage() {
           <span className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>FILTER LOG</span>
           {hasActiveFilter && (
             <button
-              onClick={() => setFilters({ search: '', module: 'all', action: 'all' })}
+              onClick={() => setFilters({ search: '', module: 'all', action: 'all', periodPreset: 'today', periodFrom: today, periodTo: today })}
               className="ml-auto text-xs font-medium px-2 py-0.5 rounded-lg"
               style={{ color: '#DC2626', backgroundColor: '#FEF2F2' }}
             >
               Reset Filter
             </button>
+          )}
+        </div>
+
+        {/* Period */}
+        <div>
+          <label className="text-xs font-medium block mb-2" style={{ color: 'var(--text-secondary)' }}>Periode</label>
+          <div className="flex flex-wrap gap-2">
+            {PERIOD_OPTIONS.map(opt => {
+              const isActive = filters.periodPreset === opt.value
+              return (
+                <button
+                  key={opt.value}
+                  onClick={() => setFilters({ periodPreset: opt.value })}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+                  style={{
+                    backgroundColor: isActive ? 'var(--green-primary)' : 'var(--bg-page)',
+                    color: isActive ? '#FFFFFF' : 'var(--text-secondary)',
+                    border: `1px solid ${isActive ? 'var(--green-primary)' : 'var(--border-card)'}`,
+                  }}
+                >
+                  {opt.label}
+                </button>
+              )
+            })}
+          </div>
+          {filters.periodPreset === 'custom' && (
+            <div className="flex flex-wrap items-center gap-2 mt-3">
+              <input
+                type="date"
+                value={filters.periodFrom}
+                onChange={e => setFilters({ periodFrom: e.target.value })}
+                className="form-input"
+                style={{ padding: '7px 12px', borderRadius: '10px', fontSize: '13px' }}
+              />
+              <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>s/d</span>
+              <input
+                type="date"
+                value={filters.periodTo}
+                onChange={e => setFilters({ periodTo: e.target.value })}
+                className="form-input"
+                style={{ padding: '7px 12px', borderRadius: '10px', fontSize: '13px' }}
+              />
+            </div>
           )}
         </div>
 

@@ -2,7 +2,7 @@ import { InvoiceStatus } from '../../domain/entities/Invoice'
 
 const statusConfig: Record<string, { label: string; bg: string; text: string }> = {
   draft:       { label: 'Draft',       bg: '#F3F4F6', text: '#374151'   },
-  sent:        { label: 'Terkirim',    bg: '#DBEAFE', text: '#1E40AF'   },
+  sent:        { label: 'Terbit',      bg: '#DBEAFE', text: '#1E40AF'   },
   outstanding: { label: 'Outstanding', bg: '#FFEDD5', text: '#9A3412'   },
   paid:        { label: 'Lunas',       bg: '#DCFCE7', text: '#166534'   },
   void:        { label: 'Void',        bg: '#FEE2E2', text: '#991B1B'   },

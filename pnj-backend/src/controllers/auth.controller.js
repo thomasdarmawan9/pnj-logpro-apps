@@ -18,13 +18,14 @@ const logout = asyncHandler(async (req, res) => {
   await authService.logout({
     accessToken:    req.token,
     accessTokenExp: req.tokenExp,
+    refreshToken:   req.body?.refresh_token,
   })
   res.json(success(null, 'Logout berhasil.'))
 })
 
 const refresh = asyncHandler(async (req, res) => {
   const { refresh_token } = req.body
-  const tokens = await authService.refresh({ refreshToken: refresh_token })
+  const tokens = await authService.refresh({ refreshToken: refresh_token, ip: req.ip })
   res.json(success(tokens, 'Token berhasil diperbarui.'))
 })
 

@@ -24,14 +24,14 @@ interface Props {
 
 export default function AttachedSJList({ attachedSj, invoiceStatus, role, onAttach, onDetach }: Props) {
   const canManage = invoiceStatus !== InvoiceStatus.PAID && invoiceStatus !== InvoiceStatus.VOID
-  const canEdit = canManage && (role === 'super_admin' || role === 'admin_finance')
+  const canEdit = canManage && role === 'super_admin'
 
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
         <div>
           <h3 className="font-semibold text-gray-800">Surat Jalan Terlampir ({attachedSj.length})</h3>
-          <p className="text-xs text-gray-500 mt-0.5">SJ yang dilampirkan hanya sebagai referensi — tidak mempengaruhi total invoice.</p>
+          <p className="text-xs text-gray-500 mt-0.5">SJ yang dilampirkan menjadi rincian muatan. Harga tetap diatur dari invoice.</p>
         </div>
         {canEdit && (
           <button

@@ -1,6 +1,6 @@
 'use strict'
 
-const { StockItem } = require('../models')
+const { StockItem, StockReceiptItem, StockDisbursement } = require('../models')
 const repo          = require('../repositories/stockItem.repository')
 const {
   NotFoundError,
@@ -84,7 +84,14 @@ async function remove(uuid) {
   const item = await repo.findByUuid(uuid)
   if (!item) throw new NotFoundError('Stock item tidak ditemukan.')
   if (Number(item.current_stock) !== 0) {
-    throw new ConflictError('Stock item masih memiliki saldo. Tidak dapat dihapus.')
+    throw new ConflictError('Stock item masih memiliki saldo (sisa stock). Tidak dapat dihapus.')
+  }
+  const [receiptCount, disbursementCount] = await Promise.all([
+    StockReceiptItem.count({ where: { stock_item_id: item.id } }),
+    StockDisbursement.count({ where: { stock_item_id: item.id } }),
+  ])
+  if (receiptCount + disbursementCount > 0) {
+    throw new ConflictError('Stock item sudah memiliki riwayat transaksi. Nonaktifkan barang agar riwayat stok tetap tercatat.')
   }
   await item.destroy()
 }

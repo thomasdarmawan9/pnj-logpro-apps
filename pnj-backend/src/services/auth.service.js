@@ -1,8 +1,10 @@
 'use strict'
 
 const bcrypt = require('bcryptjs')
+const crypto = require('crypto')
 
 const userRepo = require('../repositories/user.repository')
+const { RefreshToken } = require('../models')
 const {
   signAccessToken,
   signRefreshToken,
@@ -21,18 +23,56 @@ const MAX_LOGIN_ATTEMPT   = 5
 const LOCKOUT_MINUTES     = 15
 const BCRYPT_COST         = 12
 
+function tokenHash(token) {
+  return crypto.createHash('sha256').update(token).digest('hex')
+}
+
 function sanitize(user) {
   const plain = user.get({ plain: true })
   delete plain.password
   return plain
 }
 
-function buildTokens(user) {
+async function buildTokens(user, { ip, revokeToken } = {}) {
   const payload = { userId: user.id, role: user.role, email: user.email }
+  const refreshPayload = { userId: user.id, jti: crypto.randomUUID() }
+  const refreshToken = signRefreshToken(refreshPayload)
+  const decodedRefresh = verifyRefreshToken(refreshToken)
+
+  if (revokeToken) {
+    await RefreshToken.update(
+      { is_revoked: true },
+      { where: { token_hash: tokenHash(revokeToken), is_revoked: false } }
+    )
+  }
+
+  await RefreshToken.create({
+    user_id:    user.id,
+    token_hash: tokenHash(refreshToken),
+    expires_at: new Date(decodedRefresh.exp * 1000),
+    ip_address: ip || null,
+  })
+
   return {
     access_token:  signAccessToken(payload),
-    refresh_token: signRefreshToken({ userId: user.id }),
+    refresh_token: refreshToken,
   }
+}
+
+async function revokeRefreshToken(refreshToken) {
+  if (!refreshToken) return
+  await RefreshToken.update(
+    { is_revoked: true },
+    { where: { token_hash: tokenHash(refreshToken), is_revoked: false } }
+  )
+}
+
+async function revokeUserRefreshTokens(userId) {
+  if (!userId) return
+  await RefreshToken.update(
+    { is_revoked: true },
+    { where: { user_id: userId, is_revoked: false } }
+  )
 }
 
 async function login({ email, password, ip }) {
@@ -73,17 +113,18 @@ async function login({ email, password, ip }) {
     last_login_at: new Date(),
   })
 
-  return { user: sanitize(user), ...buildTokens(user) }
+  return { user: sanitize(user), ...(await buildTokens(user, { ip })) }
 }
 
-async function logout({ accessToken, accessTokenExp }) {
+async function logout({ accessToken, accessTokenExp, refreshToken }) {
   // Simpan token ke blacklist dengan TTL sisa umur token (detik).
   const nowSec = Math.floor(Date.now() / 1000)
   const ttl    = Math.max(accessTokenExp - nowSec, 1)
   await redis.set(REDIS_KEYS.JWT_BLACKLIST(accessToken), '1', 'EX', ttl)
+  await revokeRefreshToken(refreshToken)
 }
 
-async function refresh({ refreshToken }) {
+async function refresh({ refreshToken, ip }) {
   let payload
   try {
     payload = verifyRefreshToken(refreshToken)
@@ -96,7 +137,19 @@ async function refresh({ refreshToken }) {
     throw new UnauthorizedError('Pengguna tidak aktif.')
   }
 
-  return buildTokens(user)
+  const stored = await RefreshToken.findOne({
+    where: {
+      token_hash: tokenHash(refreshToken),
+      user_id:    user.id,
+      is_revoked: false,
+    },
+  })
+
+  if (!stored || new Date(stored.expires_at) <= new Date()) {
+    throw new UnauthorizedError('Refresh token tidak valid atau kedaluwarsa.')
+  }
+
+  return buildTokens(user, { ip, revokeToken: refreshToken })
 }
 
 async function changePassword({ user, oldPassword, newPassword }) {
@@ -110,6 +163,7 @@ async function changePassword({ user, oldPassword, newPassword }) {
 
   const hash = await bcrypt.hash(newPassword, BCRYPT_COST)
   await user.update({ password: hash })
+  await revokeUserRefreshTokens(user.id)
 }
 
 function tokenExpiryFromHeader(authHeader) {
@@ -132,4 +186,5 @@ module.exports = {
   sanitize,
   tokenExpiryFromHeader,
   BCRYPT_COST,
+  revokeUserRefreshTokens,
 }

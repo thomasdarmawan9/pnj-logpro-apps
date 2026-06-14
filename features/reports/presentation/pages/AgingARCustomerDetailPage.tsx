@@ -14,15 +14,21 @@ import {
   AlertCircle,
   ChevronDown,
   ChevronRight,
+  Download,
+  Printer,
 } from 'lucide-react'
 import { RootState } from '@/store'
 import { useAgingARCustomerDetail } from '../hooks/useAgingARCustomerDetail'
 import { formatRupiah, formatDate } from '@/lib/formatters'
 import { ProjectDetailInvoice, ProjectDetailSuratJalan } from '@/features/reports/domain/entities/AgingARProjectDetail'
+import {
+  exportAgingARCustomerExcel,
+  exportAgingARCustomerPdf,
+} from '@/features/reports/infrastructure/repositories/MockReportsRepository'
 
 const INVOICE_STATUS_CONFIG: Record<string, { label: string; bg: string; color: string; icon: React.ReactNode }> = {
   draft:       { label: 'Draft',       bg: '#F3F4F6', color: '#6B7280', icon: <FileText size={11} /> },
-  sent:        { label: 'Terkirim',    bg: '#EFF6FF', color: '#1D4ED8', icon: <FileText size={11} /> },
+  sent:        { label: 'Terbit',      bg: '#EFF6FF', color: '#1D4ED8', icon: <FileText size={11} /> },
   outstanding: { label: 'Outstanding', bg: '#FEF3C7', color: '#B45309', icon: <Clock size={11} /> },
   paid:        { label: 'Lunas',       bg: '#DCFCE7', color: '#15803D', icon: <CheckCircle2 size={11} /> },
   void:        { label: 'Void',        bg: '#FEE2E2', color: '#B91C1C', icon: <XCircle size={11} /> },
@@ -40,6 +46,7 @@ const PROJECT_STATUS_CONFIG: Record<string, { label: string; bg: string; color: 
   completed: { label: 'Selesai', bg: '#F3F4F6', color: '#374151' },
   cancelled: { label: 'Dibatalkan', bg: '#FEE2E2', color: '#B91C1C' },
   on_hold: { label: 'Ditunda', bg: '#FEF3C7', color: '#B45309' },
+  customer_only: { label: 'Proyek Customer', bg: '#EFF6FF', color: '#1D4ED8' },
 }
 
 function StatusBadge({ status, config }: { status: string; config: Record<string, { label: string; bg: string; color: string; icon?: React.ReactNode }> }) {
@@ -72,6 +79,22 @@ function SummaryCard({ label, value, sub, accent }: { label: string; value: stri
       {sub && <div className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>{sub}</div>}
     </div>
   )
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  link.style.display = 'none'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
+
+function safeFilename(value: string) {
+  return value.replace(/[^a-zA-Z0-9_\-.]/g, '_')
 }
 
 function InvoiceTable({
@@ -202,6 +225,9 @@ export default function AgingARCustomerDetailPage() {
   const user = useSelector((state: RootState) => state.auth.user)
   const customerIdParam = searchParams.get('customer_id')
   const customerId = customerIdParam ? parseInt(customerIdParam) : null
+  const [isExportingExcel, setIsExportingExcel] = useState(false)
+  const [isExportingPdf, setIsExportingPdf] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
 
   const { data, isLoading, error } = useAgingARCustomerDetail(
     Number.isNaN(customerId) ? null : customerId
@@ -251,6 +277,37 @@ export default function AgingARCustomerDetailPage() {
   if (!data) return null
 
   const hasOutstanding = data.total_outstanding > 0
+  const nonProjectSection = data.projects.find(project => project.project_id === null)
+  const actualProjectCount = data.projects.filter(project => project.project_id !== null).length
+  const exportFilenameBase = `aging-ar-customer-${safeFilename(data.customer_name)}-${new Date().toISOString().slice(0, 10)}`
+
+  const handleExportExcel = async () => {
+    if (!customerId) return
+    setExportError(null)
+    setIsExportingExcel(true)
+    try {
+      const blob = await exportAgingARCustomerExcel(customerId)
+      downloadBlob(blob, `${exportFilenameBase}.xlsx`)
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : 'Gagal export Excel.')
+    } finally {
+      setIsExportingExcel(false)
+    }
+  }
+
+  const handleExportPdf = async () => {
+    if (!customerId) return
+    setExportError(null)
+    setIsExportingPdf(true)
+    try {
+      const blob = await exportAgingARCustomerPdf(customerId)
+      downloadBlob(blob, `${exportFilenameBase}.pdf`)
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : 'Gagal cetak PDF.')
+    } finally {
+      setIsExportingPdf(false)
+    }
+  }
 
   return (
     <div className="animate-fadeIn space-y-5">
@@ -302,8 +359,27 @@ export default function AgingARCustomerDetailPage() {
           <div className="flex items-center gap-2 flex-wrap">
             <div className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl" style={{ backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0', color: '#15803D' }}>
               <Building2 size={12} />
-              {data.project_count} proyek
+              {actualProjectCount} proyek
+              {nonProjectSection ? ' + proyek customer' : ''}
             </div>
+            <button
+              onClick={handleExportExcel}
+              disabled={isExportingExcel || isExportingPdf}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl transition-all hover:brightness-95 disabled:opacity-60"
+              style={{ backgroundColor: '#EFF6FF', border: '1px solid #BFDBFE', color: '#1D4ED8' }}
+            >
+              <Download size={12} />
+              {isExportingExcel ? 'Mengekspor...' : 'Export Excel'}
+            </button>
+            <button
+              onClick={handleExportPdf}
+              disabled={isExportingExcel || isExportingPdf}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl transition-all hover:brightness-95 disabled:opacity-60"
+              style={{ backgroundColor: 'var(--green-primary)', border: '1px solid var(--green-primary)', color: '#FFFFFF' }}
+            >
+              <Printer size={12} />
+              {isExportingPdf ? 'Mencetak...' : 'Cetak PDF'}
+            </button>
           </div>
         </div>
 
@@ -314,6 +390,11 @@ export default function AgingARCustomerDetailPage() {
             <span>{data.sj_count} Surat Jalan</span>
           </div>
         </div>
+        {exportError && (
+          <div className="mt-3 text-xs px-3 py-2 rounded-xl" style={{ backgroundColor: '#FEF2F2', color: '#B91C1C', border: '1px solid #FECACA' }}>
+            {exportError}
+          </div>
+        )}
       </div>
 
       {/* Summary Cards */}
@@ -338,8 +419,8 @@ export default function AgingARCustomerDetailPage() {
         />
         <SummaryCard
           label="Total Proyek"
-          value={String(data.project_count)}
-          sub={`${data.sj_count} surat jalan`}
+          value={String(actualProjectCount)}
+          sub={`${data.sj_count} surat jalan${nonProjectSection ? ' termasuk proyek customer' : ''}`}
           accent="#6B7280"
         />
       </div>
@@ -347,7 +428,7 @@ export default function AgingARCustomerDetailPage() {
       {/* Project Sections */}
       <div className="space-y-4">
         {data.projects.map(project => (
-          <ProjectSection key={project.project_id} project={project} />
+          <ProjectSection key={project.project_id ?? 'non-project'} project={project} />
         ))}
       </div>
     </div>
@@ -358,11 +439,12 @@ function ProjectSection({
   project,
 }: {
   project: {
-    project_id: number
+    project_id: number | null
+    customer_id: number
     project_name: string
     project_code: string
     contract_number: string
-    status: 'active' | 'completed' | 'cancelled' | 'on_hold'
+    status: 'active' | 'completed' | 'cancelled' | 'on_hold' | 'customer_only'
     total_invoiced: number
     total_paid: number
     total_outstanding: number
@@ -377,12 +459,16 @@ function ProjectSection({
   const [expanded, setExpanded] = useState(false)
   const statusCfg = PROJECT_STATUS_CONFIG[project.status]
   const hasOutstanding = project.total_outstanding > 0
+  const isNonProject = project.project_id === null
 
   return (
     <div className="rounded-2xl p-5" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-card)' }}>
       <div className="flex items-start gap-3">
         <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: '#F3F4F6' }}>
-          <Truck size={18} style={{ color: 'var(--text-secondary)' }} />
+          {isNonProject
+            ? <FileText size={18} style={{ color: 'var(--text-secondary)' }} />
+            : <Truck size={18} style={{ color: 'var(--text-secondary)' }} />
+          }
         </div>
         <div className="flex-1">
           <div className="flex items-center gap-2 flex-wrap">
@@ -392,7 +478,7 @@ function ProjectSection({
             </span>
           </div>
           <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-            {project.project_code} · {project.contract_number}
+            {isNonProject ? 'Invoice dan SJ berdasarkan permintaan jasa langsung' : `${project.project_code} · ${project.contract_number || 'Tanpa kontrak'}`}
           </div>
         </div>
         <button
@@ -403,6 +489,15 @@ function ProjectSection({
           {expanded ? 'Sembunyikan Detail' : 'Lihat Detail'}
           {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         </button>
+        <a
+          href={isNonProject
+            ? `/laporan/aging-ar/detail?customer_id=${project.customer_id}&scope=non_project`
+            : `/laporan/aging-ar/detail?project_id=${project.project_id}`}
+          className="text-xs font-medium px-3 py-1.5 rounded-xl hover:brightness-95"
+          style={{ backgroundColor: '#F0FDF4', color: 'var(--green-primary)' }}
+        >
+          Buka Halaman Detail
+        </a>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">

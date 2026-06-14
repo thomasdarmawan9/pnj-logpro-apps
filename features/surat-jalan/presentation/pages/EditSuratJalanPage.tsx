@@ -29,6 +29,7 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
   const dispatch = useDispatch<AppDispatch>()
   const { push: pushToast } = useToast()
   const { fleets, drivers } = useSelector((state: RootState) => state.master)
+  const role = useSelector((state: RootState) => state.auth.user?.role ?? null)
   const { selectedSJ, isDetailLoading } = useSuratJalanDetail(uuid)
   const { form, setForm, updateField, errors, validate } = useSuratJalanForm({ mode: 'edit' })
 
@@ -40,9 +41,14 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
   const [isLoadingStockItems, setIsLoadingStockItems] = useState(false)
 
   useEffect(() => {
+    if (role === 'admin_finance') {
+      pushToast({ title: 'Akses Ditolak', description: 'Anda tidak memiliki akses mengubah Surat Jalan.', variant: 'error' })
+      router.replace(`/surat-jalan/${uuid}`)
+      return
+    }
     if (!fleets.length) dispatch(fetchFleets())
     if (!drivers.length) dispatch(fetchDrivers())
-  }, [dispatch, fleets.length, drivers.length])
+  }, [dispatch, fleets.length, drivers.length, role, router, pushToast, uuid])
 
   const armadaOptions = useMemo(() => fleets
     .filter(fleet => fleet.status === 'active' || fleet.id === selectedSJ?.fleet_id)

@@ -325,6 +325,7 @@ export const SCENARIO_INVOICE: Invoice = {
   invoice_date: '2026-03-15',
   due_date: '2026-04-14',
   service_type: 'delivery',
+  delivery_pricing_mode: 'shipment',
   items: [
     {
       id: 1,

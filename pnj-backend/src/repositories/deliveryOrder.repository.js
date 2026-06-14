@@ -41,6 +41,32 @@ const INCLUDES = [
   },
 ]
 
+function normalizeUuidList(uuids) {
+  if (!uuids) return []
+  if (Array.isArray(uuids)) return uuids.map(v => String(v).trim()).filter(Boolean)
+  return String(uuids).split(',').map(v => v.trim()).filter(Boolean)
+}
+
+function buildIncludes({ projectCode, customerName } = {}) {
+  return INCLUDES.map(include => {
+    if (include.as === 'project' && projectCode && projectCode !== 'all') {
+      return {
+        ...include,
+        required: true,
+        where:    { code: projectCode },
+      }
+    }
+    if (include.as === 'customer' && customerName && customerName !== 'all') {
+      return {
+        ...include,
+        required: true,
+        where:    { name: customerName },
+      }
+    }
+    return include
+  })
+}
+
 function findByUuid(uuid, options = {}) {
   return DeliveryOrder.findOne({
     where:   { uuid },
@@ -64,10 +90,11 @@ function findBySjNumber(sjNumber, options = {}) {
 function list({
   page, limit, search,
   status, invoiceStatus,
-  projectId, customerId,
+  projectId, projectCode, customerId, customerName, uuids,
   periodRange,
 }) {
   const where = {}
+  const uuidList = normalizeUuidList(uuids)
 
   if (status && status !== 'all') where.status = status
   if (invoiceStatus && invoiceStatus !== 'all') {
@@ -75,6 +102,7 @@ function list({
   }
   if (projectId)  where.project_id  = projectId
   if (customerId) where.customer_id = customerId
+  if (uuidList.length > 0) where.uuid = { [Op.in]: uuidList }
 
   if (periodRange && (periodRange.from || periodRange.to)) {
     where.sj_date = {}
@@ -93,7 +121,7 @@ function list({
 
   return DeliveryOrder.findAndCountAll({
     where,
-    include:  INCLUDES,
+    include:  buildIncludes({ projectCode, customerName }),
     order:    [['sj_date', 'DESC'], ['created_at', 'DESC']],
     offset:   (page - 1) * limit,
     limit,

@@ -34,7 +34,7 @@ function newWorkbook({ title = 'Export', creator = 'pnj-backend' } = {}) {
  *   - title:        'EXPORT — XYZ' (heading besar)
  *   - subtitle:     '<sub heading>'
  *   - meta:         array of [label, value] rows (tanggal, periode, filter aktif)
- *   - columns:      array of { header, key, width, format?, align? }
+ *   - columns:      array of { header, key, width, format?, align?, wrapText? }
  *   - rows:         array of object/array
  *   - summary:      array of [label, value] rows setelah data
  *   - autoFilter:   boolean (default true)
@@ -109,7 +109,7 @@ function addSheet(wb, sheetName, opts = {}) {
       const cell = row.getCell(idx + 1)
       const value = Array.isArray(r) ? r[idx] : r[col.key]
       cell.value = value === undefined || value === null ? '' : value
-      cell.alignment = { vertical: 'middle', horizontal: col.align || 'left' }
+      cell.alignment = { vertical: 'middle', horizontal: col.align || 'left', wrapText: !!col.wrapText }
       if (col.format) cell.numFmt = col.format
     })
     cursor++

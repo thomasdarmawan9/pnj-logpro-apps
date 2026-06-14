@@ -1,8 +1,10 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { Eye, Pencil, Send, Printer, AlertTriangle, DollarSign, Paperclip, MoreHorizontal, Wallet } from 'lucide-react'
 import { Invoice, InvoiceStatus } from '../../domain/entities/Invoice'
+import { resolveEffectiveInvoiceServiceType } from '../../domain/services/invoiceServiceType'
 import InvoiceStatusBadge from './InvoiceStatusBadge'
 
 function formatRupiah(amount: number): string {
@@ -29,18 +31,62 @@ interface Props {
 
 export default function InvoiceTableRow({ invoice, checked, onToggle, onAction, role }: Props) {
   const [menuOpen, setMenuOpen] = useState(false)
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
   const overdue = invoice.status === InvoiceStatus.OUTSTANDING && new Date(invoice.due_date) < new Date()
   const overdayCount = overdue ? daysOverdue(invoice.due_date) : 0
-  const canAttachSJ = invoice.service_type !== 'rental'
+  const effectiveServiceType = resolveEffectiveInvoiceServiceType(invoice.service_type, invoice.custom_service_name)
+  const canAttachSJ = effectiveServiceType !== 'rental'
+  const isReadOnly = role === 'admin_finance'
+  const serviceTypeLabel = effectiveServiceType === 'rental' && invoice.service_type !== 'other'
+    ? 'Penyewaan'
+    : invoice.service_type === 'other'
+      ? invoice.custom_service_name || 'Lainnya'
+      : 'Pengiriman'
+  const serviceTypeStyle = effectiveServiceType === 'rental'
+    ? { backgroundColor: '#FEF3C7', color: '#92400E' }
+    : invoice.service_type === 'other'
+      ? { backgroundColor: '#EDE9FE', color: '#6D28D9' }
+      : { backgroundColor: '#DBEAFE', color: '#1D4ED8' }
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false)
+      const target = e.target as Node
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(target) &&
+        buttonRef.current &&
+        !buttonRef.current.contains(target)
+      ) {
+        setMenuOpen(false)
+      }
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
+
+  useEffect(() => {
+    if (!menuOpen) return
+    const close = () => setMenuOpen(false)
+    document.addEventListener('scroll', close, true)
+    window.addEventListener('resize', close)
+    return () => {
+      document.removeEventListener('scroll', close, true)
+      window.removeEventListener('resize', close)
+    }
+  }, [menuOpen])
+
+  const toggleMenu = () => {
+    if (!menuOpen && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect()
+      setMenuPos({
+        top: rect.bottom + 4,
+        right: window.innerWidth - rect.right,
+      })
+    }
+    setMenuOpen(open => !open)
+  }
 
   const rowStyle: React.CSSProperties = invoice.status === InvoiceStatus.VOID
     ? { opacity: 0.6 }
@@ -70,7 +116,13 @@ export default function InvoiceTableRow({ invoice, checked, onToggle, onAction, 
       </td>
       <td className="px-4 py-3 text-sm text-gray-600">{formatDate(invoice.invoice_date)}</td>
       <td className="px-4 py-3">
+        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold" style={serviceTypeStyle}>
+          {serviceTypeLabel}
+        </span>
+      </td>
+      <td className="px-4 py-3">
         <div className="text-sm font-semibold">{invoice.customer.name}</div>
+        <div className="text-xs text-gray-500">{invoice.project?.name || '-'}</div>
       </td>
       <td className="px-4 py-3 text-sm text-right font-bold font-mono" style={{ fontFamily: 'var(--font-mono)' }}>{formatRupiah(invoice.total_amount)}</td>
       <td className="px-4 py-3"><InvoiceStatusBadge status={invoice.status} /></td>
@@ -84,36 +136,46 @@ export default function InvoiceTableRow({ invoice, checked, onToggle, onAction, 
         )}
       </td>
       <td className="px-4 py-3">
-        <div className="relative" ref={menuRef}>
+        <div className="relative">
           <button
-            onClick={() => setMenuOpen(v => !v)}
+            ref={buttonRef}
+            onClick={toggleMenu}
             className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"
           >
             <MoreHorizontal size={16} />
           </button>
-          {menuOpen && (
-            <div className="absolute right-0 top-full mt-1 w-52 bg-white rounded-xl shadow-lg border z-20 py-1" style={{ borderColor: 'var(--border-card)' }}>
+          {menuOpen && menuPos && createPortal(
+            <div
+              ref={menuRef}
+              className="fixed w-52 bg-white rounded-xl shadow-lg border py-1"
+              style={{ top: menuPos.top, right: menuPos.right, zIndex: 100000, borderColor: 'var(--border-card)' }}
+            >
               <ActionMenuItem icon={<Eye size={14}/>} label="Lihat Detail" onClick={() => { setMenuOpen(false); onAction('detail', invoice.uuid) }} />
-              {invoice.status === InvoiceStatus.DRAFT && (
+              {!isReadOnly && invoice.status === InvoiceStatus.DRAFT && (
                 <>
                   <ActionMenuItem icon={<Pencil size={14}/>} label="Edit Invoice" onClick={() => { setMenuOpen(false); onAction('edit', invoice.uuid) }} />
                   <ActionMenuItem icon={<Send size={14}/>} label="Kirim ke Customer" onClick={() => { setMenuOpen(false); onAction('send', invoice.uuid) }} />
                 </>
               )}
-              {(invoice.status === InvoiceStatus.SENT || invoice.status === InvoiceStatus.OUTSTANDING) && (
+              {!isReadOnly && (invoice.status === InvoiceStatus.SENT || invoice.status === InvoiceStatus.OUTSTANDING) && (
                 <>
                   <ActionMenuItem icon={<DollarSign size={14}/>} label="Catat Pembayaran" onClick={() => { setMenuOpen(false); onAction('payment', invoice.uuid) }} />
                   {canAttachSJ && <ActionMenuItem icon={<Paperclip size={14}/>} label="Kelola SJ Terlampir" onClick={() => { setMenuOpen(false); onAction('attach-sj', invoice.uuid) }} />}
                 </>
               )}
-              {invoice.status !== InvoiceStatus.DRAFT && invoice.status !== InvoiceStatus.VOID && (role === 'super_admin' || role === 'admin_finance') && (
-                <ActionMenuItem icon={<Wallet size={14}/>} label="Edit DP / Uang Muka" onClick={() => { setMenuOpen(false); onAction('edit', invoice.uuid) }} />
+              {!isReadOnly && invoice.status !== InvoiceStatus.DRAFT && invoice.status !== InvoiceStatus.VOID && role === 'super_admin' && (
+                <ActionMenuItem
+                  icon={invoice.status === InvoiceStatus.SENT ? <Pencil size={14}/> : <Wallet size={14}/>}
+                  label={invoice.status === InvoiceStatus.SENT ? 'Edit Invoice' : 'Edit DP / Uang Muka'}
+                  onClick={() => { setMenuOpen(false); onAction('edit', invoice.uuid) }}
+                />
               )}
               <ActionMenuItem icon={<Printer size={14}/>} label="Cetak PDF" onClick={() => { setMenuOpen(false); onAction('print', invoice.uuid) }} />
               {(invoice.status !== InvoiceStatus.PAID && invoice.status !== InvoiceStatus.VOID) && role === 'super_admin' && (
                 <ActionMenuItem icon={<AlertTriangle size={14}/>} label="Void Invoice" danger onClick={() => { setMenuOpen(false); onAction('void', invoice.uuid) }} />
               )}
-            </div>
+            </div>,
+            document.body,
           )}
         </div>
       </td>

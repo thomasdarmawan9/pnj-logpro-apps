@@ -13,7 +13,8 @@ function createEmptyItem(): SJItem {
     description: '',
     qty: 1,
     unit: 'pcs',
-    unit_price: 0,
+    weight: null,
+    volume: null,
     notes: '',
     source_type: 'manual',
     stock_item_id: null,
@@ -22,11 +23,6 @@ function createEmptyItem(): SJItem {
     stock_item_name: null,
     stock_kategori_name: null,
   }
-}
-
-function formatRupiah(n: number): string {
-  if (!n) return '-'
-  return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n)
 }
 
 function stockOptionKey(stockItemUuid: string | null | undefined, categoryName: string | null | undefined): string {
@@ -171,8 +167,6 @@ export default function SJFormItemsSection({
   const add = () => onChange([...items, createEmptyItem()])
   const remove = (id: string) => onChange(items.filter(item => item.id !== id))
 
-  const grandTotal = items.reduce((sum, item) => sum + item.qty * item.unit_price, 0)
-
   return (
     <div className="rounded-xl bg-white p-6 border mt-4" style={{ borderColor: 'var(--border-card)' }}>
       <div className="flex items-center justify-between mb-4">
@@ -194,7 +188,7 @@ export default function SJFormItemsSection({
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1120px] text-sm border-collapse">
+          <table className="w-full min-w-[1040px] text-sm border-collapse">
             <thead>
               <tr className="border-b text-[11px] font-medium text-gray-500" style={{ borderColor: 'var(--border-card)' }}>
                 <th className="text-left pb-2 w-7">No</th>
@@ -202,8 +196,8 @@ export default function SJFormItemsSection({
                 <th className="text-left pb-2 px-2 min-w-[360px]">Deskripsi / Nama Barang *</th>
                 <th className="text-center pb-2 px-2 w-28">Jumlah *</th>
                 <th className="text-center pb-2 px-2 w-24">Satuan *</th>
-                <th className="text-right pb-2 px-2 w-36">Harga Satuan</th>
-                <th className="text-right pb-2 px-2 w-40">Subtotal</th>
+                <th className="text-center pb-2 px-2 w-24">Berat/kg</th>
+                <th className="text-center pb-2 px-2 w-24">Volume/m3</th>
                 <th className="w-8" />
               </tr>
             </thead>
@@ -312,28 +306,28 @@ export default function SJFormItemsSection({
                       </select>
                     </td>
 
-                    <td className="pt-1.5 px-2">
+                    <td className="pt-1.5 px-1">
                       <input
                         type="number"
                         min={0}
-                        className="form-input w-full text-sm text-right font-mono"
-                        style={{ fontFamily: 'JetBrains Mono, monospace' }}
-                        value={item.unit_price || ''}
+                        step="0.01"
+                        className="form-input w-full text-sm text-center"
+                        value={item.weight ?? ''}
                         placeholder="0"
-                        onChange={e => update(item.id, 'unit_price', Math.max(0, Number(e.target.value)))}
+                        onChange={e => update(item.id, 'weight', e.target.value === '' ? null : Math.max(0, Number(e.target.value)))}
                       />
                     </td>
 
-                    <td className="pt-1.5 px-2">
-                      <div
-                        className="form-input w-full text-sm text-right bg-gray-50 select-none font-mono whitespace-nowrap"
-                        style={{
-                          color: item.unit_price > 0 ? '#166534' : '#9CA3AF',
-                          fontFamily: 'JetBrains Mono, monospace',
-                        }}
-                      >
-                        {item.unit_price > 0 ? formatRupiah(item.qty * item.unit_price) : '-'}
-                      </div>
+                    <td className="pt-1.5 px-1">
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        className="form-input w-full text-sm text-center"
+                        value={item.volume ?? ''}
+                        placeholder="0"
+                        onChange={e => update(item.id, 'volume', e.target.value === '' ? null : Math.max(0, Number(e.target.value)))}
+                      />
                     </td>
 
                     <td className="pt-1.5 pl-1">
@@ -367,14 +361,6 @@ export default function SJFormItemsSection({
               })}
             </tbody>
             <tfoot>
-              <tr className="border-t" style={{ borderColor: 'var(--border-card)' }}>
-                <td colSpan={5} />
-                <td className="pt-3 px-2 text-xs font-semibold text-right text-gray-600">Total</td>
-                <td className="pt-3 px-2 text-sm font-bold text-right" style={{ color: grandTotal > 0 ? '#166534' : '#9CA3AF' }}>
-                  {grandTotal > 0 ? formatRupiah(grandTotal) : '-'}
-                </td>
-                <td />
-              </tr>
               <tr>
                 <td colSpan={8} className="pt-2 text-xs text-gray-400">
                   {items.length} item · Data ini akan tampil di PDF Surat Jalan

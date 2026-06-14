@@ -22,6 +22,11 @@ const ITEM_INCLUDE = {
     as:         'fleet',
     attributes: ['id', 'uuid', 'name', 'plate_number'],
     required:   false,
+  }, {
+    model:      Driver,
+    as:         'driver',
+    attributes: ['id', 'uuid', 'name'],
+    required:   false,
   }],
   separate: false,
 }

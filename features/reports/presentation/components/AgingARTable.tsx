@@ -38,13 +38,14 @@ export default function AgingARTable({ data, isLoading }: AgingARTableProps) {
 
   const invoices = data.customers.flatMap(customer => customer.invoices)
   const paidInvoices = invoices.filter(inv => inv.remaining_amount <= 0 || inv.paid_amount >= inv.total_amount)
-  const totalBelumJatuhTempo = data.bucket_totals[AgingBucket.CURRENT] ?? 0
-  const totalSudahJatuhTempo =
+  const totalBelumJatuhTempo = data.not_due_amount ?? data.bucket_totals[AgingBucket.CURRENT] ?? 0
+  const totalSudahJatuhTempo = data.overdue_amount ?? (
     (data.bucket_totals[AgingBucket.DAYS_1_30] ?? 0) +
     (data.bucket_totals[AgingBucket.DAYS_31_60] ?? 0) +
     (data.bucket_totals[AgingBucket.DAYS_61_90] ?? 0) +
     (data.bucket_totals[AgingBucket.OVER_90] ?? 0)
-  const totalSudahLunas = paidInvoices.reduce((sum, inv) => sum + inv.total_amount, 0)
+  )
+  const totalSudahLunas = data.fully_paid_amount ?? paidInvoices.reduce((sum, inv) => sum + inv.total_amount, 0)
 
   return (
     <div className="overflow-x-auto">

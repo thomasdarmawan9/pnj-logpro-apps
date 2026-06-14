@@ -1,4 +1,4 @@
-import { clearAuthSession } from './apiClient'
+import { clearAuthSession, isRememberedAuthSession } from './apiClient'
 
 const INACTIVITY_MS   = 60 * 60 * 1000  // 1 jam tanpa aktivitas → logout
 const CHECK_EVERY_MS  = 60 * 1000        // cek setiap 1 menit
@@ -26,6 +26,7 @@ function forceLogout() {
  */
 export function startInactivityTracker(): () => void {
   if (typeof window === 'undefined') return () => {}
+  if (isRememberedAuthSession()) return () => {}
 
   touchActivity()
 

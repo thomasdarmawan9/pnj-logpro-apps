@@ -12,12 +12,16 @@ import { formatDate } from '@/lib/formatters'
 import { PendingFleetLampiran } from '../components/FleetLampiranUploadZone'
 import { downloadDriverLampiran, uploadDriverLampiran } from '../../infrastructure/repositories/MockMasterRepository'
 import TablePagination from '../components/TablePagination'
+import { useSelector } from 'react-redux'
+import { RootState } from '@/store'
 
 const ROWS_PER_PAGE = 10
 
 export default function DriverListPage() {
   const { drivers, isLoading, modal, openForm, closeForm, create, update, toggle, refresh } = useDriver()
   const { push: pushToast } = useToast()
+  const user = useSelector((s: RootState) => s.auth.user)
+  const canEdit = user?.role === 'super_admin' || user?.role === 'admin_ops'
 
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all')
@@ -111,9 +115,11 @@ export default function DriverListPage() {
           <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Master Supir</h1>
           <p className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>{drivers.length} supir terdaftar</p>
         </div>
-        <button data-tour="supir-add-btn" onClick={() => openForm(null)} className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: 'var(--green-primary)' }}>
-          <Plus size={15} /> Tambah Supir
-        </button>
+        {canEdit && (
+          <button data-tour="supir-add-btn" onClick={() => openForm(null)} className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: 'var(--green-primary)' }}>
+            <Plus size={15} /> Tambah Supir
+          </button>
+        )}
       </div>
 
       {/* Alert Banner */}
@@ -274,14 +280,18 @@ export default function DriverListPage() {
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => openForm(d)} className="p-1.5 rounded-lg hover:bg-blue-50" title="Edit">
-                        <Pencil size={13} className="text-blue-600" />
-                      </button>
-                      <button onClick={() => handleToggle(d)} className="p-1.5 rounded-lg hover:bg-amber-50" title={d.status === 'active' ? 'Nonaktifkan' : 'Aktifkan'}>
-                        <ToggleLeft size={13} className="text-amber-600" />
-                      </button>
-                    </div>
+	                    {canEdit ? (
+	                      <div className="flex items-center gap-1">
+	                        <button onClick={() => openForm(d)} className="p-1.5 rounded-lg hover:bg-blue-50" title="Edit">
+	                          <Pencil size={13} className="text-blue-600" />
+	                        </button>
+	                        <button onClick={() => handleToggle(d)} className="p-1.5 rounded-lg hover:bg-amber-50" title={d.status === 'active' ? 'Nonaktifkan' : 'Aktifkan'}>
+	                          <ToggleLeft size={13} className="text-amber-600" />
+	                        </button>
+	                      </div>
+	                    ) : (
+	                      <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Lihat saja</span>
+	                    )}
                   </td>
                 </tr>
                 ))}

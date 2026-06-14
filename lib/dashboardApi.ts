@@ -96,7 +96,7 @@ export interface ActivityResponse {
 export interface ActivityFilters {
   module: 'all' | 'sj' | 'invoice'
   status: string
-  period: 'all' | 'this_month' | 'last_month'
+  period: 'all' | 'this_week' | 'this_month' | 'last_month'
   page: number
   limit: number
 }
@@ -104,7 +104,7 @@ export interface ActivityFilters {
 // ── API Functions ─────────────────────────────────────────────────────────
 
 export interface SummaryFilters {
-  period: 'all' | 'this_month' | 'last_month'
+  period: 'all' | 'this_week' | 'this_month' | 'last_month'
   module: 'all' | 'sj' | 'invoice'
   status: string
 }

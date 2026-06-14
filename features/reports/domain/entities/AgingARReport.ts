@@ -10,7 +10,7 @@ export interface AgingInvoice {
   remaining_amount: number
   days_overdue: number
   aging_bucket: AgingBucket
-  project_id: number
+  project_id: number | null
   project_code: string
   project_name: string
   contract_number: string
@@ -25,6 +25,13 @@ export interface AgingARCustomer {
   invoices: AgingInvoice[]
   bucket_totals: Record<AgingBucket, number>
   total_outstanding: number
+  not_due_amount?: number
+  overdue_amount?: number
+  paid_amount?: number
+  fully_paid_amount?: number
+  not_due_count?: number
+  overdue_count?: number
+  fully_paid_count?: number
   oldest_invoice_days: number
   invoice_count: number
 }
@@ -36,5 +43,12 @@ export interface AgingARSummary {
   customer_count: number
   invoice_count: number
   bucket_totals: Record<AgingBucket, number>
+  not_due_amount?: number
+  overdue_amount?: number
+  paid_amount?: number
+  fully_paid_amount?: number
+  not_due_count?: number
+  overdue_count?: number
+  fully_paid_count?: number
   customers: AgingARCustomer[]
 }

@@ -11,6 +11,14 @@ export interface CustomerStockItemRow {
   totalIn: number
   totalOut: number
   balance: number
+  categoryRows: CustomerStockCategoryRow[]
+}
+
+export interface CustomerStockCategoryRow {
+  categoryName: string | null
+  totalIn: number
+  totalOut: number
+  balance: number
 }
 
 export interface CustomerStockAvailableItem {
@@ -104,6 +112,7 @@ function ensureItemRow(summary: CustomerStockSummary, item: StockReceiptItem['st
     name: item.name,
     unit: item.unit,
     categories: [],
+    categoryRows: [],
     totalIn: 0,
     totalOut: 0,
     balance: 0,
@@ -112,11 +121,34 @@ function ensureItemRow(summary: CustomerStockSummary, item: StockReceiptItem['st
   return row
 }
 
+function ensureCategoryRow(row: CustomerStockItemRow, categoryName: string | null) {
+  const normalizedCategory = categoryName || null
+  let categoryRow = row.categoryRows.find(r => r.categoryName === normalizedCategory)
+  if (categoryRow) return categoryRow
+
+  categoryRow = {
+    categoryName: normalizedCategory,
+    totalIn: 0,
+    totalOut: 0,
+    balance: 0,
+  }
+  row.categoryRows.push(categoryRow)
+  return categoryRow
+}
+
 function finalizeSummary(summary: CustomerStockSummary) {
   summary.itemRows = summary.itemRows
     .map(row => ({
       ...row,
       categories: [...row.categories].sort((a, b) => a.localeCompare(b)),
+      categoryRows: (row.categoryRows || [])
+        .map(categoryRow => ({
+          ...categoryRow,
+          totalIn: roundQty(categoryRow.totalIn),
+          totalOut: roundQty(categoryRow.totalOut),
+          balance: roundQty(categoryRow.totalIn - categoryRow.totalOut),
+        }))
+        .sort((a, b) => (a.categoryName || '').localeCompare(b.categoryName || '')),
       totalIn: roundQty(row.totalIn),
       totalOut: roundQty(row.totalOut),
       balance: roundQty(row.totalIn - row.totalOut),
@@ -126,7 +158,9 @@ function finalizeSummary(summary: CustomerStockSummary) {
   summary.totalIn = roundQty(summary.itemRows.reduce((sum, row) => sum + row.totalIn, 0))
   summary.totalOut = roundQty(summary.itemRows.reduce((sum, row) => sum + row.totalOut, 0))
   summary.totalAsset = roundQty(summary.itemRows.reduce((sum, row) => sum + row.balance, 0))
-  summary.totalItemTypes = summary.itemRows.length
+  summary.totalItemTypes = summary.itemRows.reduce((sum, row) => (
+    sum + Math.max(row.categoryRows.length, 1)
+  ), 0)
   summary.transactions.sort((a, b) => {
     const byDate = b.date.localeCompare(a.date)
     if (byDate !== 0) return byDate
@@ -146,7 +180,9 @@ export function buildCustomerStockSummaries(
 
     receipt.items.forEach(item => {
       const row = ensureItemRow(summary, item.stock_item)
+      const categoryRow = ensureCategoryRow(row, item.kategori_name ?? null)
       row.totalIn += item.qty
+      categoryRow.totalIn += item.qty
       if (item.kategori_name && !row.categories.includes(item.kategori_name)) {
         row.categories.push(item.kategori_name)
       }
@@ -176,7 +212,9 @@ export function buildCustomerStockSummaries(
     if (!disbursement.customer) return
     const summary = ensureSummary(map, disbursement.customer)
     const row = ensureItemRow(summary, disbursement.stock_item)
+    const categoryRow = ensureCategoryRow(row, disbursement.kategori_name ?? null)
     row.totalOut += disbursement.qty
+    categoryRow.totalOut += disbursement.qty
     if (disbursement.kategori_name && !row.categories.includes(disbursement.kategori_name)) {
       row.categories.push(disbursement.kategori_name)
     }

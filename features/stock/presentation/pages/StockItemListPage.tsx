@@ -14,7 +14,9 @@ export default function StockItemListPage() {
   const dispatch = useDispatch<AppDispatch>()
   const { push: pushToast } = useToast()
   const { items, isLoading, isSubmitting, modals } = useSelector((state: RootState) => state.stock)
+  const role = useSelector((state: RootState) => state.auth.user?.role ?? null)
   const [search, setSearch] = useState('')
+  const isReadOnly = role === 'admin_finance'
 
   useEffect(() => {
     dispatch(fetchStockItems())
@@ -45,14 +47,16 @@ export default function StockItemListPage() {
           <div className="text-xs text-gray-500">Dashboard / Manajemen Stok / Master Barang</div>
           <h1 className="text-2xl font-bold">Master Barang</h1>
         </div>
-        <button
-          onClick={() => dispatch(openAddItemModal())}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-medium"
-          style={{ backgroundColor: 'var(--green-primary)' }}
-        >
-          <Plus size={16} />
-          Tambah Barang
-        </button>
+        {!isReadOnly && (
+          <button
+            onClick={() => dispatch(openAddItemModal())}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-medium"
+            style={{ backgroundColor: 'var(--green-primary)' }}
+          >
+            <Plus size={16} />
+            Tambah Barang
+          </button>
+        )}
       </div>
 
       {/* Search */}
@@ -97,13 +101,15 @@ export default function StockItemListPage() {
                 <td colSpan={7} className="px-4 py-16 text-center">
                   <Package size={40} className="mx-auto text-gray-200 mb-3" />
                   <div className="text-gray-500 font-medium">Tidak ada barang ditemukan</div>
-                  <button
-                    onClick={() => dispatch(openAddItemModal())}
-                    className="mt-2 text-sm font-semibold"
-                    style={{ color: 'var(--green-primary)' }}
-                  >
-                    Tambah Barang Baru &rarr;
-                  </button>
+                  {!isReadOnly && (
+                    <button
+                      onClick={() => dispatch(openAddItemModal())}
+                      className="mt-2 text-sm font-semibold"
+                      style={{ color: 'var(--green-primary)' }}
+                    >
+                      Tambah Barang Baru &rarr;
+                    </button>
+                  )}
                 </td>
               </tr>
             )}
@@ -145,20 +151,24 @@ export default function StockItemListPage() {
                 </td>
                 <td className="px-4 py-3 text-right">
                   <div className="flex items-center justify-end gap-1">
-                    <button
-                      onClick={() => dispatch(openEditItemModal(item))}
-                      className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-500"
-                      title="Edit"
-                    >
-                      <Pencil size={14} />
-                    </button>
-                    <button
-                      onClick={() => handleToggleActive(item.uuid, item.is_active)}
-                      className={`p-1.5 rounded-lg hover:bg-gray-100 transition-colors ${item.is_active ? 'text-green-600' : 'text-gray-400'}`}
-                      title={item.is_active ? 'Nonaktifkan' : 'Aktifkan'}
-                    >
-                      {item.is_active ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
-                    </button>
+                    {!isReadOnly && (
+                      <>
+                        <button
+                          onClick={() => dispatch(openEditItemModal(item))}
+                          className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-500"
+                          title="Edit"
+                        >
+                          <Pencil size={14} />
+                        </button>
+                        <button
+                          onClick={() => handleToggleActive(item.uuid, item.is_active)}
+                          className={`p-1.5 rounded-lg hover:bg-gray-100 transition-colors ${item.is_active ? 'text-green-600' : 'text-gray-400'}`}
+                          title={item.is_active ? 'Nonaktifkan' : 'Aktifkan'}
+                        >
+                          {item.is_active ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
+                        </button>
+                      </>
+                    )}
                   </div>
                 </td>
               </tr>

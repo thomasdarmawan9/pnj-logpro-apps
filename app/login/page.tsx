@@ -8,13 +8,10 @@ import { loginSuccess, loginFailed } from '@/store/slices/authSlice'
 import { startTour } from '@/store/slices/tourSlice'
 import { login } from '@/lib/authApi'
 import { storeAuthSession } from '@/lib/apiClient'
-import { useSelector } from 'react-redux'
-import { RootState } from '@/store'
 
 export default function LoginPage() {
   const router = useRouter()
   const dispatch = useDispatch()
-  const loginAttempts = useSelector((state: RootState) => state.auth.loginAttempts)
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -46,17 +43,12 @@ export default function LoginPage() {
     setPasswordError(pErr)
     if (eErr || pErr) return
 
-    if (loginAttempts >= 3) {
-      setLoginError('Akun terkunci sementara. Hubungi administrator.')
-      return
-    }
-
     setIsLoading(true)
     setLoginError('')
 
     try {
       const result = await login(email, password)
-      storeAuthSession(result.access_token, result.refresh_token, result.user)
+      storeAuthSession(result.access_token, result.refresh_token, result.user, rememberMe)
       dispatch(loginSuccess({
         user: result.user,
         accessToken: result.access_token,
@@ -64,17 +56,14 @@ export default function LoginPage() {
       }))
       const tourDone = window.localStorage.getItem('pnj_tour_done')
       if (!tourDone) dispatch(startTour())
-      document.cookie = 'pnj_auth=true; path=/'
+      document.cookie = rememberMe
+        ? 'pnj_auth=true; path=/; max-age=604800; SameSite=Lax'
+        : 'pnj_auth=true; path=/; SameSite=Lax'
       router.push('/dashboard')
     } catch (err) {
       dispatch(loginFailed())
-      const remaining = 3 - (loginAttempts + 1)
-      if (remaining <= 0) {
-        setLoginError('Akun terkunci sementara. Hubungi administrator.')
-      } else {
-        const message = err instanceof Error ? err.message : 'Email atau password salah.'
-        setLoginError(`${message} Sisa percobaan: ${remaining}`)
-      }
+      const message = err instanceof Error ? err.message : 'Email atau password salah.'
+      setLoginError(message)
     } finally {
       setIsLoading(false)
     }
@@ -228,13 +217,13 @@ export default function LoginPage() {
             {/* Submit */}
             <button
               type="submit"
-              disabled={isLoading || loginAttempts >= 3}
+              disabled={isLoading}
               className="w-full h-12 rounded-xl font-semibold text-white flex items-center justify-center gap-2 transition-all"
               style={{
-                backgroundColor: loginAttempts >= 3 ? '#9CA3AF' : 'var(--green-primary)',
+                backgroundColor: 'var(--green-primary)',
               }}
-              onMouseEnter={e => { if (loginAttempts < 3) (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#255C35' }}
-              onMouseLeave={e => { if (loginAttempts < 3) (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'var(--green-primary)' }}
+              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#255C35' }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'var(--green-primary)' }}
             >
               {isLoading ? (
                 <>

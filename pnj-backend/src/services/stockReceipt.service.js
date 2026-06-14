@@ -9,6 +9,7 @@ const {
 } = require('../models')
 const repo = require('../repositories/stockReceipt.repository')
 const {
+  BadRequestError,
   NotFoundError,
   ConflictError,
 } = require('../utils/AppError')
@@ -114,6 +115,17 @@ function getResolvedStockItem(stockItemMap, itemPayload) {
   return stockItemMap.byId.get(Number(itemPayload.stock_item_id))
 }
 
+function validateReceiptItems(items) {
+  if (!Array.isArray(items) || items.length === 0) {
+    throw new BadRequestError('Minimal 1 item harus diisi.')
+  }
+  for (const [idx, item] of items.entries()) {
+    if (round2(item.qty) <= 0) {
+      throw new BadRequestError(`Qty item ${idx + 1} harus lebih dari 0.`)
+    }
+  }
+}
+
 async function resolveCustomerRef(payload, t) {
   if (payload.customer_uuid) {
     const cust = await Customer.findOne({
@@ -174,6 +186,7 @@ async function getByUuid(uuid) {
 
 // ── CREATE ─────────────────────────────────────────────────────────────────
 async function create(payload, actor) {
+  validateReceiptItems(payload.items)
   const result = await sequelize.transaction(async (t) => {
     const customer = await resolveCustomerRef(payload, t)
     const customerId = customer?.id || null
@@ -234,6 +247,7 @@ async function create(payload, actor) {
  *  - Block kalau hasilnya bikin stock negatif.
  */
 async function update(uuid, payload, actor) {
+  if (payload.items) validateReceiptItems(payload.items)
   const result = await sequelize.transaction(async (t) => {
     const receipt = await StockReceipt.findOne({
       where:       { uuid },

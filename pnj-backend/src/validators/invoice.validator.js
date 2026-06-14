@@ -4,8 +4,10 @@ const Joi = require('joi')
 
 const STATUSES = ['draft', 'sent', 'outstanding', 'paid', 'void']
 const PAYMENT_METHODS = ['transfer', 'cash', 'check']
-const SERVICE_TYPES = ['delivery', 'rental']
+const SERVICE_TYPES = ['delivery', 'rental', 'other']
+const DELIVERY_PRICING_MODES = ['shipment', 'item']
 const PERIODS = ['today', 'week', 'month', 'last_month', 'all']
+const DELIVERY_ADDITIONAL_CHARGE_LABEL = 'Pembiayaan Lainnya'
 
 /**
  * Down Payment (DP / Uang Muka) sub-schema.
@@ -24,14 +26,28 @@ const downPaymentSchema = Joi.object({
 })
 
 const itemSchema = Joi.object({
+  uuid:          Joi.string().uuid({ version: ['uuidv4'] }).allow(null),
+  source_sj_id:  Joi.number().integer().min(1).allow(null),
   fleet_uuid:    Joi.string().uuid({ version: ['uuidv4'] }).allow(null),
   fleet_id:      Joi.number().integer().min(1).allow(null),
+  driver_uuid:   Joi.string().uuid({ version: ['uuidv4'] }).allow(null),
+  driver_id:     Joi.number().integer().min(1).allow(null),
+  driver_name_manual: Joi.string().trim().max(100).allow('', null),
   fleet_label:   Joi.string().trim().min(1).max(150).required(),
   description:   Joi.string().trim().allow('', null),
   period_start:  Joi.date().iso().allow(null),
   period_end:    Joi.date().iso().allow(null),
+  rental_duration_years:  Joi.number().integer().min(0).default(0),
+  rental_duration_months: Joi.number().integer().min(0).default(0),
+  rental_duration_days:   Joi.number().integer().min(0).default(0),
+  rental_duration_hours:  Joi.number().integer().min(0).default(0),
   qty:           Joi.number().precision(2).min(0.01).required(),
   unit:          Joi.string().trim().max(20).default('Unit'),
+  cargo_qty:     Joi.number().integer().min(0).allow(null),
+  cargo_unit:    Joi.string().trim().max(30).allow('', null),
+  cargo_weight:  Joi.number().precision(2).min(0).allow(null),
+  cargo_volume:  Joi.number().precision(2).min(0).allow(null),
+  cargo_notes:   Joi.string().trim().max(500).allow('', null),
   unit_price:    Joi.number().precision(2).min(0).required(),
   sort_order:    Joi.number().integer().min(0).default(0),
 }).custom((val, helpers) => {
@@ -44,6 +60,54 @@ const itemSchema = Joi.object({
   'any.custom': '{{#message}}',
 })
 
+function isDeliveryAdditionalCharge(item) {
+  return item.fleet_label === DELIVERY_ADDITIONAL_CHARGE_LABEL &&
+    Number(item.unit_price || 0) > 0 &&
+    (item.cargo_qty === null || item.cargo_qty === undefined)
+}
+
+function effectiveServiceType(serviceType, customServiceName) {
+  if (serviceType === 'rental') return 'rental'
+  if (serviceType === 'other') {
+    const name = String(customServiceName || '').toLowerCase()
+    if (name.includes('penyewaan') || name.includes('sewa')) return 'rental'
+    if (name.includes('pengiriman')) return 'delivery'
+  }
+  return 'delivery'
+}
+
+function validateDeliveryPricingPayload(val, helpers) {
+  const serviceType = effectiveServiceType(val.service_type || 'delivery', val.custom_service_name)
+  if (serviceType === 'rental' && !val.delivery_pricing_mode) return val
+  const mode = val.delivery_pricing_mode || 'shipment'
+  if (!Array.isArray(val.items)) return val
+  const items = val.items
+  const billableItems = items.filter(item => !isDeliveryAdditionalCharge(item))
+
+  if (serviceType !== 'rental' && billableItems.length === 0) {
+    if (mode === 'item') {
+      return helpers.error('any.custom', { message: 'Minimal 1 rincian barang/muatan wajib diisi untuk mode harga per barang.' })
+    }
+    return val
+  }
+
+  if (mode === 'item') {
+    const invalidIndex = billableItems.findIndex(item => Number(item.qty || 0) <= 0 || Number(item.unit_price || 0) <= 0)
+    if (invalidIndex >= 0) {
+      return helpers.error('any.custom', { message: `Harga barang baris ${invalidIndex + 1} wajib diisi untuk mode harga per barang.` })
+    }
+  }
+
+  if (mode === 'shipment' && serviceType !== 'rental') {
+    const hasShipmentPrice = billableItems.some(item => Number(item.qty || 0) > 0 && Number(item.unit_price || 0) > 0)
+    if (!hasShipmentPrice) {
+      return helpers.error('any.custom', { message: 'Harga pengiriman wajib diisi.' })
+    }
+  }
+
+  return val
+}
+
 const createInvoiceSchema = Joi.object({
   project_uuid:     Joi.string().uuid({ version: ['uuidv4'] }),
   project_id:       Joi.number().integer().min(1).allow(null),
@@ -54,18 +118,25 @@ const createInvoiceSchema = Joi.object({
     'date.min': 'Tanggal jatuh tempo tidak boleh lebih kecil dari tanggal invoice.',
   }),
   service_type:     Joi.string().valid(...SERVICE_TYPES).required(),
+  custom_service_name: Joi.string().trim().max(100).allow('', null),
+  delivery_pricing_mode: Joi.string().valid(...DELIVERY_PRICING_MODES).default('shipment'),
   payment_method:   Joi.string().valid('transfer', 'cash', 'check').default('transfer'),
   bank_account_id:  Joi.number().integer().min(1).allow(null).optional(),
   tax_percent:      Joi.number().precision(2).min(0).max(100).default(0),
   pph_percent:      Joi.number().precision(2).min(0).max(100).default(0),
   insurance_amount: Joi.number().precision(2).min(0).default(0),
   notes:            Joi.string().trim().allow('', null),
+  origin:           Joi.string().trim().max(200).allow('', null),
+  destination:      Joi.string().trim().max(200).allow('', null),
+  cargo_description: Joi.string().trim().allow('', null),
+  manual_sj_numbers: Joi.string().trim().max(1000).allow('', null),
+  linked_sj_uuids: Joi.array().items(Joi.string().uuid({ version: ['uuidv4'] })).default([]),
   items:            Joi.array().items(itemSchema).min(0).default([]),
   send_immediately: Joi.boolean().default(false),
   // DP opsional saat create. Kalau dikirim → otomatis dibuat sebagai
   // Payment(is_down_payment=true) di transaksi yang sama dgn invoice.
   down_payment:     downPaymentSchema.optional(),
-}).oxor('project_uuid', 'project_id')
+  }).oxor('project_uuid', 'project_id')
   .oxor('customer_uuid', 'customer_id')
   .custom((val, helpers) => {
     const hasProject = !!val.project_uuid || !!val.project_id
@@ -73,8 +144,19 @@ const createInvoiceSchema = Joi.object({
     if (!hasProject && !hasCustomer) {
       return helpers.error('any.custom', { message: 'Pilih project atau customer.' })
     }
+    if (val.service_type === 'other' && !String(val.custom_service_name || '').trim()) {
+      return helpers.error('any.custom', { message: 'Nama jasa wajib diisi untuk jenis jasa lainnya.' })
+    }
+    if (val.payment_method === 'transfer' && !val.bank_account_id) {
+      return helpers.error('any.custom', { message: 'Rekening tujuan wajib dipilih untuk metode Transfer Bank.' })
+    }
+    if (effectiveServiceType(val.service_type, val.custom_service_name) === 'rental' && (!Array.isArray(val.items) || val.items.length === 0)) {
+      return helpers.error('any.custom', { message: 'Minimal 1 rincian item wajib diisi untuk invoice penyewaan.' })
+    }
     return val
-  }).messages({
+  })
+  .custom(validateDeliveryPricingPayload)
+  .messages({
   'any.custom': '{{#message}}',
   'object.oxor': 'Pilih salah satu identifier untuk project/customer.',
 })
@@ -82,12 +164,16 @@ const createInvoiceSchema = Joi.object({
 const updateInvoiceSchema = Joi.object({
   invoice_date:    Joi.date().iso(),
   due_date:        Joi.date().iso(),
+  delivery_pricing_mode: Joi.string().valid(...DELIVERY_PRICING_MODES),
   payment_method:  Joi.string().valid('transfer', 'cash', 'check'),
   bank_account_id: Joi.number().integer().min(1).allow(null).optional(),
   tax_percent:      Joi.number().precision(2).min(0).max(100),
   pph_percent:      Joi.number().precision(2).min(0).max(100),
   insurance_amount: Joi.number().precision(2).min(0),
   notes:            Joi.string().trim().allow('', null),
+  origin:           Joi.string().trim().max(200).allow('', null),
+  destination:      Joi.string().trim().max(200).allow('', null),
+  cargo_description: Joi.string().trim().allow('', null),
   items:           Joi.array().items(itemSchema).min(1),
   lampiran_paths:  Joi.array().items(Joi.string().trim().max(255)).allow(null),
   // DP edit:
@@ -101,7 +187,9 @@ const updateInvoiceSchema = Joi.object({
     return helpers.error('any.custom', { message: 'due_date tidak boleh lebih kecil dari invoice_date.' })
   }
   return val
-}).messages({
+})
+  .custom(validateDeliveryPricingPayload)
+  .messages({
   'object.min': 'Minimal satu field harus diubah.',
   'any.custom': '{{#message}}',
 })
@@ -160,6 +248,7 @@ module.exports = {
   STATUSES,
   PAYMENT_METHODS,
   SERVICE_TYPES,
+  DELIVERY_PRICING_MODES,
   PERIODS,
   downPaymentSchema,
   createInvoiceSchema,

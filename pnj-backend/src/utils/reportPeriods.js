@@ -13,7 +13,7 @@ function endOfMonth(d)  { return new Date(d.getFullYear(), d.getMonth() + 1, 0, 
 function resolvePeriod(preset, customFrom, customTo) {
   const now = new Date()
 
-  if (customFrom || customTo) {
+  if (preset === 'custom' && (customFrom || customTo)) {
     return {
       from: customFrom ? startOfDay(new Date(customFrom)) : null,
       to:   customTo   ? endOfDay(new Date(customTo))     : null,

@@ -17,10 +17,12 @@ export interface ProfitLossSJDetail {
 }
 
 export interface ProfitLossProject {
-  project_id: number
+  project_id: number | null
+  project_uuid: string | null
   project_name: string
   project_code: string
   contract_number: string
+  customer_id: number
   customer_name: string
   start_date: string
   end_date: string | null

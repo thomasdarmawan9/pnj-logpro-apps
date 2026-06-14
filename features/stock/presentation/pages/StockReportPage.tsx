@@ -327,7 +327,7 @@ export default function StockReportPage() {
         <div className="bg-white rounded-xl border shadow-sm p-16 text-center" style={{ borderColor: 'var(--border-card)' }}>
           <FileBarChart2 size={48} className="mx-auto text-gray-200 mb-3" />
           <div className="text-gray-500 font-medium">Pilih barang untuk melihat rekap stok</div>
-          <div className="text-sm text-gray-400 mt-1">Rekap menampilkan pergerakan stok masuk dan keluar dengan saldo berjalan</div>
+          <div className="text-sm text-gray-400 mt-1">Rekap menampilkan pergerakan stok masuk dan keluar dengan saldo (sisa stock) berjalan</div>
         </div>
       ) : isLoading ? (
         <div className="space-y-3">

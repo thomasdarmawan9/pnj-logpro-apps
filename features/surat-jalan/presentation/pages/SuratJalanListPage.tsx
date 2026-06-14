@@ -38,6 +38,9 @@ import AttachToInvoiceModal from '../components/modals/AttachToInvoiceModal'
 import { StatusLampiran, StatusOperasional } from '../../domain/entities/SuratJalan'
 import { AvailableInvoice } from '@/features/invoice/domain/entities/Invoice'
 import { useToast } from '@/components/toast/useToast'
+import { exportSuratJalan } from '../../infrastructure/repositories/MockSuratJalanRepository'
+import { fetchCustomers, fetchProjects } from '@/store/slices/masterSlice'
+import TablePagination from '@/features/master/presentation/components/TablePagination'
 
 export default function SuratJalanListPage() {
   const router = useRouter()
@@ -50,9 +53,12 @@ export default function SuratJalanListPage() {
     isGeneratePDFModalOpen, isAttachInvoiceModalOpen, availableInvoices, isLoadingInvoices,
     isSubmitting, selectedUuid, selectedSJ,
   } = useSelector((state: RootState) => state.suratJalan)
-  const role = useSelector((state: RootState) => state.auth.user?.role || 'super_admin')
+  const { customers, projects } = useSelector((state: RootState) => state.master)
+  const role = useSelector((state: RootState) => state.auth.user?.role ?? null)
+  const isReadOnly = role === 'admin_finance'
 
   const [selectedRows, setSelectedRows] = useState<string[]>([])
+  const [isExporting, setIsExporting] = useState(false)
 
   useEffect(() => {
     if (error) {
@@ -66,6 +72,11 @@ export default function SuratJalanListPage() {
     }
   }, [dispatch, isDetailDrawerOpen, selectedUuid])
 
+  useEffect(() => {
+    dispatch(fetchCustomers())
+    dispatch(fetchProjects())
+  }, [dispatch])
+
   const stats = useMemo(() => {
     const totalBulanIni = pagination.total
     const sedangBerjalan = list.filter(sj => sj.status === StatusOperasional.ASSIGNED).length
@@ -76,6 +87,20 @@ export default function SuratJalanListPage() {
 
   const currentSJ = selectedSJ || list.find(sj => sj.uuid === selectedUuid) || null
 
+  const customerOptions = useMemo(() => [
+    { value: 'all', label: 'Semua Customer' },
+    ...customers
+      .map(customer => ({ value: customer.name, label: customer.name }))
+      .sort((a, b) => a.label.localeCompare(b.label)),
+  ], [customers])
+
+  const projectOptions = useMemo(() => [
+    { value: 'all', label: 'Semua Proyek' },
+    ...projects
+      .map(project => ({ value: project.code, label: `${project.code} - ${project.name}` }))
+      .sort((a, b) => a.label.localeCompare(b.label)),
+  ], [projects])
+
   const toggleSelect = (uuid: string) => {
     setSelectedRows(prev => prev.includes(uuid) ? prev.filter(id => id !== uuid) : [...prev, uuid])
   }
@@ -83,6 +108,7 @@ export default function SuratJalanListPage() {
   const handleAction = (action: string, uuid: string) => {
     if (action === 'detail') return dispatch(openDetailDrawer(uuid))
     if (action === 'print') return dispatch(openGeneratePDFModal(uuid))
+    if (isReadOnly) return
     if (action === 'edit') return router.push(`/surat-jalan/${uuid}/edit`)
     if (action === 'assign') return dispatch(openAssignModal(uuid))
     if (action === 'deliver') return dispatch(openUploadPODModal(uuid))
@@ -121,7 +147,31 @@ export default function SuratJalanListPage() {
     })
   }
 
-  const totalPages = Math.ceil(pagination.total / pagination.perPage) || 1
+  const handleExport = async (uuids?: string[]) => {
+    try {
+      setIsExporting(true)
+      const blob = await exportSuratJalan(filters, uuids)
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `surat-jalan-export-${new Date().toISOString().slice(0, 10)}.xlsx`
+      link.click()
+      URL.revokeObjectURL(url)
+      pushToast({
+        title: 'Export berhasil',
+        description: uuids?.length ? `${uuids.length} surat jalan diekspor.` : 'Data surat jalan berhasil diekspor.',
+        variant: 'success',
+      })
+    } catch (err) {
+      pushToast({
+        title: 'Export gagal',
+        description: err instanceof Error ? err.message : 'File Excel surat jalan tidak dapat dibuat.',
+        variant: 'error',
+      })
+    } finally {
+      setIsExporting(false)
+    }
+  }
 
   return (
     <DashboardLayout>
@@ -130,14 +180,16 @@ export default function SuratJalanListPage() {
           <div className="text-xs text-gray-500">Dashboard / Surat Jalan</div>
           <h1 className="text-2xl font-bold">Surat Jalan</h1>
         </div>
-        <button
-          onClick={() => router.push('/surat-jalan/create')}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl text-white"
-          style={{ backgroundColor: 'var(--green-primary)' }}
-        >
-          <Plus size={16} />
-          Buat SJ Baru
-        </button>
+        {!isReadOnly && (
+          <button
+            onClick={() => router.push('/surat-jalan/create')}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-white"
+            style={{ backgroundColor: 'var(--green-primary)' }}
+          >
+            <Plus size={16} />
+            Buat SJ Baru
+          </button>
+        )}
       </div>
 
       <SJSummaryCards stats={stats} />
@@ -147,7 +199,11 @@ export default function SuratJalanListPage() {
           filters={filters}
           onChange={setFilters}
           onReset={resetFilters}
+          onExport={() => handleExport()}
           resultCount={pagination.total}
+          isExporting={isExporting}
+          customerOptions={customerOptions}
+          projectOptions={projectOptions}
         />
       </div>
 
@@ -189,7 +245,7 @@ export default function SuratJalanListPage() {
                 checked={selectedRows.includes(sj.uuid)}
                 onToggle={toggleSelect}
                 onAction={handleAction}
-                role={role}
+                role={role ?? undefined}
               />
             ))}
           </tbody>
@@ -199,8 +255,13 @@ export default function SuratJalanListPage() {
       {selectedRows.length > 0 && (
         <div className="mt-4 rounded-xl border bg-white px-4 py-3 flex items-center gap-3" style={{ borderColor: 'var(--border-card)' }}>
           <div className="text-sm font-medium">{selectedRows.length} SJ dipilih</div>
-          <button className="text-sm px-3 py-1.5 rounded-lg border" style={{ borderColor: 'var(--border-card)' }}>
-            Export Excel yang Dipilih
+          <button
+            className="text-sm px-3 py-1.5 rounded-lg border disabled:opacity-50"
+            style={{ borderColor: 'var(--border-card)' }}
+            disabled={isExporting}
+            onClick={() => handleExport(selectedRows)}
+          >
+            {isExporting ? 'Mengekspor...' : 'Export Excel yang Dipilih'}
           </button>
           <button
             className="text-sm px-3 py-1.5 rounded-lg text-gray-500"
@@ -212,37 +273,15 @@ export default function SuratJalanListPage() {
       )}
 
       <div className="flex flex-wrap items-center justify-between mt-6 text-sm">
-        <div className="text-gray-500">
-          Menampilkan {(pagination.page - 1) * pagination.perPage + 1}–{Math.min(pagination.page * pagination.perPage, pagination.total)} dari {pagination.total} surat jalan
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            className="px-3 py-1.5 rounded-lg border"
-            style={{ borderColor: 'var(--border-card)' }}
-            disabled={pagination.page === 1}
-            onClick={() => setPage(Math.max(1, pagination.page - 1))}
-          >
-            ← Sebelumnya
-          </button>
-          {Array.from({ length: totalPages }).map((_, idx) => (
-            <button
-              key={idx}
-              className={`px-3 py-1.5 rounded-lg border ${pagination.page === idx + 1 ? 'bg-green-50 text-green-700' : ''}`}
-              style={{ borderColor: 'var(--border-card)' }}
-              onClick={() => setPage(idx + 1)}
-            >
-              {idx + 1}
-            </button>
-          ))}
-          <button
-            className="px-3 py-1.5 rounded-lg border"
-            style={{ borderColor: 'var(--border-card)' }}
-            disabled={pagination.page === totalPages}
-            onClick={() => setPage(Math.min(totalPages, pagination.page + 1))}
-          >
-            Berikutnya →
-          </button>
-        </div>
+        <TablePagination
+          page={pagination.page}
+          perPage={pagination.perPage}
+          total={pagination.total}
+          label="surat jalan"
+          onPageChange={setPage}
+          showBorderTop={false}
+          className="flex-1 px-0 py-0"
+        />
         <div className="flex items-center gap-2">
           <span className="text-gray-500">Tampilkan:</span>
           <select
