@@ -90,7 +90,7 @@ function processLampiran(subDir) {
 
       if (isImage) {
         await sharp(req.file.buffer)
-          .resize(2000, 2000, { fit: 'inside', withoutEnlargement: true })
+          .resize(1600, 1600, { fit: 'inside', withoutEnlargement: true })
           .webp({ quality: env.upload.compressQuality })
           .toFile(outputPath)
       } else {
