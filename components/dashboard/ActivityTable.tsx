@@ -38,7 +38,7 @@ export default function ActivityTable({ data, meta, isLoading, onPageChange }: A
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border-light)' }}>
-                  {['No. Dokumen', 'Proyek / Customer', 'Armada', 'Status Ops', 'Status Invoice', 'Tanggal'].map(h => (
+                  {['No. Dokumen', 'Proyek / Customer', 'Armada', 'Status Invoice', 'Tanggal'].map(h => (
                     <th
                       key={h}
                       className="text-left pb-3 px-2 text-xs font-semibold whitespace-nowrap"
@@ -71,10 +71,11 @@ export default function ActivityTable({ data, meta, isLoading, onPageChange }: A
                         {row.armada}
                       </td>
                       <td className="py-3 px-2 whitespace-nowrap">
-                        <OpsStatusBadge status={row.statusOps as 'DELIVERED' | 'ASSIGNED' | 'DRAFT' | 'OUTSTANDING' | 'PAID' | 'VOID'} />
-                      </td>
-                      <td className="py-3 px-2 whitespace-nowrap">
-                        <InvoiceStatusBadge status={row.statusInvoice as 'terlampir' | 'belum' | null} invoiceNo={row.invoiceNo} />
+                        {row.type === 'invoice' ? (
+                          <OpsStatusBadge status={row.statusOps as 'DELIVERED' | 'ASSIGNED' | 'DRAFT' | 'OUTSTANDING' | 'PAID' | 'VOID'} />
+                        ) : (
+                          <InvoiceStatusBadge status={row.statusInvoice as 'terlampir' | 'belum' | null} invoiceNo={row.invoiceNo} />
+                        )}
                       </td>
                       <td className="py-3 px-2 whitespace-nowrap text-xs" style={{ color: 'var(--text-secondary)' }}>
                         {row.tanggal}

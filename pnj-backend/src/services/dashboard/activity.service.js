@@ -3,6 +3,7 @@
 const { Op } = require('sequelize')
 const {
   Invoice,
+  InvoiceItem,
   DeliveryOrder,
   Project,
   Customer,
@@ -119,6 +120,21 @@ function mapInvoice(inv) {
   let statusOps = String(plain.status || '').toUpperCase()
   if (plain.status === 'sent') statusOps = 'OUTSTANDING'  // FE merge sent + outstanding
 
+  // Armada — ambil dari label armada di invoice items (fallback ke jumlah SJ terlampir).
+  const fleetLabels = [...new Set(
+    (plain.items || [])
+      .map(item => (item.fleet_label || '').trim())
+      .filter(Boolean)
+  )]
+  let armada = '—'
+  if (fleetLabels.length === 1) {
+    armada = fleetLabels[0]
+  } else if (fleetLabels.length > 1) {
+    armada = `${fleetLabels[0]} +${fleetLabels.length - 1} lainnya`
+  } else if (sjCount > 0) {
+    armada = `${sjCount} unit kendaraan`
+  }
+
   return {
     id:            `inv-${plain.id}`,
     type:          'invoice',
@@ -127,7 +143,7 @@ function mapInvoice(inv) {
     proyek:        plain.project
       ? `${plain.customer?.name || '—'} / ${plain.project.contract_number || plain.project.code}`
       : (plain.customer?.name || '—'),
-    armada:        sjCount > 0 ? `${sjCount} unit kendaraan` : '—',
+    armada,
     statusOps,
     statusInvoice: null,
     invoiceNo:     null,
@@ -165,6 +181,11 @@ async function getActivity(filters = {}) {
     {
       model: DeliveryOrder, as: 'attachedSJs',
       attributes: ['id', 'uuid', 'sj_number'],
+      required: false,
+    },
+    {
+      model: InvoiceItem, as: 'items',
+      attributes: ['id', 'fleet_label'],
       required: false,
     },
   ]
