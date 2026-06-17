@@ -4,7 +4,7 @@ const express          = require('express')
 const router           = express.Router()
 
 const { authenticate } = require('../middlewares/auth.middleware')
-const { isAnyRole, isSuperAdmin } = require('../middlewares/rbac.middleware')
+const { isAnyRole, isSuperAdmin, isFinanceOrAbove } = require('../middlewares/rbac.middleware')
 const { validate }     = require('../middlewares/validate.middleware')
 const { uuidParam, uuidFilenameParam } = require('../validators/common.validator')
 const {
@@ -77,7 +77,7 @@ router.patch('/:uuid/mark-outstanding',
 )
 
 router.post('/:uuid/payments',
-  isSuperAdmin,
+  isFinanceOrAbove,
   validate(uuidParam, 'params'),
   validate(recordPaymentSchema),
   logActivity('record_payment', 'invoice'),

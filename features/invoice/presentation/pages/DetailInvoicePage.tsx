@@ -63,6 +63,7 @@ export default function DetailInvoicePage({ uuid }: Props) {
   const { attachableSJ, modals } = useSelector((state: RootState) => state.invoice)
   const role = useSelector((state: RootState) => state.auth.user?.role ?? null)
   const isReadOnly = role === 'admin_finance'
+  const canRecordPayment = role === 'super_admin' || role === 'admin_finance'
   const [activeTab, setActiveTab] = useState<'items' | 'sj' | 'payments' | 'lampiran'>('items')
   const [lampiranPaths, setLampiranPaths] = useState<string[]>([])
   const [isSavingLampiran, setIsSavingLampiran] = useState(false)
@@ -331,7 +332,7 @@ export default function DetailInvoicePage({ uuid }: Props) {
               paidAmount={invoice.paid_amount}
               downPaymentAmount={invoice.down_payment_amount}
               invoiceStatus={invoice.status}
-              role={isReadOnly ? 'viewer' : role ?? 'viewer'}
+              role={role ?? 'viewer'}
               onAddPayment={() => dispatch(openRecordPaymentModal())}
               isOverdue={isOverdue}
             />
@@ -388,7 +389,7 @@ export default function DetailInvoicePage({ uuid }: Props) {
               )}
               {(invoice.status === InvoiceStatus.SENT || invoice.status === InvoiceStatus.OUTSTANDING) && (
                 <>
-                  {!isReadOnly && <button onClick={() => dispatch(openRecordPaymentModal())} className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: 'var(--green-primary)' }}>
+                  {canRecordPayment && <button onClick={() => dispatch(openRecordPaymentModal())} className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: 'var(--green-primary)' }}>
                     <DollarSign size={14} />Catat Pembayaran
                   </button>}
                   {!isReadOnly && !isRentalInvoice && <button onClick={async () => {

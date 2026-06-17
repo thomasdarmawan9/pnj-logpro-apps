@@ -72,7 +72,7 @@ export default function InvoiceListPage() {
 
   const handleAction = async (action: string, uuid: string) => {
     if (action === 'detail') return router.push(`/invoice/${uuid}`)
-    if (isReadOnly && action !== 'print') return
+    if (isReadOnly && action !== 'print' && action !== 'payment') return
     if (action === 'edit') return router.push(`/invoice/${uuid}/edit`)
     if (action === 'print') {
       setActiveUuid(uuid)

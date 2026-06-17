@@ -39,6 +39,7 @@ export default function InvoiceTableRow({ invoice, checked, onToggle, onAction, 
   const effectiveServiceType = resolveEffectiveInvoiceServiceType(invoice.service_type, invoice.custom_service_name)
   const canAttachSJ = effectiveServiceType !== 'rental'
   const isReadOnly = role === 'admin_finance'
+  const canRecordPayment = role === 'super_admin' || role === 'admin_finance'
   const serviceTypeLabel = effectiveServiceType === 'rental' && invoice.service_type !== 'other'
     ? 'Penyewaan'
     : invoice.service_type === 'other'
@@ -157,10 +158,10 @@ export default function InvoiceTableRow({ invoice, checked, onToggle, onAction, 
                   <ActionMenuItem icon={<Send size={14}/>} label="Kirim ke Customer" onClick={() => { setMenuOpen(false); onAction('send', invoice.uuid) }} />
                 </>
               )}
-              {!isReadOnly && (invoice.status === InvoiceStatus.SENT || invoice.status === InvoiceStatus.OUTSTANDING) && (
+              {(invoice.status === InvoiceStatus.SENT || invoice.status === InvoiceStatus.OUTSTANDING) && (
                 <>
-                  <ActionMenuItem icon={<DollarSign size={14}/>} label="Catat Pembayaran" onClick={() => { setMenuOpen(false); onAction('payment', invoice.uuid) }} />
-                  {canAttachSJ && <ActionMenuItem icon={<Paperclip size={14}/>} label="Kelola SJ Terlampir" onClick={() => { setMenuOpen(false); onAction('attach-sj', invoice.uuid) }} />}
+                  {canRecordPayment && <ActionMenuItem icon={<DollarSign size={14}/>} label="Catat Pembayaran" onClick={() => { setMenuOpen(false); onAction('payment', invoice.uuid) }} />}
+                  {!isReadOnly && canAttachSJ && <ActionMenuItem icon={<Paperclip size={14}/>} label="Kelola SJ Terlampir" onClick={() => { setMenuOpen(false); onAction('attach-sj', invoice.uuid) }} />}
                 </>
               )}
               {!isReadOnly && invoice.status !== InvoiceStatus.DRAFT && invoice.status !== InvoiceStatus.VOID && role === 'super_admin' && (
