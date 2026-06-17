@@ -90,7 +90,7 @@ export default function DeliveryPricingSection({
     if (Object.prototype.hasOwnProperty.call(decimalDrafts, key)) return decimalDrafts[key]
     const num = Number(value)
     if (value === '' || value === null || value === undefined || isNaN(num)) return ''
-    return num.toFixed(4)
+    return num % 1 === 0 ? String(num) : num.toFixed(4)
   }
   const changeDecimalInput = (key: string, value: string, onParsed: (parsed: number) => void) => {
     if (!isDecimalDraft(value)) return

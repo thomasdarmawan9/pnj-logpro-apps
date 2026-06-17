@@ -279,7 +279,7 @@ export default function InvoiceItemRow({
             type="text"
             inputMode="decimal"
             className={`form-input w-full text-sm ${errors[`${errPrefix}.qty`] ? 'border-red-400' : ''}`}
-            value={qtyDraft !== null ? qtyDraft : Number(item.qty).toFixed(4)}
+            value={qtyDraft !== null ? qtyDraft : (Number(item.qty) % 1 === 0 ? String(Number(item.qty)) : Number(item.qty).toFixed(4))}
             onChange={e => {
               if (!isDecimalDraft(e.target.value)) return
               setQtyDraft(e.target.value)

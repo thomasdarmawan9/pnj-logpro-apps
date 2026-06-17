@@ -39,8 +39,9 @@ export default function DeliveryInvoiceItemsSection({
 
   const decimalInputValue = (key: string, value: number | null | undefined) => {
     if (Object.prototype.hasOwnProperty.call(decimalDrafts, key)) return decimalDrafts[key]
-    if (value === null || value === undefined || isNaN(Number(value))) return ''
-    return Number(value).toFixed(4)
+    const num = Number(value)
+    if (value === null || value === undefined || isNaN(num)) return ''
+    return num % 1 === 0 ? String(num) : num.toFixed(4)
   }
 
   const changeDecimalInput = (key: string, raw: string, onParsed: (n: number | null) => void) => {
