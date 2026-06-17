@@ -74,15 +74,12 @@ export default function CreateStockReceiptPage() {
   const activeItems = items.filter(i => i.is_active)
 
   // --- Kategori suggestions ---
-  const loadKategoriSuggestions = useCallback(async (rowId: string, stockItemId: number) => {
-    const stockItem = items.find(i => i.id === stockItemId)
-    if (!stockItem?.uuid) {
-      setRowKategoriSuggestions(prev => ({ ...prev, [rowId]: [] }))
-      return
-    }
+  // Terima UUID langsung supaya tidak perlu items dalam closure
+  const loadKategoriSuggestions = useCallback(async (rowId: string, stockItemUuid: string, customerUuid?: string) => {
     try {
+      const qs = customerUuid ? `?customer_uuid=${encodeURIComponent(customerUuid)}` : ''
       const res = await apiRequest<{ unit: string; categories: { kategori_name: string | null }[] }>(
-        `/stock/items/${stockItem.uuid}/categories`,
+        `/stock/items/${stockItemUuid}/categories${qs}`,
         { method: 'GET' },
       )
       const names = res.data.categories
@@ -92,7 +89,7 @@ export default function CreateStockReceiptPage() {
     } catch {
       setRowKategoriSuggestions(prev => ({ ...prev, [rowId]: [] }))
     }
-  }, [items])
+  }, [])
 
   // --- Row helpers ---
   const addRow = () => {
@@ -119,7 +116,11 @@ export default function CreateStockReceiptPage() {
   const handleItemChange = (rowId: string, itemIdStr: string) => {
     updateRow(rowId, 'stock_item_id', itemIdStr)
     if (itemIdStr) {
-      loadKategoriSuggestions(rowId, Number(itemIdStr))
+      const stockItem = activeItems.find(i => i.id === Number(itemIdStr))
+      if (stockItem?.uuid) {
+        const customerUuid = customers.find(c => c.id === Number(form.customer_id))?.uuid
+        loadKategoriSuggestions(rowId, stockItem.uuid, customerUuid)
+      }
     } else {
       setRowKategoriSuggestions(prev => ({ ...prev, [rowId]: [] }))
     }
@@ -130,20 +131,29 @@ export default function CreateStockReceiptPage() {
   }
 
   const toggleKategorisasi = (rowId: string) => {
+    // Cari row SEBELUM update state agar bisa pakai data terkini di luar callback
+    const currentRow = itemRows.find(r => r.id === rowId)
+    const enabling = currentRow ? !currentRow.use_kategorisasi : false
+
     setItemRows(prev => prev.map(r => {
       if (r.id !== rowId) return r
-      const enabling = !r.use_kategorisasi
-      // load suggestions when enabling and item already selected
-      if (enabling && r.stock_item_id) {
-        loadKategoriSuggestions(rowId, Number(r.stock_item_id))
-      }
+      const enable = !r.use_kategorisasi
       return {
         ...r,
-        use_kategorisasi: enabling,
-        qty: enabling ? '' : r.qty,
-        kategorisasi: enabling ? (r.kategorisasi.length === 0 ? [newKategoriRow()] : r.kategorisasi) : [],
+        use_kategorisasi: enable,
+        qty: enable ? '' : r.qty,
+        kategorisasi: enable ? (r.kategorisasi.length === 0 ? [newKategoriRow()] : r.kategorisasi) : [],
       }
     }))
+
+    // Load suggestions DI LUAR state updater (bukan side effect di dalam callback)
+    if (enabling && currentRow?.stock_item_id) {
+      const stockItem = activeItems.find(i => i.id === Number(currentRow.stock_item_id))
+      if (stockItem?.uuid) {
+        const customerUuid = customers.find(c => c.id === Number(form.customer_id))?.uuid
+        loadKategoriSuggestions(rowId, stockItem.uuid, customerUuid)
+      }
+    }
   }
 
   // --- Kategorisasi helpers ---
