@@ -19,6 +19,7 @@ interface KategoriRow {
   name: string
   qty: string
   notes: string
+  input_mode: 'stock' | 'new'
 }
 
 interface ReceiptItemRow {
@@ -31,7 +32,7 @@ interface ReceiptItemRow {
 }
 
 function newKategoriRow(): KategoriRow {
-  return { id: Date.now().toString() + Math.random(), name: '', qty: '', notes: '' }
+  return { id: Date.now().toString() + Math.random(), name: '', qty: '', notes: '', input_mode: 'new' }
 }
 
 export default function CreateStockReceiptPage() {
@@ -180,6 +181,18 @@ export default function CreateStockReceiptPage() {
       return {
         ...r,
         kategorisasi: r.kategorisasi.map(k => k.id === katId ? { ...k, [field]: value } : k),
+      }
+    }))
+  }
+
+  const switchKategoriMode = (rowId: string, katId: string, mode: 'stock' | 'new') => {
+    setItemRows(prev => prev.map(r => {
+      if (r.id !== rowId) return r
+      return {
+        ...r,
+        kategorisasi: r.kategorisasi.map(k =>
+          k.id === katId ? { ...k, input_mode: mode, name: '' } : k
+        ),
       }
     }))
   }
@@ -498,23 +511,50 @@ export default function CreateStockReceiptPage() {
                         <div className="h-px flex-1 bg-blue-100" />
                       </div>
 
-                      {row.kategorisasi.map((kat, kIdx) => (
-                        <div key={kat.id} className="grid grid-cols-12 gap-3 items-start bg-blue-50 border border-blue-100 rounded-lg p-2.5 min-w-[760px]">
-                          <div className="col-span-4">
+                      {row.kategorisasi.map((kat, kIdx) => {
+                        const suggestions = rowKategoriSuggestions[row.id] ?? []
+                        const catOptions = suggestions.map((name, i) => ({ id: i + 1, label: name }))
+                        const catValueId = kat.name ? (catOptions.find(o => o.label === kat.name)?.id ?? null) : null
+                        return (
+                        <div key={kat.id} className="grid grid-cols-12 gap-3 items-start bg-blue-50 border border-blue-100 rounded-lg p-2.5 min-w-[820px]">
+                          <div className="col-span-5">
                             <label className="block text-xs text-gray-500 mb-1">Nama Kategori {kIdx + 1} *</label>
-                            <datalist id={`cats-${row.id}`}>
-                              {(rowKategoriSuggestions[row.id] ?? []).map(name => (
-                                <option key={name} value={name} />
-                              ))}
-                            </datalist>
-                            <input
-                              type="text"
-                              list={`cats-${row.id}`}
-                              className="form-input w-full text-sm"
-                              value={kat.name}
-                              onChange={e => updateKategoriRow(row.id, kat.id, 'name', e.target.value)}
-                              placeholder="Contoh: Ukuran 12m"
-                            />
+                            <div className="flex gap-1.5">
+                              {/* Mode selector */}
+                              <select
+                                className="form-input text-xs shrink-0 w-28 cursor-pointer"
+                                value={kat.input_mode}
+                                onChange={e => switchKategoriMode(row.id, kat.id, e.target.value as 'stock' | 'new')}
+                              >
+                                <option value="new">Input Baru</option>
+                                <option value="stock" disabled={suggestions.length === 0}>
+                                  {suggestions.length === 0 ? 'Dari Stok (-)' : 'Dari Stok'}
+                                </option>
+                              </select>
+                              {/* Input sesuai mode */}
+                              {kat.input_mode === 'stock' ? (
+                                <div className="flex-1">
+                                  <SearchableSelect
+                                    options={catOptions}
+                                    value={catValueId}
+                                    placeholder="Cari kategori..."
+                                    emptyText="Kategori tidak ditemukan"
+                                    onChange={id => {
+                                      const label = catOptions.find(o => o.id === id)?.label ?? ''
+                                      updateKategoriRow(row.id, kat.id, 'name', label)
+                                    }}
+                                  />
+                                </div>
+                              ) : (
+                                <input
+                                  type="text"
+                                  className="form-input flex-1 text-sm"
+                                  value={kat.name}
+                                  onChange={e => updateKategoriRow(row.id, kat.id, 'name', e.target.value)}
+                                  placeholder="Contoh: Ukuran 12m"
+                                />
+                              )}
+                            </div>
                           </div>
                           <div className="col-span-2">
                             <label className="block text-xs text-gray-500 mb-1">Qty *</label>
@@ -531,7 +571,7 @@ export default function CreateStockReceiptPage() {
                             <label className="block text-xs text-gray-500 mb-1">Satuan</label>
                             <div className="form-input w-full text-sm text-gray-400 bg-white border-gray-200 whitespace-nowrap overflow-hidden text-ellipsis">{selectedItem?.unit ?? '—'}</div>
                           </div>
-                          <div className="col-span-3">
+                          <div className="col-span-2">
                             <label className="block text-xs text-gray-500 mb-1">Catatan</label>
                             <input
                               type="text"
@@ -552,7 +592,8 @@ export default function CreateStockReceiptPage() {
                             </button>
                           </div>
                         </div>
-                      ))}
+                        )
+                      })}
 
                       <button
                         type="button"
