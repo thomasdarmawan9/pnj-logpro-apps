@@ -5,7 +5,7 @@ import type { InvoiceItem } from '../../domain/entities/Invoice'
 
 type PartialItem = Omit<InvoiceItem, 'id' | 'invoice_id'>
 
-const CARGO_UNIT_OPTIONS = ['pcs', 'unit', 'set', 'kg', 'ton', 'collie', 'liter', 'dus', 'karton', 'roll', 'meter', 'batang', 'pallet', 'buruh']
+const CARGO_UNIT_OPTIONS = ['pcs', 'unit', 'set', 'kg', 'ton', 'collie', 'liter', 'dus', 'karton', 'karung', 'roll', 'meter', 'batang', 'pallet', 'buruh']
 const CARGO_UNIT_OTHER_VALUE = 'lainnya'
 
 interface Props {
@@ -119,7 +119,7 @@ export default function DeliveryInvoiceItemsSection({
                       <input
                         type="number"
                         min={0}
-                        step="0.01"
+                        step="0.0001"
                         className="form-input w-full text-sm text-center"
                         value={item.cargo_weight ?? ''}
                         placeholder="0"
@@ -130,7 +130,7 @@ export default function DeliveryInvoiceItemsSection({
                       <input
                         type="number"
                         min={0}
-                        step="0.01"
+                        step="0.0001"
                         className="form-input w-full text-sm text-center"
                         value={item.cargo_volume ?? ''}
                         placeholder="0"

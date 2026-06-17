@@ -35,4 +35,9 @@ const remove = asyncHandler(async (req, res) => {
   res.json(success(null, 'Stock item berhasil dihapus.'))
 })
 
-module.exports = { list, getOne, create, update, toggle, remove }
+const getItemCategories = asyncHandler(async (req, res) => {
+  const data = await service.getItemCategories(req.params.uuid, req.query.customer_uuid)
+  res.json(success(data))
+})
+
+module.exports = { list, getOne, create, update, toggle, remove, getItemCategories }

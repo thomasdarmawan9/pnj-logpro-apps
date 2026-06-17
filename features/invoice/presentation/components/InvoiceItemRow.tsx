@@ -33,6 +33,7 @@ const UNIT_OPTIONS = [
   'Ton',
   'Collie',
   'Karton',
+  'Karung',
   'Lembar',
   'Liter',
   'Meter',
@@ -266,8 +267,8 @@ export default function InvoiceItemRow({
           <label className="text-xs font-medium text-gray-600 mb-1 block">Jumlah *</label>
           <input
             type="number"
-            min="0.01"
-            step="0.01"
+            min="0.0001"
+            step="0.0001"
             className={`form-input w-full text-sm ${errors[`${errPrefix}.qty`] ? 'border-red-400' : ''}`}
             value={item.qty}
             onChange={e => onChange(item.uuid, 'qty', Number(e.target.value))}

@@ -61,8 +61,8 @@ function estimateCompactContentHeight(doc, invoice) {
   const items = invoice.items || []
   if (items.length === 0) return 0
   const rows = buildInvoiceTableRows(invoice, items)
-  const PAD = 3
-  const MIN_ROW = 18
+  const PAD = 6
+  const MIN_ROW = 22
   const COL_QTY = 55
   let tableH = 16 // header tabel
   doc.font('Helvetica').fontSize(8.5)
@@ -78,8 +78,8 @@ function estimateCompactContentHeight(doc, invoice) {
     tableH += Math.max(MIN_ROW, hQtyEff + PAD * 2)
   }
   tableH += 10 // spacer bawah tabel
-  // 270 = perkiraan overhead kompak: kop (~58) + bar info (~24) + kepada (~35) + footer (~90) + ttd (~63)
-  return 270 + tableH
+  // 257 = perkiraan overhead kompak (aktual ~250pt) + 7pt safety margin
+  return 257 + tableH
 }
 
 // ── Draw horizontal rule ───────────────────────────────────────────────────
@@ -555,8 +555,8 @@ function drawItemTable(doc, invoice, startY, copyIndex = 0, ctx = null) {
 
   const FONT_SZ  = 8.5
   const KET_FONT_SZ = 7.2
-  const PAD      = compact ? 3 : 4    // padding horizontal & vertical dalam sel
-  const MIN_ROW  = compact ? 18 : 22   // tinggi baris minimum
+  const PAD      = 6    // padding horizontal & vertical dalam sel
+  const MIN_ROW  = 22   // tinggi baris minimum
 
   const HEADER_H = compact ? 16 : 18
   let y = startY

@@ -57,6 +57,11 @@ router.post('/items',
   logActivity('create_stock_item', 'master'),
   stockItemsController.create,
 )
+router.get('/items/:uuid/categories',
+  isAnyRole,
+  validate(uuidParam, 'params'),
+  stockItemsController.getItemCategories,
+)
 router.get('/items/:uuid',
   isAnyRole,
   validate(uuidParam, 'params'),

@@ -12,7 +12,7 @@ export interface AdditionalDeliveryCharge {
   amount: number
 }
 
-const BILLING_UNIT_OPTIONS = ['unit', 'kg', 'volume', 'collie', 'batang', 'pengiriman', 'pallet', 'buruh']
+const BILLING_UNIT_OPTIONS = ['unit', 'kg', 'volume', 'collie', 'karung', 'batang', 'pengiriman', 'pallet', 'buruh']
 const BILLING_UNIT_OTHER_VALUE = 'Lainnya'
 
 function parseRupiah(value: string): number {
@@ -28,7 +28,7 @@ function parseDecimal(value: string): number {
 }
 
 function isDecimalDraft(value: string): boolean {
-  return /^(\d+([.,]\d{0,2})?|[.,]\d{0,2})?$/.test(value)
+  return /^(\d+([.,]\d{0,4})?|[.,]\d{0,4})?$/.test(value)
 }
 
 function formatRupiah(amount: number): string {
