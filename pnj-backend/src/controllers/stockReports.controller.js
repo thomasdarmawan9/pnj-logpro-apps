@@ -73,6 +73,15 @@ const customerAvailableItems = asyncHandler(async (req, res) => {
   res.json(success(data))
 })
 
+const deleteCustomerStockCategory = asyncHandler(async (req, res) => {
+  await service.deleteCustomerStockCategory(
+    req.params.uuid,
+    req.params.stockItemCode,
+    req.query.category_name,
+  )
+  res.json(success(null, 'Data stok kategori berhasil dihapus.'))
+})
+
 const exportXlsx = asyncHandler(async (req, res) => {
   const workbook = new ExcelJS.Workbook()
   workbook.creator = 'PNJ Control'
@@ -188,6 +197,7 @@ module.exports = {
   customerStockItemDetail,
   adjustCustomerStockItemBalance,
   customerAvailableItems,
+  deleteCustomerStockCategory,
   exportXlsx,
   exportPdf,
   exportCustomerPdf,

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Check, Pencil, X } from 'lucide-react'
+import { ArrowLeft, Check, Pencil, Trash2, X } from 'lucide-react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { apiRequest } from '@/lib/apiClient'
 import { formatDate } from '@/lib/formatters'
@@ -70,6 +70,9 @@ export default function CustomerStockItemDetailPage({ customerUuid, stockItemCod
   const [editingCategory, setEditingCategory] = useState<string | null | '__UNCATEGORIZED__'>(null)
   const [qtyValue, setQtyValue] = useState('')
   const [notes, setNotes] = useState('')
+  // delete confirm: key = categoryName atau '__UNCATEGORIZED__'
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
   const isReadOnly = role === 'admin_finance'
 
   useEffect(() => {
@@ -108,6 +111,39 @@ export default function CustomerStockItemDetailPage({ customerUuid, stockItemCod
     setEditingCategory(null)
     setQtyValue('')
     setNotes('')
+  }
+
+  const handleDeleteCategory = async (categoryName: string | null) => {
+    if (isReadOnly || !detail) return
+    setIsDeleting(true)
+    try {
+      const params = categoryName !== null ? `?category_name=${encodeURIComponent(categoryName)}` : ''
+      await apiRequest(
+        `/stock/customers/${customerUuid}/items/${encodeURIComponent(stockItemCode)}/category${params}`,
+        { method: 'DELETE' },
+      )
+      // reload detail
+      const response = await apiRequest<CustomerStockItemDetail>(
+        `/stock/customers/${customerUuid}/items/${encodeURIComponent(stockItemCode)}`,
+      )
+      setDetail(normalizeDetail(response.data))
+      setConfirmDelete(null)
+      pushToast({
+        title: 'Data Dihapus',
+        description: categoryName
+          ? `Stok kategori "${categoryName}" berhasil dihapus.`
+          : 'Stok tanpa kategori berhasil dihapus.',
+        variant: 'success',
+      })
+    } catch (error) {
+      pushToast({
+        title: 'Gagal Menghapus',
+        description: error instanceof Error ? error.message : 'Data stok tidak dapat dihapus.',
+        variant: 'error',
+      })
+    } finally {
+      setIsDeleting(false)
+    }
   }
 
   const saveEdit = async (row: CustomerStockCategoryRow) => {
@@ -197,6 +233,7 @@ export default function CustomerStockItemDetailPage({ customerUuid, stockItemCod
                     <th className="px-4 py-3 text-right">Saldo (sisa stock) Akhir</th>
                     {!isReadOnly && <th className="px-4 py-3 text-left">Catatan Adjustment</th>}
                     {!isReadOnly && <th className="px-4 py-3 text-right">Aksi</th>}
+                    {!isReadOnly && <th className="px-4 py-3 text-right">Hapus</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -280,6 +317,43 @@ export default function CustomerStockItemDetailPage({ customerUuid, stockItemCod
                             </button>
                           )}
                         </td>}
+                        {!isReadOnly && (
+                          <td className="px-4 py-3 text-right">
+                            {confirmDelete === key ? (
+                              <div className="flex justify-end items-center gap-1">
+                                <span className="text-xs text-red-600 font-medium mr-1">Yakin?</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteCategory(row.categoryName)}
+                                  disabled={isDeleting}
+                                  className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-white bg-red-500 hover:bg-red-600 disabled:opacity-50 text-xs font-bold"
+                                  title="Konfirmasi hapus"
+                                >
+                                  <Check size={13} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmDelete(null)}
+                                  disabled={isDeleting}
+                                  className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-50"
+                                  title="Batal"
+                                >
+                                  <X size={13} />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDelete(key)}
+                                disabled={isEditing || isDeleting}
+                                className="inline-flex items-center justify-center w-8 h-8 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-30"
+                                title={row.categoryName ? `Hapus stok kategori "${row.categoryName}"` : 'Hapus stok tanpa kategori'}
+                              >
+                                <Trash2 size={14} className="text-red-400" />
+                              </button>
+                            )}
+                          </td>
+                        )}
                       </tr>
                     )
                   })}

@@ -712,6 +712,95 @@ function decorateItem(item) {
   return plain
 }
 
+async function deleteCustomerStockCategory(customerUuid, stockItemCode, rawCategoryName) {
+  // undefined / empty string → null (uncategorized)
+  const categoryName = (rawCategoryName !== undefined && rawCategoryName !== null && String(rawCategoryName).trim() !== '')
+    ? String(rawCategoryName).trim()
+    : null
+
+  return sequelize.transaction(async (t) => {
+    const customer = await Customer.findOne({
+      where:       { uuid: customerUuid },
+      attributes:  ['id', 'name'],
+      transaction: t,
+    })
+    if (!customer) throw new NotFoundError('Customer tidak ditemukan.')
+
+    const stockItem = await StockItem.findOne({
+      where:       { code: stockItemCode },
+      paranoid:    false,
+      lock:        t.LOCK.UPDATE,
+      transaction: t,
+    })
+    if (!stockItem) throw new NotFoundError('Stock item tidak ditemukan.')
+
+    // ── Receipt items ──────────────────────────────────────────────────────
+    const receiptItems = await StockReceiptItem.findAll({
+      where: {
+        stock_item_id: stockItem.id,
+        kategori_name: categoryName,
+      },
+      include: [{
+        model:      StockReceipt,
+        as:         'receipt',
+        where:      { customer_id: customer.id },
+        required:   true,
+        attributes: ['id'],
+      }],
+      attributes: ['id', 'qty', 'receipt_id'],
+      transaction: t,
+    })
+
+    const totalIn = round2(receiptItems.reduce((s, r) => s + Number(r.qty || 0), 0))
+
+    // ── Disbursements ──────────────────────────────────────────────────────
+    const disbursements = await StockDisbursement.findAll({
+      where: {
+        customer_id:   customer.id,
+        stock_item_id: stockItem.id,
+        kategori_name: categoryName,
+      },
+      attributes: ['id', 'qty'],
+      transaction: t,
+    })
+
+    const totalOut = round2(disbursements.reduce((s, d) => s + Number(d.qty || 0), 0))
+    const balance  = round2(totalIn - totalOut)
+
+    // Hard-delete receipt items (model tidak paranoid)
+    const receiptItemIds = receiptItems.map(ri => ri.id)
+    if (receiptItemIds.length > 0) {
+      await StockReceiptItem.destroy({ where: { id: receiptItemIds }, transaction: t })
+    }
+
+    // Soft-delete disbursements (paranoid: true)
+    const disbursementIds = disbursements.map(d => d.id)
+    if (disbursementIds.length > 0) {
+      await StockDisbursement.destroy({ where: { id: disbursementIds }, transaction: t })
+    }
+
+    // Hapus StockReceipt yang sudah tidak punya item lagi
+    const affectedReceiptIds = [...new Set(receiptItems.map(ri => ri.receipt_id))]
+    if (affectedReceiptIds.length > 0) {
+      const remaining = await StockReceiptItem.findAll({
+        where:       { receipt_id: { [Op.in]: affectedReceiptIds } },
+        attributes:  ['receipt_id'],
+        transaction: t,
+      })
+      const hasItemSet = new Set(remaining.map(ri => ri.receipt_id))
+      const orphanIds  = affectedReceiptIds.filter(id => !hasItemSet.has(id))
+      if (orphanIds.length > 0) {
+        await StockReceipt.destroy({ where: { id: { [Op.in]: orphanIds } }, transaction: t })
+      }
+    }
+
+    // Sesuaikan current_stock global (kurangi sisa stok yang dihapus)
+    if (balance !== 0) {
+      await applyStockDelta(stockItem, -balance, t)
+    }
+  })
+}
+
 module.exports = {
   PERIODS,
   recap,
@@ -721,5 +810,6 @@ module.exports = {
   customerStockItemDetail,
   adjustCustomerStockItemBalance,
   customerAvailableItems,
+  deleteCustomerStockCategory,
   periodToRange,
 }

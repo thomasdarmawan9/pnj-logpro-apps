@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { useRouter } from 'next/navigation'
 import { Plus, Trash2, ArrowLeft, PackagePlus, ChevronUp, Layers } from 'lucide-react'
@@ -11,6 +11,7 @@ import { fetchCustomers } from '@/store/slices/masterSlice'
 import { useToast } from '@/components/toast/useToast'
 import AddStockItemModal from '../components/modals/AddStockItemModal'
 import { CreateStockItemDto } from '@/features/stock/application/dto/CreateStockItemDto'
+import { apiRequest } from '@/lib/apiClient'
 
 interface KategoriRow {
   id: string
@@ -56,6 +57,9 @@ export default function CreateStockReceiptPage() {
 
   const [newItemModal, setNewItemModal] = useState<{ open: boolean; rowId: string | null }>({ open: false, rowId: null })
 
+  // kategori suggestions per row — key = rowId, value = nama kategori yang pernah dipakai untuk barang tsb
+  const [rowKategoriSuggestions, setRowKategoriSuggestions] = useState<Record<string, string[]>>({})
+
   useEffect(() => {
     if (role === 'admin_finance') {
       pushToast({ title: 'Akses Ditolak', description: 'Anda tidak memiliki akses membuat stok masuk.', variant: 'error' })
@@ -68,6 +72,26 @@ export default function CreateStockReceiptPage() {
 
   const activeItems = items.filter(i => i.is_active)
 
+  // --- Kategori suggestions ---
+  const loadKategoriSuggestions = useCallback(async (rowId: string, stockItemId: number) => {
+    const stockItem = items.find(i => i.id === stockItemId)
+    if (!stockItem?.uuid) {
+      setRowKategoriSuggestions(prev => ({ ...prev, [rowId]: [] }))
+      return
+    }
+    try {
+      const res = await apiRequest<{ unit: string; categories: { kategori_name: string | null }[] }>(
+        `/stock/items/${stockItem.uuid}/categories`,
+        { method: 'GET' },
+      )
+      const names = res.data.categories
+        .map(c => c.kategori_name)
+        .filter((n): n is string => Boolean(n))
+      setRowKategoriSuggestions(prev => ({ ...prev, [rowId]: names }))
+    } catch {
+      setRowKategoriSuggestions(prev => ({ ...prev, [rowId]: [] }))
+    }
+  }, [items])
 
   // --- Row helpers ---
   const addRow = () => {
@@ -84,6 +108,20 @@ export default function CreateStockReceiptPage() {
   const removeRow = (id: string) => {
     if (itemRows.length === 1) return
     setItemRows(prev => prev.filter(r => r.id !== id))
+    setRowKategoriSuggestions(prev => {
+      const next = { ...prev }
+      delete next[id]
+      return next
+    })
+  }
+
+  const handleItemChange = (rowId: string, itemIdStr: string) => {
+    updateRow(rowId, 'stock_item_id', itemIdStr)
+    if (itemIdStr) {
+      loadKategoriSuggestions(rowId, Number(itemIdStr))
+    } else {
+      setRowKategoriSuggestions(prev => ({ ...prev, [rowId]: [] }))
+    }
   }
 
   const updateRow = (id: string, field: keyof ReceiptItemRow, value: unknown) => {
@@ -94,6 +132,10 @@ export default function CreateStockReceiptPage() {
     setItemRows(prev => prev.map(r => {
       if (r.id !== rowId) return r
       const enabling = !r.use_kategorisasi
+      // load suggestions when enabling and item already selected
+      if (enabling && r.stock_item_id) {
+        loadKategoriSuggestions(rowId, Number(r.stock_item_id))
+      }
       return {
         ...r,
         use_kategorisasi: enabling,
@@ -355,7 +397,7 @@ export default function CreateStockReceiptPage() {
                         <select
                           className={`form-input w-full text-sm ${isDuplicate ? 'error' : ''}`}
                           value={row.stock_item_id}
-                          onChange={e => updateRow(row.id, 'stock_item_id', e.target.value)}
+                          onChange={e => handleItemChange(row.id, e.target.value)}
                         >
                           <option value="">— Pilih Barang —</option>
                           {activeItems.map(item => (
@@ -452,8 +494,14 @@ export default function CreateStockReceiptPage() {
                         <div key={kat.id} className="grid grid-cols-12 gap-3 items-start bg-blue-50 border border-blue-100 rounded-lg p-2.5 min-w-[760px]">
                           <div className="col-span-4">
                             <label className="block text-xs text-gray-500 mb-1">Nama Kategori {kIdx + 1} *</label>
+                            <datalist id={`cats-${row.id}`}>
+                              {(rowKategoriSuggestions[row.id] ?? []).map(name => (
+                                <option key={name} value={name} />
+                              ))}
+                            </datalist>
                             <input
                               type="text"
+                              list={`cats-${row.id}`}
                               className="form-input w-full text-sm"
                               value={kat.name}
                               onChange={e => updateKategoriRow(row.id, kat.id, 'name', e.target.value)}

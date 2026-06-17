@@ -180,6 +180,12 @@ router.put('/customers/:uuid/items/:stockItemCode/balance',
   logActivity('adjust_customer_stock_balance', 'stok'),
   reportsController.adjustCustomerStockItemBalance,
 )
+router.delete('/customers/:uuid/items/:stockItemCode/category',
+  isOpsOrAbove,
+  validate(customerStockItemParams, 'params'),
+  logActivity('delete_customer_stock_category', 'stok'),
+  reportsController.deleteCustomerStockCategory,
+)
 router.get('/customers/:uuid/export/pdf',
   isAnyRole,
   validate(uuidParam, 'params'),
