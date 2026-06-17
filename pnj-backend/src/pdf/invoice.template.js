@@ -41,7 +41,7 @@ function pageGeom(doc, ctx) {
 // bertumpuk dalam satu halaman A4, rangkap selanjutnya (jika ada) di
 // halaman baru dengan layout normal (1 rangkap / halaman).
 const COMBO_GAP = 14
-const COMBO_MAX_ROWS = 3 // ambang jumlah baris item agar layout combo dipakai
+const COMBO_MAX_ROWS = 4 // ambang jumlah baris item agar layout combo dipakai
 
 function comboGeom(doc) {
   const L = doc.page.margins.left
@@ -53,6 +53,26 @@ function comboGeom(doc) {
 function comboCopyHeight(doc) {
   const usableH = doc.page.height - doc.page.margins.top - doc.page.margins.bottom
   return (usableH - COMBO_GAP) / 2
+}
+
+// Estimasi tinggi konten satu copy dalam compact mode.
+// Dipakai sebelum memutuskan combo agar tidak overflow setengah halaman.
+function estimateCompactContentHeight(doc, invoice) {
+  const items = invoice.items || []
+  if (items.length === 0) return 0
+  const rows = buildInvoiceTableRows(invoice, items)
+  const PAD = 3
+  const MIN_ROW = 18
+  const COL_QTY = 55
+  let tableH = 16 // header tabel
+  doc.font('Helvetica').fontSize(8.5)
+  for (const row of rows) {
+    const hQty = row.qtyText ? doc.heightOfString(row.qtyText, { width: COL_QTY - PAD * 2 }) : 0
+    tableH += Math.max(MIN_ROW, hQty + PAD * 2)
+  }
+  tableH += 10 // spacer bawah tabel
+  // 270 = perkiraan overhead kompak: kop (~58) + bar info (~24) + kepada (~35) + footer (~90) + ttd (~63)
+  return 270 + tableH
 }
 
 // ── Draw horizontal rule ───────────────────────────────────────────────────
@@ -327,10 +347,19 @@ function buildInvoiceTableRows(invoice, items) {
     }))
   const itemRows = cargoItems.map((item, idx) => {
     const noteText = qtyNoteText(item, invoice)
+    const qtyMainText = [formatCargoQty(item), noteText].filter(Boolean).join('\n\n')
+    const weightParts = []
+    if (Number(item.cargo_weight || 0) > 0) weightParts.push(`${formatQty(item.cargo_weight)} kg`)
+    if (Number(item.cargo_volume || 0) > 0) weightParts.push(`${formatQty(item.cargo_volume)} m3`)
+    const qtySubText = weightParts.join('\n\n')
+    const hasQtyDivider = Boolean(qtySubText)
     return {
       noText:  String(idx + 1),
       descText: item.description || item.cargo_notes || '-',
-      qtyText: [formatCargoQty(item), noteText].filter(Boolean).join('\n\n'),
+      qtyText: hasQtyDivider ? [qtyMainText, qtySubText].filter(Boolean).join('\n') : qtyMainText,
+      qtyMainText: hasQtyDivider ? qtyMainText : undefined,
+      qtyUsageText: hasQtyDivider ? qtySubText : undefined,
+      hasQtyDivider,
       hrgText: isDeliveryItemPricing(invoice)
         ? formatDeliveryPricePerUnit(item)
         : idx === 0 && shipmentPricingItem ? formatPricePerUnit(shipmentPricingItem) : '',
@@ -1085,7 +1114,8 @@ function render(doc, invoice, company, options = {}) {
   // ── Cek apakah rangkap 1 & 2 bisa digabung ke 1 halaman (mirip SJ) ──────
   const items = invoice.items || []
   const rowCount = items.length === 0 ? 0 : buildInvoiceTableRows(invoice, items).length
-  const canCombo = copies >= 2 && rowCount > 0 && rowCount <= COMBO_MAX_ROWS
+  const canCombo = copies >= 2 && rowCount > 0 && rowCount <= COMBO_MAX_ROWS &&
+    estimateCompactContentHeight(doc, invoice) <= comboCopyHeight(doc)
 
   let comboTopY = null
   let comboBotY = null
