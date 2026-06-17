@@ -181,6 +181,22 @@ async function decorateRentalState(rows) {
 async function create(payload, actor) {
   const dupe = await repo.findByPlate(payload.plate_number)
   if (dupe) throw new ConflictError('Nomor plat sudah terdaftar.')
+
+  // If a soft-deleted record exists with the same plate, restore & update it
+  // instead of inserting a new row (which would violate the unique constraint).
+  const deleted = await repo.findByPlate(payload.plate_number, { paranoid: false })
+  if (deleted) {
+    await deleted.restore()
+    await deleted.update({
+      ...payload,
+      lampiran_paths: deleted.lampiran_paths?.length ? deleted.lampiran_paths : [],
+      is_tbd:         false,
+      created_by:     actor?.id || null,
+    })
+    const [decorated] = await decorateRentalState([deleted])
+    return decorated
+  }
+
   const item = await Fleet.create({
     ...payload,
     lampiran_paths: [],
