@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import type { InvoiceItem } from '../../domain/entities/Invoice'
 
@@ -7,6 +8,15 @@ type PartialItem = Omit<InvoiceItem, 'id' | 'invoice_id'>
 
 const CARGO_UNIT_OPTIONS = ['pcs', 'unit', 'set', 'kg', 'ton', 'collie', 'liter', 'dus', 'karton', 'karung', 'roll', 'meter', 'batang', 'pallet', 'buruh']
 const CARGO_UNIT_OTHER_VALUE = 'lainnya'
+
+function isDecimalDraft(value: string): boolean {
+  return /^(\d+([.,]\d{0,4})?|[.,]\d{0,4})?$/.test(value)
+}
+
+function parseDecimal(value: string): number {
+  const normalized = value.replace(/,/g, '.').replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1')
+  return Number(normalized) || 0
+}
 
 interface Props {
   items: PartialItem[]
@@ -25,6 +35,24 @@ export default function DeliveryInvoiceItemsSection({
   errors = {},
   readOnlyStructure = false,
 }: Props) {
+  const [decimalDrafts, setDecimalDrafts] = useState<Record<string, string>>({})
+
+  const decimalInputValue = (key: string, value: number | null | undefined) => {
+    if (Object.prototype.hasOwnProperty.call(decimalDrafts, key)) return decimalDrafts[key]
+    if (value === null || value === undefined || isNaN(Number(value))) return ''
+    return Number(value).toFixed(4)
+  }
+
+  const changeDecimalInput = (key: string, raw: string, onParsed: (n: number | null) => void) => {
+    if (!isDecimalDraft(raw)) return
+    setDecimalDrafts(prev => ({ ...prev, [key]: raw }))
+    onParsed(raw === '' ? null : parseDecimal(raw))
+  }
+
+  const commitDecimalInput = (key: string) => {
+    setDecimalDrafts(prev => { const next = { ...prev }; delete next[key]; return next })
+  }
+
   return (
     <div className="bg-white rounded-xl border p-6" style={{ borderColor: 'var(--border-card)' }}>
       <div className="flex items-center justify-between mb-1">
@@ -117,24 +145,24 @@ export default function DeliveryInvoiceItemsSection({
                     </td>
                     <td className="py-2 px-1">
                       <input
-                        type="number"
-                        min={0}
-                        step="0.0001"
+                        type="text"
+                        inputMode="decimal"
                         className="form-input w-full text-sm text-center"
-                        value={item.cargo_weight ?? ''}
-                        placeholder="0"
-                        onChange={event => onChange(item.uuid, 'cargo_weight', event.target.value === '' ? null : Math.max(0, Number(event.target.value)))}
+                        value={decimalInputValue(`${item.uuid}-weight`, item.cargo_weight)}
+                        placeholder="0.0000"
+                        onChange={event => changeDecimalInput(`${item.uuid}-weight`, event.target.value, val => onChange(item.uuid, 'cargo_weight', val))}
+                        onBlur={() => commitDecimalInput(`${item.uuid}-weight`)}
                       />
                     </td>
                     <td className="py-2 px-1">
                       <input
-                        type="number"
-                        min={0}
-                        step="0.0001"
+                        type="text"
+                        inputMode="decimal"
                         className="form-input w-full text-sm text-center"
-                        value={item.cargo_volume ?? ''}
-                        placeholder="0"
-                        onChange={event => onChange(item.uuid, 'cargo_volume', event.target.value === '' ? null : Math.max(0, Number(event.target.value)))}
+                        value={decimalInputValue(`${item.uuid}-volume`, item.cargo_volume)}
+                        placeholder="0.0000"
+                        onChange={event => changeDecimalInput(`${item.uuid}-volume`, event.target.value, val => onChange(item.uuid, 'cargo_volume', val))}
+                        onBlur={() => commitDecimalInput(`${item.uuid}-volume`)}
                       />
                     </td>
                     <td className="py-2 px-2">

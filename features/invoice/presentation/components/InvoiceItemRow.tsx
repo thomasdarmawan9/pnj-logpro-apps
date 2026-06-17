@@ -81,6 +81,15 @@ function toNonNegativeInteger(value: string): number {
   return Math.max(0, Math.floor(Number(value) || 0))
 }
 
+function isDecimalDraft(value: string): boolean {
+  return /^(\d+([.,]\d{0,4})?|[.,]\d{0,4})?$/.test(value)
+}
+
+function parseDecimal(value: string): number {
+  const normalized = value.replace(/,/g, '.').replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1')
+  return Number(normalized) || 0
+}
+
 export default function InvoiceItemRow({
   item,
   index,
@@ -95,6 +104,7 @@ export default function InvoiceItemRow({
   sourceLabel = null,
 }: Props) {
   const [fleetOptions, setFleetOptions] = useState<FleetOption[]>([])
+  const [qtyDraft, setQtyDraft] = useState<string | null>(null)
   const duration = calcDuration(item.period_start, item.period_end)
   const subtotalFormatted = item.subtotal > 0 ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(item.subtotal) : '—'
   const errPrefix = `items.${index}`
@@ -266,12 +276,16 @@ export default function InvoiceItemRow({
         <div>
           <label className="text-xs font-medium text-gray-600 mb-1 block">Jumlah *</label>
           <input
-            type="number"
-            min="0.0001"
-            step="0.0001"
+            type="text"
+            inputMode="decimal"
             className={`form-input w-full text-sm ${errors[`${errPrefix}.qty`] ? 'border-red-400' : ''}`}
-            value={item.qty}
-            onChange={e => onChange(item.uuid, 'qty', Number(e.target.value))}
+            value={qtyDraft !== null ? qtyDraft : Number(item.qty).toFixed(4)}
+            onChange={e => {
+              if (!isDecimalDraft(e.target.value)) return
+              setQtyDraft(e.target.value)
+              onChange(item.uuid, 'qty', parseDecimal(e.target.value))
+            }}
+            onBlur={() => setQtyDraft(null)}
           />
         </div>
         <div>

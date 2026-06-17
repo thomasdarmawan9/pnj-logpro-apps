@@ -86,8 +86,12 @@ export default function DeliveryPricingSection({
     : shipmentSubtotal
   const total = deliveryTotal + additionalTotal
   const canManageAdditionalCharges = Boolean(additionalCharges && onAddAdditionalCharge && onChangeAdditionalCharge && onRemoveAdditionalCharge)
-  const decimalInputValue = (key: string, value: number | string | null | undefined) =>
-    Object.prototype.hasOwnProperty.call(decimalDrafts, key) ? decimalDrafts[key] : String(value ?? '')
+  const decimalInputValue = (key: string, value: number | string | null | undefined) => {
+    if (Object.prototype.hasOwnProperty.call(decimalDrafts, key)) return decimalDrafts[key]
+    const num = Number(value)
+    if (value === '' || value === null || value === undefined || isNaN(num)) return ''
+    return num.toFixed(4)
+  }
   const changeDecimalInput = (key: string, value: string, onParsed: (parsed: number) => void) => {
     if (!isDecimalDraft(value)) return
     setDecimalDrafts(prev => ({ ...prev, [key]: value }))
