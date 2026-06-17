@@ -90,6 +90,7 @@ export default function CreateInvoicePage() {
   const [isLoadingSJs, setIsLoadingSJs] = useState(false)
   const formRef = useRef<HTMLDivElement>(null)
   const customerPickerRef = useRef<HTMLDivElement>(null)
+  const projectPickerRef = useRef<HTMLDivElement>(null)
   const sjPickerRef = useRef<HTMLDivElement>(null)
   const bankAccounts = useSelector((state: RootState) => state.settings.bankAccounts).filter(b => b.is_active)
   const customers = useSelector((state: RootState) => state.master.customers)
@@ -99,6 +100,8 @@ export default function CreateInvoicePage() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [customerSearch, setCustomerSearch] = useState('')
   const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false)
+  const [projectSearch, setProjectSearch] = useState('')
+  const [projectDropdownOpen, setProjectDropdownOpen] = useState(false)
 
   const {
     header, taxPercent, taxEnabled, pphPercent, pphEnabled,
@@ -140,6 +143,9 @@ export default function CreateInvoicePage() {
       if (!customerPickerRef.current?.contains(event.target as Node)) {
         setCustomerDropdownOpen(false)
       }
+      if (!projectPickerRef.current?.contains(event.target as Node)) {
+        setProjectDropdownOpen(false)
+      }
       if (!sjPickerRef.current?.contains(event.target as Node)) {
         setSjDropdownOpen(false)
       }
@@ -159,6 +165,18 @@ export default function CreateInvoicePage() {
       : customers
     return list.slice(0, 25)
   }, [customers, customerSearch])
+
+  const filteredProjects = useMemo(() => {
+    const q = projectSearch.trim().toLowerCase()
+    const list = q
+      ? projects.filter(p =>
+          p.code.toLowerCase().includes(q) ||
+          p.name.toLowerCase().includes(q) ||
+          p.customer.name.toLowerCase().includes(q)
+        )
+      : projects
+    return list.slice(0, 25)
+  }, [projects, projectSearch])
 
   useEffect(() => {
     const effective = resolveEffectiveInvoiceServiceType(serviceType, customServiceName)
@@ -634,16 +652,71 @@ export default function CreateInvoicePage() {
               {scopeMode === 'project' ? (
                 <div>
                   <label className="text-xs font-medium text-gray-600 block mb-1">Pilih Proyek *</label>
-                  <select
-                    className={`form-input w-full ${errors.project_id ? 'border-red-400' : ''}`}
-                    value={header.project_id ?? ''}
-                    onChange={e => { selectProject(Number(e.target.value)); setSelectedCustomer(null); setCustomerSearch(''); setSelectedSJs([]); setSjSearch(''); setManualSjNumbers(''); resetItems(items.filter(item => !item.source_sj_id)); setErrors(prev => ({ ...prev, project_id: '' })) }}
-                  >
-                    <option value="">-- Pilih proyek --</option>
-                    {projects.map(p => (
-                      <option key={p.id} value={p.id}>{p.code} — {p.name} — {p.customer.name}</option>
-                    ))}
-                  </select>
+                  <div ref={projectPickerRef} className="relative">
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+                        <Search size={15} />
+                      </span>
+                      <input
+                        className={`form-input w-full ${errors.project_id ? 'border-red-400' : ''}`}
+                        style={{ paddingLeft: 42, paddingRight: 40 }}
+                        value={projectSearch}
+                        placeholder={selectedProject ? `${selectedProject.code} — ${selectedProject.name}` : 'Ketik kode atau nama proyek...'}
+                        onFocus={() => { setProjectDropdownOpen(true); setProjectSearch('') }}
+                        onChange={event => {
+                          setProjectSearch(event.target.value)
+                          setProjectDropdownOpen(true)
+                          setErrors(prev => ({ ...prev, project_id: '' }))
+                        }}
+                        onBlur={() => setProjectSearch('')}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setProjectDropdownOpen(open => !open)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-gray-100"
+                        aria-label="Buka daftar proyek"
+                      >
+                        <ChevronDown size={16} className="text-gray-400" />
+                      </button>
+                    </div>
+                    {projectDropdownOpen && (
+                      <div className="absolute z-30 mt-1 w-full rounded-lg border bg-white shadow-lg overflow-hidden" style={{ borderColor: 'var(--border-card)' }}>
+                        <div className="max-h-64 overflow-y-auto">
+                          {filteredProjects.length > 0 ? filteredProjects.map(p => {
+                            const selected = selectedProject?.id === p.id
+                            return (
+                              <button
+                                key={p.id}
+                                type="button"
+                                onMouseDown={event => {
+                                  event.preventDefault()
+                                  selectProject(p.id)
+                                  setSelectedCustomer(null)
+                                  setCustomerSearch('')
+                                  setSelectedSJs([])
+                                  setSjSearch('')
+                                  setManualSjNumbers('')
+                                  resetItems(items.filter(item => !item.source_sj_id))
+                                  setErrors(prev => ({ ...prev, project_id: '' }))
+                                  setProjectDropdownOpen(false)
+                                  setProjectSearch('')
+                                }}
+                                className="w-full px-3 py-2.5 text-left text-sm hover:bg-green-50 flex items-start gap-2"
+                              >
+                                <span className="mt-0.5 w-4 text-green-600 shrink-0">{selected && <Check size={14} />}</span>
+                                <span className="min-w-0">
+                                  <span className="block font-medium text-gray-800 truncate">{p.code} — {p.name}</span>
+                                  <span className="block text-xs text-gray-500 truncate">{p.customer.name}</span>
+                                </span>
+                              </button>
+                            )
+                          }) : (
+                            <div className="px-3 py-3 text-sm text-gray-500">Proyek tidak ditemukan</div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                   {errors.project_id && <p className="text-xs text-red-500 mt-1">{errors.project_id}</p>}
                 </div>
               ) : (
