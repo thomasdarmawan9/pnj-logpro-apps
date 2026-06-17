@@ -12,6 +12,7 @@ import { useToast } from '@/components/toast/useToast'
 import AddStockItemModal from '../components/modals/AddStockItemModal'
 import { CreateStockItemDto } from '@/features/stock/application/dto/CreateStockItemDto'
 import { apiRequest } from '@/lib/apiClient'
+import SearchableSelect from '@/features/invoice/presentation/components/SearchableSelect'
 
 interface KategoriRow {
   id: string
@@ -340,16 +341,13 @@ export default function CreateStockReceiptPage() {
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
                 Customer <span className="text-red-500">*</span>
               </label>
-              <select
-                className="form-input w-full"
-                value={form.customer_id}
-                onChange={e => setForm(prev => ({ ...prev, customer_id: e.target.value }))}
-              >
-                <option value="">— Pilih Customer —</option>
-                {customers.map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
+              <SearchableSelect
+                options={customers.map(c => ({ id: c.id, label: c.name }))}
+                value={form.customer_id ? Number(form.customer_id) : null}
+                placeholder="Cari customer..."
+                emptyText="Customer tidak ditemukan"
+                onChange={id => setForm(prev => ({ ...prev, customer_id: id !== null ? String(id) : '' }))}
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Catatan</label>
