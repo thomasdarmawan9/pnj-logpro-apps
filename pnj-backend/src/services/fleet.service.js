@@ -18,9 +18,13 @@ const {
 const lampiranSvc = require('./lampiran.service')
 
 function assertNotTbd(fleet) {
-  if (fleet.is_tbd) {
+  if (isTbdPlate(fleet?.plate_number)) {
     throw new ForbiddenError('Fleet TBD tidak dapat diedit atau dihapus.')
   }
+}
+
+function isTbdPlate(plateNumber) {
+  return String(plateNumber || '').trim().toUpperCase() === 'TBD'
 }
 
 async function list(params) {
@@ -163,6 +167,7 @@ async function decorateRentalState(rows) {
   ])
   return plainRows.map(row => ({
     ...row,
+    is_tbd:                  isTbdPlate(row.plate_number),
     rental_status:          rentalMap.get(Number(row.id))?.rental_status ?? null,
     rental_invoice_item_id: rentalMap.get(Number(row.id))?.rental_invoice_item_id ?? null,
     rental_invoice_id:      rentalMap.get(Number(row.id))?.rental_invoice_id ?? null,
@@ -200,6 +205,11 @@ async function update(uuid, payload) {
   }
 
   const updates = { ...payload }
+  const effectivePlate = updates.plate_number || item.plate_number
+  if (!isTbdPlate(effectivePlate)) {
+    updates.is_tbd = false
+  }
+
   if ('lampiran_paths' in payload) {
     const oldPaths = Array.isArray(item.lampiran_paths) ? item.lampiran_paths : []
     const newArr = Array.isArray(payload.lampiran_paths) ? payload.lampiran_paths : []

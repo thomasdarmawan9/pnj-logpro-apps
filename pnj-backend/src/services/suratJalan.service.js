@@ -282,7 +282,7 @@ async function resolveMasters({ project_uuid, project_id, customer_uuid, custome
       ? Customer.findOne({ where: customer_uuid ? { uuid: customer_uuid } : { id: customer_id }, transaction: t })
       : null,
     fleet_uuid || fleet_id !== undefined
-      ? Fleet.findOne({ where: fleet_uuid ? { uuid: fleet_uuid } : fleet_id === 0 ? { is_tbd: true } : { id: fleet_id }, transaction: t })
+      ? Fleet.findOne({ where: fleet_uuid ? { uuid: fleet_uuid } : fleet_id === 0 ? { plate_number: 'TBD' } : { id: fleet_id }, transaction: t })
       : null,
     driver_uuid || driver_id
       ? Driver.findOne({ where: driver_uuid ? { uuid: driver_uuid } : { id: driver_id }, transaction: t })
