@@ -67,8 +67,15 @@ function estimateCompactContentHeight(doc, invoice) {
   let tableH = 16 // header tabel
   doc.font('Helvetica').fontSize(8.5)
   for (const row of rows) {
-    const hQty = row.qtyText ? doc.heightOfString(row.qtyText, { width: COL_QTY - PAD * 2 }) : 0
-    tableH += Math.max(MIN_ROW, hQty + PAD * 2)
+    let hQtyEff
+    if (row.hasQtyDivider) {
+      const hMain  = row.qtyMainText  ? doc.heightOfString(row.qtyMainText,  { width: COL_QTY - PAD * 2 }) : 0
+      const hUsage = row.qtyUsageText ? doc.heightOfString(row.qtyUsageText, { width: COL_QTY - PAD * 2 }) : 0
+      hQtyEff = hMain + hUsage + PAD * 2
+    } else {
+      hQtyEff = row.qtyText ? doc.heightOfString(row.qtyText, { width: COL_QTY - PAD * 2 }) : 0
+    }
+    tableH += Math.max(MIN_ROW, hQtyEff + PAD * 2)
   }
   tableH += 10 // spacer bawah tabel
   // 270 = perkiraan overhead kompak: kop (~58) + bar info (~24) + kepada (~35) + footer (~90) + ttd (~63)
@@ -605,10 +612,17 @@ function drawItemTable(doc, invoice, startY, copyIndex = 0, ctx = null) {
       const hQty  = doc.heightOfString(row.qtyText || '', { width: COL_QTY - PAD * 2 })
       const hHrg  = doc.heightOfString(row.hrgText || '', { width: COL_HARGA - PAD * 2 })
       const hJml  = doc.heightOfString(row.jmlText || '', { width: COL_JML - PAD * 2 })
+      // Untuk divider rows, ruang yang dibutuhkan = PAD + hMain + PAD + PAD + hUsage + PAD
+      // (PAD ekstra untuk gap di atas dan bawah garis divider)
+      const hQtyEff = row.hasQtyDivider
+        ? doc.heightOfString(row.qtyMainText || '', { width: COL_QTY - PAD * 2 }) +
+          doc.heightOfString(row.qtyUsageText || '', { width: COL_QTY - PAD * 2 }) +
+          PAD * 2
+        : hQty
       return {
         ...row,
         heights: { no: hNo, desc: hDesc, qty: hQty, hrg: hHrg, jml: hJml },
-        rowH:    Math.max(MIN_ROW, hNo + PAD * 2, hDesc + PAD * 2, hQty + PAD * 2, hHrg + PAD * 2, hJml + PAD * 2),
+        rowH:    Math.max(MIN_ROW, hNo + PAD * 2, hDesc + PAD * 2, hQtyEff + PAD * 2, hHrg + PAD * 2, hJml + PAD * 2),
       }
     })
     const mergePriceColumns = effectiveServiceType(invoice) !== 'rental' && !isDeliveryItemPricing(invoice)
