@@ -579,6 +579,134 @@ async function list(params) {
   }
 }
 
+/**
+ * Summary stats untuk cards di halaman list invoice — dihitung di DB
+ * (agregat), bukan dengan menarik semua baris invoice ke memori.
+ * Filter yang dipakai sama dengan list() (search, status, customer,
+ * project, periode) supaya angka summary konsisten dengan hasil filter
+ * yang sedang ditampilkan.
+ */
+async function getSummaryStats(params) {
+  const { Op, fn, literal } = require('sequelize')
+  const { search, status, project_uuid, customer_uuid, period, from, to } = params
+
+  let projectId  = null
+  let customerId = null
+  if (project_uuid) {
+    const p = await Project.findOne({ where: { uuid: project_uuid }, attributes: ['id'] })
+    if (!p) return emptySummary()
+    projectId = p.id
+  }
+  if (customer_uuid) {
+    const c = await Customer.findOne({ where: { uuid: customer_uuid }, attributes: ['id'] })
+    if (!c) return emptySummary()
+    customerId = c.id
+  }
+
+  let periodRange = null
+  if (from || to) {
+    periodRange = { from: from || null, to: to || null }
+  } else {
+    periodRange = periodToRange(period)
+  }
+
+  const baseWhere = {}
+  if (projectId)  baseWhere.project_id  = projectId
+  if (customerId) baseWhere.customer_id = customerId
+  if (periodRange && (periodRange.from || periodRange.to)) {
+    baseWhere.invoice_date = {}
+    if (periodRange.from) baseWhere.invoice_date[Op.gte] = periodRange.from
+    if (periodRange.to)   baseWhere.invoice_date[Op.lte] = periodRange.to
+  }
+  if (search) {
+    baseWhere[Op.or] = [
+      { invoice_number: { [Op.iLike]: `%${search}%` } },
+      { notes:          { [Op.iLike]: `%${search}%` } },
+    ]
+  }
+
+  // status filter dari user (jika ada) di-intersect dengan status yang
+  // relevan untuk masing-masing metric — kalau tidak overlap, metric = 0.
+  const statusFilter = (status && status !== 'all') ? status : null
+
+  function intersect(allowed) {
+    if (!statusFilter) return allowed.length === 1 ? allowed[0] : { [Op.in]: allowed }
+    return allowed.includes(statusFilter) ? statusFilter : null
+  }
+
+  const now = new Date()
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+
+  // ── Piutang aktif (sent/outstanding, remaining > 0) ──
+  // Filter 'outstanding' dari user merepresentasikan piutang aktif secara
+  // keseluruhan (sent + outstanding manual), jadi tidak di-intersect ke
+  // status 'outstanding' literal saja (yang biasanya tidak punya data).
+  const receivableStatus = statusFilter === 'outstanding'
+    ? { [Op.in]: ['sent', 'outstanding'] }
+    : intersect(['sent', 'outstanding'])
+  let totalPiutang = 0
+  let jatuhTempo = 0
+  let countOutstanding = 0
+  if (receivableStatus) {
+    const row = await Invoice.findOne({
+      where: { ...baseWhere, status: receivableStatus },
+      attributes: [
+        [fn('COALESCE', fn('SUM', literal('GREATEST(total_amount - paid_amount, 0)')), 0), 'total_piutang'],
+        [fn('COUNT', literal('CASE WHEN (total_amount - paid_amount) > 0 THEN 1 END')), 'count_outstanding'],
+        [fn('COUNT', literal("CASE WHEN (total_amount - paid_amount) > 0 AND due_date < NOW() THEN 1 END")), 'jatuh_tempo'],
+      ],
+      raw: true,
+    })
+    totalPiutang    = round2(Number(row?.total_piutang || 0))
+    countOutstanding = Number(row?.count_outstanding || 0)
+    jatuhTempo      = Number(row?.jatuh_tempo || 0)
+  }
+
+  // ── Lunas bulan ini (status paid, updated_at di bulan ini) ──
+  const paidStatus = intersect(['paid'])
+  let terbayarBulanIni = 0
+  let countPaidThisMonth = 0
+  if (paidStatus) {
+    const row = await Invoice.findOne({
+      where: { ...baseWhere, status: paidStatus, updated_at: { [Op.gte]: startOfMonth } },
+      attributes: [
+        [fn('COALESCE', fn('SUM', literal('paid_amount')), 0), 'terbayar'],
+        [fn('COUNT', literal('*')), 'count_paid'],
+      ],
+      raw: true,
+    })
+    terbayarBulanIni   = round2(Number(row?.terbayar || 0))
+    countPaidThisMonth = Number(row?.count_paid || 0)
+  }
+
+  // ── Draft belum dikirim ──
+  const draftStatus = intersect(['draft'])
+  let draftBelumDikirim = 0
+  if (draftStatus) {
+    draftBelumDikirim = await Invoice.count({ where: { ...baseWhere, status: draftStatus } })
+  }
+
+  return {
+    totalPiutang,
+    jatuhTempo,
+    terbayarBulanIni,
+    draftBelumDikirim,
+    countOutstanding,
+    countPaidThisMonth,
+  }
+}
+
+function emptySummary() {
+  return {
+    totalPiutang: 0,
+    jatuhTempo: 0,
+    terbayarBulanIni: 0,
+    draftBelumDikirim: 0,
+    countOutstanding: 0,
+    countPaidThisMonth: 0,
+  }
+}
+
 async function getByUuid(uuid) {
   const inv = await repo.findByUuid(uuid)
   if (!inv) throw new NotFoundError('Invoice tidak ditemukan.')
@@ -813,7 +941,7 @@ async function update(uuid, payload, actor) {
     const isDpOnly = payloadKeys.every(k => k === 'down_payment')
     const isLampiranOnly = payloadKeys.every(k => k === 'lampiran_paths')
     const isSentBillingOnly = invoice.status === STATUS.SENT &&
-      payloadKeys.every(k => ['payment_method', 'bank_account_id', 'down_payment', 'items', 'delivery_pricing_mode', 'origin', 'destination', 'cargo_description', 'lampiran_paths'].includes(k))
+      payloadKeys.every(k => ['payment_method', 'bank_account_id', 'down_payment', 'items', 'delivery_pricing_mode', 'origin', 'destination', 'cargo_description', 'lampiran_paths', 'tax_percent', 'pph_percent', 'insurance_amount'].includes(k))
 
     if (invoice.status === STATUS.VOID) {
       throw new ForbiddenError('Invoice void tidak dapat diedit.')
@@ -1273,6 +1401,7 @@ module.exports = {
   ALLOWED_TRANSITIONS,
   canTransition,
   list,
+  getSummaryStats,
   getByUuid,
   create,
   update,

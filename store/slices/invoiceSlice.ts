@@ -108,8 +108,8 @@ export const updateInvoice = createAsyncThunk(
   async ({ uuid, dto }: { uuid: string; dto: UpdateInvoiceDto }, { rejectWithValue }) => {
     try {
       return await invoiceRepository.update(uuid, dto)
-    } catch {
-      return rejectWithValue('Gagal memperbarui invoice')
+    } catch (e) {
+      return rejectWithValue(e instanceof Error ? e.message : 'Gagal memperbarui invoice')
     }
   }
 )

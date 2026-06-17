@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useDispatch, useSelector } from 'react-redux'
 import { Plus, ArrowLeft, Pencil, Truck, KeyRound, Wrench, ArrowRightLeft } from 'lucide-react'
@@ -212,10 +212,11 @@ export default function EditInvoicePage({ uuid }: Props) {
     if (!drivers.length) dispatch(fetchDrivers())
   }, [dispatch, fleets.length, drivers.length])
 
-  if (role !== 'super_admin') {
-    router.replace('/dashboard')
-    return null
-  }
+  useEffect(() => {
+    if (role !== null && role !== 'super_admin') {
+      router.replace('/dashboard')
+    }
+  }, [role, router])
 
   const effectiveInvoiceServiceType = resolveEffectiveInvoiceServiceType(invoice?.service_type, invoice?.custom_service_name)
   const isDeliveryLikeInvoice = effectiveInvoiceServiceType !== 'rental'
@@ -249,6 +250,19 @@ export default function EditInvoicePage({ uuid }: Props) {
   const taxAmount = taxEnabled ? calculateTax(invoiceSubtotalAmount, taxPercent) : 0
   const pphAmount = pphEnabled ? Math.round(invoiceSubtotalAmount * pphPercent / 100) : 0
   const nettoAmount = totalAmount(invoiceSubtotalAmount, taxAmount) - pphAmount + (insuranceEnabled ? insuranceAmount : 0)
+  // Dihitung langsung dari invoice (bukan via effect) supaya DownPaymentForm
+  // sudah mendapat nilai DP yang benar di render pertama — mencegah glitch
+  // "Tidak ada DP" yang sempat muncul lalu berubah jadi "Aktif".
+  const dpInitialValue = useMemo<CreateDownPaymentDto | null>(() => {
+    if (!invoice?.down_payment) return null
+    return {
+      payment_date: invoice.down_payment.payment_date,
+      amount:       invoice.down_payment.amount,
+      method:       invoice.down_payment.method,
+      notes:        invoice.down_payment.notes,
+    }
+  }, [invoice?.down_payment])
+  const displayedDownPayment = downPayment ?? dpInitialValue
   const today = new Date().toISOString().split('T')[0]
   const isDueDatePast = dueDate < today
 
@@ -285,7 +299,7 @@ export default function EditInvoicePage({ uuid }: Props) {
 
   const updateDeliveryShipmentPricing = (field: 'qty' | 'unit' | 'unit_price', value: string | number) => {
     if (field === 'qty') setDeliveryShipmentQty(Number(value || 0))
-    if (field === 'unit') setDeliveryShipmentUnit(String(value || 'pengiriman'))
+    if (field === 'unit') setDeliveryShipmentUnit(value === '' ? '' : String(value ?? 'pengiriman'))
     if (field === 'unit_price') setDeliveryShipmentUnitPrice(Number(value || 0))
   }
 
@@ -461,7 +475,10 @@ export default function EditInvoicePage({ uuid }: Props) {
       }
       const result = validateUpdateInvoice(dto as Parameters<typeof validateUpdateInvoice>[0], invoice?.service_type, invoice?.custom_service_name)
       setErrors(result.errors)
-      if (!result.valid) return
+      if (!result.valid) {
+        pushToast({ title: 'Data belum lengkap', description: Object.values(result.errors)[0], variant: 'error' })
+        return
+      }
     } else {
       dto = canEditPaymentSetup
         ? {
@@ -472,21 +489,31 @@ export default function EditInvoicePage({ uuid }: Props) {
             cargo_description: isDeliveryLikeInvoice ? cargoDescription || null : null,
             ...(canEditItems && isDeliveryLikeInvoice ? { delivery_pricing_mode: deliveryPricingMode } : {}),
             ...(canEditItems ? { items: itemPayload } : {}),
+            tax_percent: taxEnabled ? taxPercent : 0,
+            pph_percent: pphEnabled ? pphPercent : 0,
+            insurance_amount: insuranceEnabled ? insuranceAmount : 0,
             down_payment: dpPayload,
           }
         : { down_payment: dpPayload }
 
       const result = validateUpdateInvoice(dto as Parameters<typeof validateUpdateInvoice>[0], invoice?.service_type, invoice?.custom_service_name)
       setErrors(result.errors)
-      if (!result.valid) return
+      if (!result.valid) {
+        pushToast({ title: 'Data belum lengkap', description: Object.values(result.errors)[0], variant: 'error' })
+        return
+      }
     }
 
     const action = await dispatch(updateInvoice({ uuid, dto: dto as Parameters<typeof validateUpdateInvoice>[0] }))
     if (updateInvoice.fulfilled.match(action)) {
       pushToast({ title: 'Invoice Disimpan', description: `Invoice #${invoice?.invoice_number} berhasil diperbarui.`, variant: 'success' })
       router.push(`/invoice/${uuid}`)
+    } else if (updateInvoice.rejected.match(action)) {
+      pushToast({ title: 'Gagal Menyimpan', description: action.payload as string ?? 'Terjadi kesalahan. Coba lagi.', variant: 'error' })
     }
   }
+
+  if (role === null || role !== 'super_admin') return null
 
   if (isLoading || !invoice) {
     return (
@@ -525,7 +552,7 @@ export default function EditInvoicePage({ uuid }: Props) {
             {fullEditable
               ? 'Anda sedang mengedit invoice draft. Perubahan belum disimpan.'
               : canEditPaymentSetup
-                ? 'Invoice terbit bisa mengubah metode pembayaran, DP, dan rincian item. Pajak tetap terkunci.'
+                ? 'Invoice terbit bisa mengubah metode pembayaran, DP, rincian item, serta PPN/PPh/Asuransi.'
                 : 'Invoice sudah berjalan. Hanya DP/Uang Muka yang bisa diedit. Item & pajak terkunci.'
             }
           </div>
@@ -727,7 +754,7 @@ export default function EditInvoicePage({ uuid }: Props) {
           )}
 
           {/* Tax */}
-          {fullEditable && <div className="bg-white rounded-xl border p-6" style={{ borderColor: 'var(--border-card)' }}>
+          {canEditPaymentSetup && <div className="bg-white rounded-xl border p-6" style={{ borderColor: 'var(--border-card)' }}>
             <h2 className="text-base font-semibold mb-4">Kalkulasi Pajak</h2>
             <InvoiceTaxCalculator
               subtotal={invoiceSubtotalAmount}
@@ -816,8 +843,8 @@ export default function EditInvoicePage({ uuid }: Props) {
 
           {/* Down Payment (Uang Muka) — bisa diedit di semua status non-void */}
           <DownPaymentForm
-            totalAmount={fullEditable ? nettoAmount : (invoice?.total_amount ?? 0)}
-            initialValue={downPayment}
+            totalAmount={canEditPaymentSetup ? nettoAmount : (invoice?.total_amount ?? 0)}
+            initialValue={dpInitialValue}
             onChange={setDownPayment}
             defaultDate={invoice?.invoice_date}
             paymentMethod={paymentMethod}
@@ -848,15 +875,15 @@ export default function EditInvoicePage({ uuid }: Props) {
                 <span>NETTO</span>
                 <span className="font-mono" style={{ fontFamily: 'var(--font-mono)', color: '#166534' }}>{formatRupiah(nettoAmount)}</span>
               </div>
-              {downPayment && downPayment.amount > 0 && (
+              {displayedDownPayment && displayedDownPayment.amount > 0 && (
                 <>
                   <div className="flex justify-between text-green-700 border-t pt-2" style={{ borderColor: 'var(--border-card)' }}>
                     <span>DP Diterima</span>
-                    <span className="font-mono" style={{ fontFamily: 'var(--font-mono)' }}>− {formatRupiah(downPayment.amount)}</span>
+                    <span className="font-mono" style={{ fontFamily: 'var(--font-mono)' }}>− {formatRupiah(displayedDownPayment.amount)}</span>
                   </div>
                   <div className="flex justify-between font-semibold">
                     <span>Sisa Tagihan</span>
-                    <span className="font-mono" style={{ fontFamily: 'var(--font-mono)' }}>{formatRupiah(Math.max(0, (fullEditable ? nettoAmount : (invoice?.total_amount ?? 0)) - downPayment.amount))}</span>
+                    <span className="font-mono" style={{ fontFamily: 'var(--font-mono)' }}>{formatRupiah(Math.max(0, (canEditPaymentSetup ? nettoAmount : (invoice?.total_amount ?? 0)) - displayedDownPayment.amount))}</span>
                   </div>
                 </>
               )}

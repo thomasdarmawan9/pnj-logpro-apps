@@ -1,6 +1,7 @@
 'use client'
 
 import { Truck, UserRound } from 'lucide-react'
+import SearchableSelect from './SearchableSelect'
 
 type Option = { id: number; label: string }
 
@@ -37,24 +38,20 @@ export default function DeliveryOperationsSection({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className="text-xs font-medium text-gray-600 block mb-1">Armada</label>
-          <div className="relative mb-2">
-            <Truck size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <select
-              className="form-input w-full pl-9 text-sm"
-              value={fleetId ?? 0}
-              onChange={event => {
-                const nextId = Number(event.target.value) || null
+          <div className="mb-2">
+            <SearchableSelect
+              options={fleetOptions}
+              value={fleetId}
+              placeholder="Cari armada..."
+              emptyText="Armada tidak ditemukan"
+              icon={<Truck size={15} />}
+              disabled={disabled}
+              onChange={nextId => {
                 const fleet = fleetOptions.find(option => option.id === nextId)
                 onChangeFleetId(nextId)
                 onChangeFleetLabel(fleet?.label || '')
               }}
-              disabled={disabled}
-            >
-              <option value={0}>-- Pilih armada --</option>
-              {fleetOptions.map(option => (
-                <option key={option.id} value={option.id}>{option.label}</option>
-              ))}
-            </select>
+            />
           </div>
           <input
             className="form-input w-full text-sm"
@@ -67,23 +64,19 @@ export default function DeliveryOperationsSection({
 
         <div>
           <label className="text-xs font-medium text-gray-600 block mb-1">Supir</label>
-          <div className="relative mb-2">
-            <UserRound size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <select
-              className="form-input w-full pl-9 text-sm"
-              value={driverId ?? 0}
-              onChange={event => {
-                const nextId = Number(event.target.value) || null
+          <div className="mb-2">
+            <SearchableSelect
+              options={driverOptions}
+              value={driverId}
+              placeholder="Cari supir..."
+              emptyText="Supir tidak ditemukan"
+              icon={<UserRound size={15} />}
+              disabled={disabled}
+              onChange={nextId => {
                 onChangeDriverId(nextId)
                 if (nextId) onChangeDriverNameManual('')
               }}
-              disabled={disabled}
-            >
-              <option value={0}>-- Pilih supir --</option>
-              {driverOptions.map(option => (
-                <option key={option.id} value={option.id}>{option.label}</option>
-              ))}
-            </select>
+            />
           </div>
           <input
             className="form-input w-full text-sm"

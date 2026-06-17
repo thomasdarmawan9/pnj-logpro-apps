@@ -5,7 +5,14 @@ const logger = require('../utils/logger')
 
 // eslint-disable-next-line no-unused-vars
 function errorHandler(err, req, res, next) {
-  logger.error(`[${req.method}] ${req.path} — ${err.message}`, { stack: err.stack })
+  const detail = err.errors
+    ? err.errors.map((e) => ({ path: e.path, message: e.message, type: e.type, value: e.value }))
+    : undefined
+  logger.error(`[${req.method}] ${req.path} — ${err.message}`, {
+    stack: err.stack,
+    detail,
+    original: err.original ? String(err.original.message || err.original) : undefined,
+  })
 
   if (err instanceof ValidationError) {
     const errors = err.errors.map((e) => ({ field: e.path, message: e.message }))

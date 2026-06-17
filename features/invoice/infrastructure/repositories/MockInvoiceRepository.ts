@@ -211,57 +211,6 @@ function normalizeInvoice(inv: ApiInvoice): Invoice {
   }
 }
 
-function applyFrontendFilters(list: Invoice[], filters: InvoiceFilterState): Invoice[] {
-  const now = new Date()
-  return list.filter(inv => {
-    if (filters.search) {
-      const q = filters.search.toLowerCase()
-      const match =
-        inv.invoice_number.toLowerCase().includes(q) ||
-        inv.customer.name.toLowerCase().includes(q) ||
-        (inv.project?.name || '').toLowerCase().includes(q) ||
-        (inv.project?.contract_number || '').toLowerCase().includes(q)
-      if (!match) return false
-    }
-    if (filters.status && filters.status !== 'all' && inv.status !== filters.status) return false
-    if (filters.customer && filters.customer !== 'all' && inv.customer.name !== filters.customer) return false
-    if (filters.proyek && filters.proyek !== 'all' && inv.project?.code !== filters.proyek) return false
-    if (filters.periode && filters.periode !== 'all') {
-      const invDate = new Date(inv.invoice_date)
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-      const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-      const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0)
-      if (filters.periode === 'month' && (invDate < startOfMonth || invDate > now)) return false
-      if (filters.periode === 'last_month' && (invDate < startOfLastMonth || invDate > endOfLastMonth)) return false
-    }
-    return true
-  })
-}
-
-function buildSummary(list: Invoice[]): InvoiceSummaryStats {
-  const now = new Date()
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-  const activeReceivables = list.filter(inv =>
-    [InvoiceStatus.SENT, InvoiceStatus.OUTSTANDING].includes(inv.status) &&
-    inv.remaining_amount > 0
-  )
-  const overdue = activeReceivables.filter(inv => new Date(inv.due_date) < now)
-  const paidThisMonth = list.filter(inv =>
-    inv.status === InvoiceStatus.PAID &&
-    new Date(inv.updated_at ?? inv.created_at ?? '') >= startOfMonth
-  )
-  const drafts = list.filter(inv => inv.status === InvoiceStatus.DRAFT)
-
-  return {
-    totalPiutang: activeReceivables.reduce((sum, inv) => sum + inv.remaining_amount, 0),
-    jatuhTempo: overdue.length,
-    terbayarBulanIni: paidThisMonth.reduce((sum, inv) => sum + inv.paid_amount, 0),
-    draftBelumDikirim: drafts.length,
-    countOutstanding: activeReceivables.length,
-    countPaidThisMonth: paidThisMonth.length,
-  }
-}
-
 async function fetchAllInvoices() {
   return apiRequestAllPages<ApiInvoice>('/invoices?status=all&period=all', { method: 'GET' })
 }
@@ -295,14 +244,28 @@ function toItemPayload(item: CreateInvoiceItemDto) {
 
 export class MockInvoiceRepository implements IInvoiceRepository {
   async getList(filters: InvoiceFilterState, pagination: PaginationState): Promise<PaginatedResult<Invoice>> {
-    const filtered = applyFrontendFilters((await fetchAllInvoices()).map(normalizeInvoice), filters)
-    const start = (pagination.page - 1) * pagination.perPage
+    const params = new URLSearchParams()
+    if (filters.search) params.set('search', filters.search)
+    params.set('status', filters.status || 'all')
+    if (filters.customer && filters.customer !== 'all') params.set('customer_uuid', filters.customer)
+    if (filters.proyek && filters.proyek !== 'all') params.set('project_uuid', filters.proyek)
+    params.set('period', filters.periode || 'all')
+
+    const listParams = new URLSearchParams(params)
+    listParams.set('page', String(pagination.page))
+    listParams.set('limit', String(pagination.perPage))
+
+    const [listRes, summaryRes] = await Promise.all([
+      apiRequest<ApiInvoice[]>(`/invoices?${listParams.toString()}`, { method: 'GET' }),
+      apiRequest<InvoiceSummaryStats>(`/invoices/summary?${params.toString()}`, { method: 'GET' }),
+    ])
+
     return {
-      data: filtered.slice(start, start + pagination.perPage),
-      total: filtered.length,
+      data: listRes.data.map(normalizeInvoice),
+      total: listRes.meta?.total ?? listRes.data.length,
       page: pagination.page,
       perPage: pagination.perPage,
-      summary: buildSummary(filtered),
+      summary: summaryRes.data,
     }
   }
 

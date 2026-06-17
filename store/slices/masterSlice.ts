@@ -78,6 +78,10 @@ export const deleteFleetLampiran = createAsyncThunk('master/deleteFleetLampiran'
   try { return await masterRepository.deleteFleetLampiran(uuid, filePath) }
   catch (e) { return rejectWithValue((e as Error).message) }
 })
+export const deleteFleet = createAsyncThunk('master/deleteFleet', async (uuid: string, { rejectWithValue }) => {
+  try { await masterRepository.deleteFleet(uuid); return uuid }
+  catch (e) { return rejectWithValue((e as Error).message) }
+})
 
 // Thunks — Driver
 export const fetchDrivers = createAsyncThunk('master/fetchDrivers', async () => masterRepository.getDrivers())
@@ -99,6 +103,10 @@ export const uploadDriverLampiran = createAsyncThunk('master/uploadDriverLampira
 })
 export const deleteDriverLampiran = createAsyncThunk('master/deleteDriverLampiran', async ({ uuid, filePath }: { uuid: string; filePath: string }, { rejectWithValue }) => {
   try { return await masterRepository.deleteDriverLampiran(uuid, filePath) }
+  catch (e) { return rejectWithValue((e as Error).message) }
+})
+export const deleteDriver = createAsyncThunk('master/deleteDriver', async (uuid: string, { rejectWithValue }) => {
+  try { await masterRepository.deleteDriver(uuid); return uuid }
   catch (e) { return rejectWithValue((e as Error).message) }
 })
 
@@ -151,19 +159,24 @@ const masterSlice = createSlice({
     const pending = (state: any) => { state.isLoading = true; state.error = null }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rejected = (state: any, action: { payload?: unknown }) => { state.isLoading = false; state.error = (action.payload as string) || 'Terjadi kesalahan' }
-    const replaceFleet = (state: MasterState, payload: Fleet) => {
+    const replaceFleet = (state: MasterState, payload: Fleet, moveToTop = false) => {
       const idx = state.fleets.findIndex(f => f.uuid === payload.uuid)
       if (idx === -1) return
 
       const current = state.fleets[idx]
-      state.fleets[idx] = {
+      const updated = {
         ...payload,
         total_trips: current.total_trips,
         active_days_this_month: current.active_days_this_month,
         last_used_date: current.last_used_date,
       }
+      state.fleets[idx] = updated
+      if (moveToTop && idx !== 0) {
+        state.fleets.splice(idx, 1)
+        state.fleets.unshift(updated)
+      }
       if (state.modals.fleetForm.data?.uuid === payload.uuid) {
-        state.modals.fleetForm.data = state.fleets[idx]
+        state.modals.fleetForm.data = updated
       }
     }
 
@@ -194,13 +207,13 @@ const masterSlice = createSlice({
       .addCase(fetchFleets.rejected, rejected)
 
       .addCase(createFleet.pending, pending)
-      .addCase(createFleet.fulfilled, (state, a) => { state.isLoading = false; state.fleets.push(a.payload) })
+      .addCase(createFleet.fulfilled, (state, a) => { state.isLoading = false; state.fleets.unshift(a.payload) })
       .addCase(createFleet.rejected, rejected)
 
       .addCase(updateFleet.pending, pending)
       .addCase(updateFleet.fulfilled, (state, a) => {
         state.isLoading = false
-        replaceFleet(state, a.payload)
+        replaceFleet(state, a.payload, true)
       })
       .addCase(updateFleet.rejected, rejected)
 
@@ -217,19 +230,32 @@ const masterSlice = createSlice({
         replaceFleet(state, a.payload)
       })
 
+      .addCase(deleteFleet.pending, pending)
+      .addCase(deleteFleet.fulfilled, (state, a) => {
+        state.isLoading = false
+        state.fleets = state.fleets.filter(f => f.uuid !== a.payload)
+      })
+      .addCase(deleteFleet.rejected, rejected)
+
       .addCase(fetchDrivers.pending, pending)
       .addCase(fetchDrivers.fulfilled, (state, a) => { state.isLoading = false; state.drivers = a.payload })
       .addCase(fetchDrivers.rejected, rejected)
 
       .addCase(createDriver.pending, pending)
-      .addCase(createDriver.fulfilled, (state, a) => { state.isLoading = false; state.drivers.push(a.payload) })
+      .addCase(createDriver.fulfilled, (state, a) => { state.isLoading = false; state.drivers.unshift(a.payload) })
       .addCase(createDriver.rejected, rejected)
 
       .addCase(updateDriver.pending, pending)
       .addCase(updateDriver.fulfilled, (state, a) => {
         state.isLoading = false
         const idx = state.drivers.findIndex(d => d.uuid === a.payload.uuid)
-        if (idx !== -1) state.drivers[idx] = a.payload
+        if (idx !== -1) {
+          state.drivers[idx] = a.payload
+          if (idx !== 0) {
+            state.drivers.splice(idx, 1)
+            state.drivers.unshift(a.payload)
+          }
+        }
       })
       .addCase(updateDriver.rejected, rejected)
 
@@ -245,6 +271,13 @@ const masterSlice = createSlice({
         const idx = state.drivers.findIndex(d => d.uuid === a.payload.uuid)
         if (idx !== -1) state.drivers[idx] = a.payload
       })
+
+      .addCase(deleteDriver.pending, pending)
+      .addCase(deleteDriver.fulfilled, (state, a) => {
+        state.isLoading = false
+        state.drivers = state.drivers.filter(d => d.uuid !== a.payload)
+      })
+      .addCase(deleteDriver.rejected, rejected)
 
       .addCase(fetchProjects.pending, pending)
       .addCase(fetchProjects.fulfilled, (state, a) => { state.isLoading = false; state.projects = a.payload })

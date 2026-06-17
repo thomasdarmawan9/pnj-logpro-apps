@@ -42,6 +42,12 @@ router.get('/export',
   controller.exportXlsx,
 )
 
+router.get('/summary',
+  isAnyRole,
+  validate(listInvoiceQuery, 'query'),
+  controller.summary,
+)
+
 router.get('/:uuid',
   isAnyRole,
   validate(uuidParam, 'params'),

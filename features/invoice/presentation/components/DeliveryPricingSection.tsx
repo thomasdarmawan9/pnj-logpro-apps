@@ -12,7 +12,8 @@ export interface AdditionalDeliveryCharge {
   amount: number
 }
 
-const BILLING_UNIT_OPTIONS = ['unit', 'kg', 'volume', 'collie', 'batang', 'pengiriman']
+const BILLING_UNIT_OPTIONS = ['unit', 'kg', 'volume', 'collie', 'batang', 'pengiriman', 'pallet', 'buruh']
+const BILLING_UNIT_OTHER_VALUE = 'Lainnya'
 
 function parseRupiah(value: string): number {
   return Number(value.replace(/\D/g, '')) || 0
@@ -158,13 +159,30 @@ export default function DeliveryPricingSection({
                   />
                 </td>
                 <td className="py-2 px-1">
-                  <select
-                    className="form-input w-full text-sm"
-                    value={effectiveShipmentUnit}
-                    onChange={event => changeShipmentPricing('unit', event.target.value)}
-                  >
-                    {BILLING_UNIT_OPTIONS.map(unit => <option key={unit} value={unit}>{unit}</option>)}
-                  </select>
+                  {(() => {
+                    const matchedUnit = BILLING_UNIT_OPTIONS.find(u => u.toLowerCase() === (effectiveShipmentUnit ?? '').toLowerCase())
+                    const isCustomUnit = !matchedUnit
+                    return (
+                      <>
+                        <select
+                          className="form-input w-full text-sm"
+                          value={isCustomUnit ? BILLING_UNIT_OTHER_VALUE : matchedUnit}
+                          onChange={event => changeShipmentPricing('unit', event.target.value === BILLING_UNIT_OTHER_VALUE ? '' : event.target.value)}
+                        >
+                          {BILLING_UNIT_OPTIONS.map(unit => <option key={unit} value={unit}>{unit}</option>)}
+                          <option value={BILLING_UNIT_OTHER_VALUE}>{BILLING_UNIT_OTHER_VALUE}</option>
+                        </select>
+                        {isCustomUnit && (
+                          <input
+                            className="form-input w-full text-sm mt-2"
+                            value={effectiveShipmentUnit}
+                            onChange={event => changeShipmentPricing('unit', event.target.value)}
+                            placeholder="Tulis satuan..."
+                          />
+                        )}
+                      </>
+                    )
+                  })()}
                 </td>
                 <td className="py-2 px-2">
                   <input
@@ -227,13 +245,30 @@ export default function DeliveryPricingSection({
                     />
                   </td>
                   <td className="py-2 px-1">
-                    <select
-                      className="form-input w-full text-sm"
-                      value={item.unit}
-                      onChange={event => onChange(item.uuid, 'unit', event.target.value)}
-                    >
-                      {BILLING_UNIT_OPTIONS.map(unit => <option key={unit} value={unit}>{unit}</option>)}
-                    </select>
+                    {(() => {
+                      const matchedUnit = BILLING_UNIT_OPTIONS.find(u => u.toLowerCase() === (item.unit ?? '').toLowerCase())
+                      const isCustomUnit = !matchedUnit
+                      return (
+                        <>
+                          <select
+                            className="form-input w-full text-sm"
+                            value={isCustomUnit ? BILLING_UNIT_OTHER_VALUE : matchedUnit}
+                            onChange={event => onChange(item.uuid, 'unit', event.target.value === BILLING_UNIT_OTHER_VALUE ? '' : event.target.value)}
+                          >
+                            {BILLING_UNIT_OPTIONS.map(unit => <option key={unit} value={unit}>{unit}</option>)}
+                            <option value={BILLING_UNIT_OTHER_VALUE}>{BILLING_UNIT_OTHER_VALUE}</option>
+                          </select>
+                          {isCustomUnit && (
+                            <input
+                              className="form-input w-full text-sm mt-2"
+                              value={item.unit}
+                              onChange={event => onChange(item.uuid, 'unit', event.target.value)}
+                              placeholder="Tulis satuan..."
+                            />
+                          )}
+                        </>
+                      )
+                    })()}
                   </td>
                   <td className="py-2 px-2">
                     <input

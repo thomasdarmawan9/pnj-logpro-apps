@@ -28,11 +28,31 @@ const DEFAULT_DELIVERY_FLEET_LABELS = new Set(['Pengiriman', 'Lainnya'])
 const COPY_ROW_BG = [null, '#FFFDE7', '#FCE4EC']
 
 // ── Helper geometry ────────────────────────────────────────────────────────
-function pageGeom(doc) {
+function pageGeom(doc, ctx) {
+  if (ctx?.geom) return ctx.geom
   const L = doc.page.margins.left
   const R = doc.page.width - doc.page.margins.right
   const W = R - L
   return { L, R, W }
+}
+
+// ── Layout "2 rangkap dalam 1 lembar" (mirip Surat Jalan) ────────────────
+// Dipakai ketika invoice singkat (sedikit item) — rangkap 1 & 2 dicetak
+// bertumpuk dalam satu halaman A4, rangkap selanjutnya (jika ada) di
+// halaman baru dengan layout normal (1 rangkap / halaman).
+const COMBO_GAP = 14
+const COMBO_MAX_ROWS = 3 // ambang jumlah baris item agar layout combo dipakai
+
+function comboGeom(doc) {
+  const L = doc.page.margins.left
+  const R = doc.page.width - doc.page.margins.right
+  const W = R - L
+  return { L, R, W }
+}
+
+function comboCopyHeight(doc) {
+  const usableH = doc.page.height - doc.page.margins.top - doc.page.margins.bottom
+  return (usableH - COMBO_GAP) / 2
 }
 
 // ── Draw horizontal rule ───────────────────────────────────────────────────
@@ -359,16 +379,19 @@ function drawLogo(doc, company, x, y, size) {
 }
 
 // ── 1. Kop Perusahaan ─────────────────────────────────────────────────────
-function drawHeader(doc, company, options) {
-  const { L, R, W } = pageGeom(doc)
-  const topY = doc.page.margins.top
+function drawHeader(doc, company, options, ctx = null) {
+  const { L, R, W } = pageGeom(doc, ctx)
+  const topY = ctx?.startY ?? doc.page.margins.top
+  const compact = !!ctx?.compact
 
-  const LOGO_SIZE = 64
+  const LOGO_SIZE  = compact ? 48 : 64
+  const NAME_FSZ   = compact ? 13 : 16
+  const DETAIL_FSZ = compact ? 7 : 8
   const INFO_X    = L + LOGO_SIZE + 10
   const INFO_W    = W - LOGO_SIZE - 10
 
   // Border atas
-  hRule(doc, L, topY, W, C_BORDER, 1.2)
+  hRule(doc, L, topY, W, C_BORDER, compact ? 1 : 1.2)
 
   if (options.includeLogo !== false) {
     drawLogo(doc, company, L, topY + 4, LOGO_SIZE)
@@ -376,15 +399,15 @@ function drawHeader(doc, company, options) {
 
   // Info perusahaan
   const infoStartY = topY + 2
-  doc.font('Helvetica-Bold').fontSize(16).fillColor(C_DARK)
+  doc.font('Helvetica-Bold').fontSize(NAME_FSZ).fillColor(C_DARK)
      .text(company.name || 'PT. PELANGI NUANSA JAYA', INFO_X, infoStartY, { width: INFO_W })
 
-  doc.font('Helvetica').fontSize(8).fillColor(C_DARK)
+  doc.font('Helvetica').fontSize(DETAIL_FSZ).fillColor(C_DARK)
   if (company.address) {
     doc.text(company.address, INFO_X, doc.y + 1, { width: INFO_W })
   }
   if (company.website) {
-    doc.font('Helvetica-Oblique').fontSize(8)
+    doc.font('Helvetica-Oblique').fontSize(DETAIL_FSZ)
        .text(`Website : ${company.website}`, INFO_X, doc.y + 1, { width: INFO_W })
     doc.font('Helvetica')
   }
@@ -392,48 +415,51 @@ function drawHeader(doc, company, options) {
   if (company.phone) contactParts.push(`Phone : ${company.phone}`)
   if (company.email) contactParts.push(`email : ${company.email}`)
   if (contactParts.length) {
-    doc.font('Helvetica').fontSize(8)
+    doc.font('Helvetica').fontSize(DETAIL_FSZ)
        .text(contactParts.join(' - '), INFO_X, doc.y + 1, { width: INFO_W })
   }
 
   const headerBottom = Math.max(topY + LOGO_SIZE + 6, doc.y + 4)
 
   // Border bawah kop
-  hRule(doc, L, headerBottom, W, C_BORDER, 1.2)
+  hRule(doc, L, headerBottom, W, C_BORDER, compact ? 1 : 1.2)
 
-  return headerBottom + 6
+  return headerBottom + (compact ? 5 : 6)
 }
 
 // ── 2. Bar Info Dokumen ────────────────────────────────────────────────────
-function drawDocInfoBar(doc, invoice, startY) {
-  const { L, W } = pageGeom(doc)
+function drawDocInfoBar(doc, invoice, startY, ctx = null) {
+  const { L, W } = pageGeom(doc, ctx)
+  const compact = !!ctx?.compact
 
   const noText      = `No : ${invoice.invoice_number || '-'}`
   const tglText     = `Tanggal :${formatDateShort(invoice.invoice_date)}`
   const labelText   = 'Invoice'
-  const barH        = 22
+  const barH        = compact ? 18 : 22
 
   // Background putih, border bawah
   hRule(doc, L, startY + barH, W, C_BORDER, 0.8)
 
   // "No :"
-  doc.font('Helvetica-Bold').fontSize(10).fillColor(C_DARK)
-     .text(noText, L, startY + 5, { width: W / 3, align: 'left' })
+  doc.font('Helvetica-Bold').fontSize(compact ? 9 : 10).fillColor(C_DARK)
+     .text(noText, L, startY + (compact ? 4 : 5), { width: W / 3, align: 'left' })
 
   // "Tanggal :"
-  doc.font('Helvetica-Bold').fontSize(10).fillColor(C_DARK)
-     .text(tglText, L + W / 3, startY + 5, { width: W / 3, align: 'center' })
+  doc.font('Helvetica-Bold').fontSize(compact ? 9 : 10).fillColor(C_DARK)
+     .text(tglText, L + W / 3, startY + (compact ? 4 : 5), { width: W / 3, align: 'center' })
 
   // "Invoice" label besar kanan
-  doc.font('Helvetica-Bold').fontSize(16).fillColor(C_DARK)
-     .text(labelText, L + (W * 2 / 3), startY + 2, { width: W / 3, align: 'right' })
+  doc.font('Helvetica-Bold').fontSize(compact ? 14 : 16).fillColor(C_DARK)
+     .text(labelText, L + (W * 2 / 3), startY + (compact ? 1 : 2), { width: W / 3, align: 'right' })
 
-  return startY + barH + 8
+  return startY + barH + (compact ? 6 : 8)
 }
 
 // ── 3. Kepada + No Kontrak ────────────────────────────────────────────────
-function drawRecipientBlock(doc, invoice, startY) {
-  const { L, W } = pageGeom(doc)
+function drawRecipientBlock(doc, invoice, startY, ctx = null) {
+  const { L, W } = pageGeom(doc, ctx)
+  const compact = !!ctx?.compact
+  const fsz = compact ? 8.5 : 9
   const colW = W / 2
   const rightX = L + colW
   const sjNumbers = getAttachedSjNumbers(invoice)
@@ -442,27 +468,27 @@ function drawRecipientBlock(doc, invoice, startY) {
   let y = startY
 
   // Kepada (kiri)
-  doc.font('Helvetica-Bold').fontSize(9).fillColor(C_DARK)
+  doc.font('Helvetica-Bold').fontSize(fsz).fillColor(C_DARK)
      .text('Kepada :', L, y)
   y = doc.y
-  doc.font('Helvetica-Bold').fontSize(9).fillColor(C_DARK)
+  doc.font('Helvetica-Bold').fontSize(fsz).fillColor(C_DARK)
      .text(invoice.customer?.name || '-', L, y)
   const customerNameY = y
   y = doc.y
 
   if (sjText) {
-    doc.font('Helvetica').fontSize(9).fillColor(C_DARK)
+    doc.font('Helvetica').fontSize(fsz).fillColor(C_DARK)
        .text(sjText, rightX, customerNameY, { width: colW, align: 'right' })
   }
 
   // No Kontrak (kanan) — ditulis di baris pertama sejajar "Kepada :"
   if (invoice.project?.contract_number || invoice.project?.code) {
     const contractNo = invoice.project.contract_number || invoice.project.code
-    doc.font('Helvetica').fontSize(9).fillColor(C_DARK)
+    doc.font('Helvetica').fontSize(fsz).fillColor(C_DARK)
        .text(`No Kontrak : ${contractNo}`, rightX, startY, { width: colW, align: 'right' })
   }
 
-  return Math.max(doc.y, y) + 8
+  return Math.max(doc.y, y) + (compact ? 6 : 8)
 }
 
 // ── 4. Tabel Item ─────────────────────────────────────────────────────────
@@ -470,8 +496,9 @@ function drawRecipientBlock(doc, invoice, startY) {
  * Kolom: No | Deskripsi | Keterangan | Qty | Harga | Jumlah
  * Satu baris per item, tinggi baris auto-fit berdasarkan konten terpanjang.
  */
-function drawItemTable(doc, invoice, startY, copyIndex = 0) {
-  const { L, W } = pageGeom(doc)
+function drawItemTable(doc, invoice, startY, copyIndex = 0, ctx = null) {
+  const { L, W } = pageGeom(doc, ctx)
+  const compact = !!ctx?.compact
   const rowBg = COPY_ROW_BG[copyIndex] || null
 
   // Lebar kolom
@@ -492,10 +519,10 @@ function drawItemTable(doc, invoice, startY, copyIndex = 0) {
 
   const FONT_SZ  = 8.5
   const KET_FONT_SZ = 7.2
-  const PAD      = 4    // padding horizontal & vertical dalam sel
-  const MIN_ROW  = 22   // tinggi baris minimum
+  const PAD      = compact ? 3 : 4    // padding horizontal & vertical dalam sel
+  const MIN_ROW  = compact ? 18 : 22   // tinggi baris minimum
 
-  const HEADER_H = 18
+  const HEADER_H = compact ? 16 : 18
   let y = startY
 
   function drawTableHeader(headerY) {
@@ -694,7 +721,9 @@ function drawItemTable(doc, invoice, startY, copyIndex = 0) {
       return blockStartY + blockH
     }
 
-    const pageBottom = () => doc.page.height - doc.page.margins.bottom - 18
+    const pageBottom = () => compact && ctx?.maxY != null
+      ? ctx.maxY
+      : doc.page.height - doc.page.margins.bottom - 18
     let pageRows = []
     let pageRowsH = 0
 
@@ -717,8 +746,8 @@ function drawItemTable(doc, invoice, startY, copyIndex = 0) {
   }
 
   // Baris spacer bawah tabel
-  const spacerH = 14
-  if (y + spacerH > doc.page.height - doc.page.margins.bottom) {
+  const spacerH = compact ? 10 : 14
+  if (!compact && y + spacerH > doc.page.height - doc.page.margins.bottom) {
     y = drawPageContinuationHeader()
   }
   if (rowBg) {
@@ -732,39 +761,42 @@ function drawItemTable(doc, invoice, startY, copyIndex = 0) {
 }
 
 // ── 5. Footer: Pembayaran + Totals ────────────────────────────────────────
-function drawFooter(doc, invoice, company, startY) {
-  const { L, R, W } = pageGeom(doc)
+function drawFooter(doc, invoice, company, startY, ctx = null) {
+  const { L, R, W } = pageGeom(doc, ctx)
+  const compact = !!ctx?.compact
 
   const COL_LEFT_W  = W * 0.55
   const COL_RIGHT_W = W - COL_LEFT_W
   const RIGHT_X     = L + COL_LEFT_W
-  const PAD         = 4
+  const PAD         = compact ? 3 : 4
 
   let leftY  = startY + PAD
   let rightY = startY + PAD
 
+  const FSZ = compact ? 8.5 : 9
+
   // ── Kiri: Metode Pembayaran ──────────────────────────────────────────
-  doc.font('Helvetica-Bold').fontSize(9).fillColor(C_DARK)
+  doc.font('Helvetica-Bold').fontSize(FSZ).fillColor(C_DARK)
      .text('Metode Pembayaran :', L, leftY)
   leftY = doc.y + 2
-  doc.font('Helvetica').fontSize(9).fillColor(C_DARK)
+  doc.font('Helvetica').fontSize(FSZ).fillColor(C_DARK)
   doc.text(formatPaymentMethod(invoice, company), L, leftY, { width: COL_LEFT_W - PAD })
-  leftY = doc.y + 4
+  leftY = doc.y + (compact ? 3 : 4)
 
-  doc.font('Helvetica-Bold').fontSize(9).fillColor(C_DARK)
+  doc.font('Helvetica-Bold').fontSize(FSZ).fillColor(C_DARK)
      .text('Note :', L, leftY)
   leftY = doc.y + 2
   // Catatan internal (invoice.notes) tidak ditampilkan di PDF — hanya pesan
   // standar pembayaran.
   const noteText = 'Setelah Pembayaran dilakukan, mohon kirimkan bukti transfer ke email kami atau hubungi admin kami melalui WhatsApp'
-  doc.font('Helvetica').fontSize(8).fillColor(C_DARK)
+  doc.font('Helvetica').fontSize(compact ? 7.5 : 8).fillColor(C_DARK)
      .text(noteText, L, leftY, { width: COL_LEFT_W - PAD })
-  leftY = doc.y + 6
+  leftY = doc.y + (compact ? 5 : 6)
 
   // ── Kanan: Totals ────────────────────────────────────────────────────
   const LABEL_W = 80
   const VALUE_W = COL_RIGHT_W - LABEL_W - 20
-  const ROW_H   = 16
+  const ROW_H   = compact ? 14 : 16
 
   function totalRow(label, value, bold = false, doubleBorder = false) {
     const rowBotY = rightY + ROW_H
@@ -774,10 +806,10 @@ function drawFooter(doc, invoice, company, startY) {
       doc.rect(RIGHT_X + 1, rightY + 1, COL_RIGHT_W - 2, ROW_H - 2)
          .strokeColor(C_BORDER).lineWidth(0.5).stroke()
     }
-    doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(9).fillColor(C_DARK)
-       .text(label, RIGHT_X + PAD, rightY + 4, { width: LABEL_W, align: 'left' })
-    doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(9).fillColor(C_DARK)
-       .text(value, RIGHT_X + LABEL_W, rightY + 4, { width: VALUE_W + 20, align: 'right' })
+    doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(FSZ).fillColor(C_DARK)
+       .text(label, RIGHT_X + PAD, rightY + (compact ? 3 : 4), { width: LABEL_W, align: 'left' })
+    doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(FSZ).fillColor(C_DARK)
+       .text(value, RIGHT_X + LABEL_W, rightY + (compact ? 3 : 4), { width: VALUE_W + 20, align: 'right' })
     rightY = rowBotY
   }
 
@@ -808,19 +840,21 @@ function drawFooter(doc, invoice, company, startY) {
 }
 
 // ── 6. Tanda Tangan ───────────────────────────────────────────────────────
-function drawSignatures(doc, invoice, company, startY) {
-  const { L, R, W } = pageGeom(doc)
+function drawSignatures(doc, invoice, company, startY, ctx = null) {
+  const { L, R, W } = pageGeom(doc, ctx)
+  const compact = !!ctx?.compact
   const colW   = W / 2
-  const sigH   = 70   // space untuk tanda tangan / materai
+  const sigH   = compact ? 50 : 70   // space untuk tanda tangan / materai
+  const fsz    = compact ? 8.5 : 9
 
-  let y = startY + 6
+  let y = startY + (compact ? 5 : 6)
 
   // Tanda Terima (kiri)
-  doc.font('Helvetica-Bold').fontSize(9).fillColor(C_DARK)
+  doc.font('Helvetica-Bold').fontSize(fsz).fillColor(C_DARK)
      .text('Tanda Terima', L, y, { width: colW, align: 'center' })
 
   // Hormat Kami (kanan)
-  doc.font('Helvetica-Bold').fontSize(9).fillColor(C_DARK)
+  doc.font('Helvetica-Bold').fontSize(fsz).fillColor(C_DARK)
      .text('Hormat Kami,', L + colW, y, { width: colW, align: 'center' })
 
   y += sigH
@@ -830,26 +864,29 @@ function drawSignatures(doc, invoice, company, startY) {
   doc.moveTo(L + colW + 20, y).lineTo(R - 20,            y).strokeColor(C_BORDER).lineWidth(0.8).stroke()
 
   // Nama
-  doc.font('Helvetica').fontSize(9).fillColor(C_DARK)
+  doc.font('Helvetica').fontSize(fsz).fillColor(C_DARK)
      .text(invoice.customer?.name || '(___________________)', L, y + 3, { width: colW, align: 'center' })
-  doc.font('Helvetica').fontSize(9).fillColor(C_DARK)
+  doc.font('Helvetica').fontSize(fsz).fillColor(C_DARK)
      .text(company.name || 'PT. Pelangi Nuansa Jaya', L + colW, y + 3, { width: colW, align: 'center' })
 
   // y posisi setelah baris nama (untuk penempatan footer "Dicetak pada")
-  return y + 16
+  return y + (compact ? 14 : 16)
 }
 
 // ── Footer page (nomor + tanggal cetak) ─────────────────────────────────
 // contentY: posisi Y setelah konten terakhir (mis. tanda tangan). Footer
 // diletakkan tepat di bawah konten tersebut, tapi tidak melewati batas
 // bawah halaman.
-function drawPageFooter(doc, invoice, contentY = null) {
-  const { L, W } = pageGeom(doc)
-  const maxFooterY = doc.page.height - doc.page.margins.bottom - 10
+function drawPageFooter(doc, invoice, contentY = null, ctx = null) {
+  const { L, W } = pageGeom(doc, ctx)
+  const compact = !!ctx?.compact
+  const maxFooterY = compact && ctx?.maxY != null
+    ? ctx.maxY - 8
+    : doc.page.height - doc.page.margins.bottom - 10
   const footerY = contentY != null
-    ? Math.min(contentY + 10, maxFooterY)
+    ? Math.min(contentY + (compact ? 6 : 10), maxFooterY)
     : maxFooterY
-  doc.font('Helvetica').fontSize(7).fillColor(C_GRAY)
+  doc.font('Helvetica').fontSize(compact ? 6.5 : 7).fillColor(C_GRAY)
      .text(
        `Dicetak pada ${formatDateShort(new Date())} — ${invoice.invoice_number || ''}`,
        L, footerY, { width: W, align: 'center' },
@@ -917,47 +954,54 @@ function drawSJAppendix(doc, invoice, company, options) {
  * Jika konten melebihi satu halaman, fungsi ini akan memanggil doc.addPage()
  * sendiri (perilaku sama dengan sebelumnya).
  */
-function renderOneCopy(doc, invoice, company, options = {}, copyIndex = 0) {
+function renderOneCopy(doc, invoice, company, options = {}, copyIndex = 0, ctx = null) {
   const {
     includeLogo = true,
     includeSig  = true,
   } = options
+  const compact = !!ctx?.compact
 
   // 1. Kop
-  let y = drawHeader(doc, company, { includeLogo })
+  let y = drawHeader(doc, company, { includeLogo }, ctx)
 
   // 2. Bar info dokumen
-  y = drawDocInfoBar(doc, invoice, y)
+  y = drawDocInfoBar(doc, invoice, y, ctx)
 
   // 3. Kepada + No Kontrak
-  y = drawRecipientBlock(doc, invoice, y)
+  y = drawRecipientBlock(doc, invoice, y, ctx)
 
   // 4. Tabel
-  y = drawItemTable(doc, invoice, y, copyIndex)
-  y += 4
+  y = drawItemTable(doc, invoice, y, copyIndex, ctx)
+  y += compact ? 2 : 4
 
   // 5. Footer (pembayaran + totals)
-  const minFooterH = 80
-  if (y + minFooterH > doc.page.height - doc.page.margins.bottom - 120) {
-    doc.addPage()
-    y = doc.page.margins.top
+  if (!compact) {
+    const minFooterH = 80
+    if (y + minFooterH > doc.page.height - doc.page.margins.bottom - 120) {
+      doc.addPage()
+      y = doc.page.margins.top
+    }
   }
-  y = drawFooter(doc, invoice, company, y)
+  y = drawFooter(doc, invoice, company, y, ctx)
 
   // 6. Tanda tangan
   let contentEndY = y
   if (includeSig) {
-    const sigH = 100
-    if (y + sigH > doc.page.height - doc.page.margins.bottom) {
-      doc.addPage()
-      y = doc.page.margins.top
+    if (!compact) {
+      const sigH = 100
+      if (y + sigH > doc.page.height - doc.page.margins.bottom) {
+        doc.addPage()
+        y = doc.page.margins.top
+      }
     }
-    contentEndY = drawSignatures(doc, invoice, company, y)
+    contentEndY = drawSignatures(doc, invoice, company, y, ctx)
   }
 
   // Page footer (nomor + tanggal cetak) pada halaman terakhir copy ini —
   // diletakkan tepat di bawah konten terakhir (tanda tangan / footer totals).
-  drawPageFooter(doc, invoice, contentEndY)
+  drawPageFooter(doc, invoice, contentEndY, ctx)
+
+  return contentEndY
 }
 
 // ── Lampiran foto (halaman terakhir invoice) ──────────────────────────────
@@ -1038,16 +1082,36 @@ function render(doc, invoice, company, options = {}) {
     ? options.copies
     : 3
 
+  // ── Cek apakah rangkap 1 & 2 bisa digabung ke 1 halaman (mirip SJ) ──────
+  const items = invoice.items || []
+  const rowCount = items.length === 0 ? 0 : buildInvoiceTableRows(invoice, items).length
+  const canCombo = copies >= 2 && rowCount > 0 && rowCount <= COMBO_MAX_ROWS
+
+  let comboTopY = null
+  let comboBotY = null
+  if (canCombo) {
+    comboTopY = doc.page.margins.top
+    comboBotY = comboTopY + comboCopyHeight(doc) + COMBO_GAP
+  }
+
   for (let i = 0; i < copies; i++) {
-    if (i > 0) doc.addPage()
-    renderOneCopy(doc, invoice, company, options, i)
+    const isSecondOfCombo = canCombo && i === 1
+    if (i > 0 && !isSecondOfCombo) doc.addPage()
+
+    const ctx = canCombo && i < 2
+      ? { compact: true, startY: i === 0 ? comboTopY : comboBotY, maxY: i === 0 ? comboBotY - COMBO_GAP : (doc.page.height - doc.page.margins.bottom) }
+      : null
+
+    renderOneCopy(doc, invoice, company, options, i, ctx)
 
     // Opsional: label lembar di sudut kanan bawah tiap salinan
     if (options.copyLabel) {
       const { L, W } = pageGeom(doc)
-      const footerY  = doc.page.height - doc.page.margins.bottom + 4
+      const footerY = ctx && i === 0
+        ? comboBotY - COMBO_GAP - 9
+        : doc.page.height - doc.page.margins.bottom - 9
       doc.font('Helvetica').fontSize(7).fillColor('#AAAAAA')
-         .text(`Lembar ${i + 1} / ${copies}`, L, footerY, { width: W, align: 'right' })
+         .text(`Lembar ${i + 1} / ${copies}`, L, footerY, { width: W, align: 'right', lineBreak: false })
       doc.fillColor('#000000')
     }
   }

@@ -114,7 +114,7 @@ export default function CreateInvoicePage() {
   } = useInvoiceItems()
 
   useEffect(() => {
-    if (role !== 'super_admin') {
+    if (role !== null && role !== 'super_admin') {
       pushToast({ title: 'Akses Ditolak', description: 'Anda tidak memiliki akses ke halaman ini.', variant: 'error' })
       router.replace('/dashboard')
     }
@@ -212,7 +212,7 @@ export default function CreateInvoicePage() {
       .slice(0, 25)
   }, [availableSJs, selectedSJs, sjSearch])
 
-  if (role !== 'super_admin') return null
+  if (role === null || role !== 'super_admin') return null
 
   const effectiveServiceType = resolveEffectiveInvoiceServiceType(serviceType, customServiceName)
   const isDeliveryLikeService = effectiveServiceType !== 'rental'
@@ -277,7 +277,7 @@ export default function CreateInvoicePage() {
 
   const updateDeliveryShipmentPricing = (field: 'qty' | 'unit' | 'unit_price', value: string | number) => {
     if (field === 'qty') setDeliveryShipmentQty(Number(value || 0))
-    if (field === 'unit') setDeliveryShipmentUnit(String(value || 'pengiriman'))
+    if (field === 'unit') setDeliveryShipmentUnit(value === '' ? '' : String(value ?? 'pengiriman'))
     if (field === 'unit_price') setDeliveryShipmentUnitPrice(Number(value || 0))
   }
 

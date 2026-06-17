@@ -1,6 +1,6 @@
 'use strict'
 
-const { Op } = require('sequelize')
+const { Op, literal } = require('sequelize')
 const {
   Invoice,
   InvoiceItem,
@@ -118,7 +118,16 @@ function list({
 }) {
   const where = {}
 
-  if (status && status !== 'all') where.status = status
+  if (status && status !== 'all') {
+    if (status === 'outstanding') {
+      // "Outstanding" = piutang aktif: invoice terbit (atau sudah ditandai
+      // outstanding manual) yang sisa tagihannya masih > 0.
+      where.status = { [Op.in]: ['sent', 'outstanding'] }
+      where[Op.and] = literal('(total_amount - paid_amount) > 0')
+    } else {
+      where.status = status
+    }
+  }
   if (projectId)  where.project_id  = projectId
   if (customerId) where.customer_id = customerId
 

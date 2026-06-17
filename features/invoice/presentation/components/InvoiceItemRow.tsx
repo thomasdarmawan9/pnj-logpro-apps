@@ -36,7 +36,11 @@ const UNIT_OPTIONS = [
   'Lembar',
   'Liter',
   'Meter',
+  'Pallet',
+  'Buruh',
 ]
+
+const UNIT_OTHER_VALUE = 'Lainnya'
 
 interface FleetOption {
   id: number
@@ -93,6 +97,8 @@ export default function InvoiceItemRow({
   const duration = calcDuration(item.period_start, item.period_end)
   const subtotalFormatted = item.subtotal > 0 ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(item.subtotal) : '—'
   const errPrefix = `items.${index}`
+  const matchedUnit = UNIT_OPTIONS.find(u => u.toLowerCase() === (item.unit ?? '').toLowerCase())
+  const isCustomUnit = !matchedUnit
 
   useEffect(() => {
     let alive = true
@@ -271,11 +277,20 @@ export default function InvoiceItemRow({
           <label className="text-xs font-medium text-gray-600 mb-1 block">Satuan</label>
           <select
             className="form-input w-full text-sm"
-            value={item.unit}
-            onChange={e => onChange(item.uuid, 'unit', e.target.value)}
+            value={isCustomUnit ? UNIT_OTHER_VALUE : matchedUnit}
+            onChange={e => onChange(item.uuid, 'unit', e.target.value === UNIT_OTHER_VALUE ? '' : e.target.value)}
           >
             {UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
+            <option value={UNIT_OTHER_VALUE}>{UNIT_OTHER_VALUE}</option>
           </select>
+          {isCustomUnit && (
+            <input
+              className="form-input w-full text-sm mt-2"
+              value={item.unit}
+              onChange={e => onChange(item.uuid, 'unit', e.target.value)}
+              placeholder="Tulis satuan..."
+            />
+          )}
         </div>
         <div>
           <label className="text-xs font-medium text-gray-600 mb-1 block">Harga/{item.unit} *</label>

@@ -5,7 +5,7 @@ import { useDispatch, useSelector } from 'react-redux'
 import { AppDispatch, RootState } from '@/store'
 import {
   fetchFleets, createFleet, updateFleet, toggleFleetStatus,
-  completeFleetRental,
+  completeFleetRental, deleteFleet,
   openFleetForm, closeFleetForm,
 } from '@/store/slices/masterSlice'
 import { Fleet } from '@/features/master/domain/entities/Fleet'
@@ -29,6 +29,7 @@ export function useFleet() {
     update: (uuid: string, data: Partial<Fleet>) => dispatch(updateFleet({ uuid, data })),
     toggle: (uuid: string) => dispatch(toggleFleetStatus(uuid)),
     completeRental: (uuid: string) => dispatch(completeFleetRental(uuid)),
+    remove: (uuid: string) => dispatch(deleteFleet(uuid)),
     refresh: () => dispatch(fetchFleets()),
   }
 }

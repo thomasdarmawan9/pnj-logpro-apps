@@ -320,6 +320,10 @@ class MockMasterRepository implements IMasterRepository {
     return normalizeFleet(response.data)
   }
 
+  async deleteFleet(uuid: string): Promise<void> {
+    await apiRequest<null>(`/fleets/${uuid}`, { method: 'DELETE' })
+  }
+
   async deleteFleetLampiran(uuid: string, filePath: string): Promise<Fleet> {
     const filename = filePath.split('/').pop()!
     const response = await apiRequest<ApiFleet>(`/fleets/${uuid}/lampiran/${filename}`, {
@@ -360,6 +364,10 @@ class MockMasterRepository implements IMasterRepository {
       body: formData,
     })
     return normalizeDriver(response.data)
+  }
+
+  async deleteDriver(uuid: string): Promise<void> {
+    await apiRequest<null>(`/drivers/${uuid}`, { method: 'DELETE' })
   }
 
   async deleteDriverLampiran(uuid: string, filePath: string): Promise<Driver> {

@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { Plus, Search, Pencil, Truck, ToggleLeft, Filter, RotateCcw, ChevronDown } from 'lucide-react'
+import { Plus, Search, Pencil, Truck, ToggleLeft, Trash2, Filter, RotateCcw, ChevronDown } from 'lucide-react'
 import { useFleet } from '../hooks/useFleet'
 import FleetFormModal from '../components/FleetFormModal'
 import FleetLampiranModal from '../components/FleetLampiranModal'
+import ConfirmDeleteModal from '../components/ConfirmDeleteModal'
 import FleetCategoryBadge from '@/components/ui/FleetCategoryBadge'
 import FleetStatusBadge from '@/components/ui/FleetStatusBadge'
 import { useToast } from '@/components/toast/useToast'
@@ -18,7 +19,7 @@ import { RootState } from '@/store'
 const ROWS_PER_PAGE = 10
 
 export default function FleetListPage() {
-  const { fleets, isLoading, modal, openForm, closeForm, create, update, toggle, completeRental, refresh } = useFleet()
+  const { fleets, isLoading, modal, openForm, closeForm, create, update, toggle, completeRental, remove, refresh } = useFleet()
   const { push: pushToast } = useToast()
   const user = useSelector((s: RootState) => s.auth.user)
   const canEdit = user?.role === 'super_admin' || user?.role === 'admin_ops'
@@ -29,6 +30,8 @@ export default function FleetListPage() {
   const [submitting, setSubmitting] = useState(false)
   const [lampiranFleet, setLampiranFleet] = useState<Fleet | null>(null)
   const [page, setPage] = useState(1)
+  const [deleteTarget, setDeleteTarget] = useState<Fleet | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   const resetFilters = () => { setSearch(''); setFilterCategory('all'); setFilterStatus('all'); setPage(1) }
 
@@ -87,6 +90,7 @@ export default function FleetListPage() {
       }
       if (pendingLampiran.length > 0) await refresh()
       closeForm()
+      setPage(1)
       pushToast({ title: modal.data ? 'Armada diperbarui' : 'Armada berhasil ditambahkan', variant: 'success' })
     } catch {
       pushToast({ title: 'Gagal menyimpan armada', variant: 'error' })
@@ -98,6 +102,22 @@ export default function FleetListPage() {
   const handleToggle = async (fleet: Fleet) => {
     await toggle(fleet.uuid)
     pushToast({ title: `Armada ${fleet.status === 'active' ? 'dinonaktifkan' : 'diaktifkan'}`, variant: 'success' })
+  }
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      const action = await remove(deleteTarget.uuid)
+      if ((action as { meta?: { requestStatus?: string } }).meta?.requestStatus === 'rejected') {
+        pushToast({ title: (action as { payload?: string }).payload || 'Gagal menghapus armada', variant: 'error' })
+        return
+      }
+      pushToast({ title: 'Armada dihapus', variant: 'success' })
+      setDeleteTarget(null)
+    } finally {
+      setDeleting(false)
+    }
   }
 
   const handleCompleteRental = async (fleet: Fleet) => {
@@ -307,6 +327,13 @@ export default function FleetListPage() {
                         >
                           <ToggleLeft size={13} className="text-amber-600" />
                         </button>
+                        <button
+                          onClick={() => setDeleteTarget(f)}
+                          className="p-1.5 rounded-lg hover:bg-red-50 transition-colors"
+                          title="Hapus"
+                        >
+                          <Trash2 size={13} className="text-red-500" />
+                        </button>
                       </div>
 	                    ) : !f.is_tbd ? (
 	                      <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Lihat saja</span>
@@ -339,6 +366,14 @@ export default function FleetListPage() {
         paths={lampiranFleet?.lampiran_paths ?? []}
         downloadLampiran={downloadFleetLampiran}
         onClose={() => setLampiranFleet(null)}
+      />
+      <ConfirmDeleteModal
+        open={!!deleteTarget}
+        title="Hapus Armada"
+        description={`Hapus armada "${deleteTarget?.name}" (${deleteTarget?.plate_number})? Data ini akan dihapus secara permanen.`}
+        isSubmitting={deleting}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
       />
     </div>
   )

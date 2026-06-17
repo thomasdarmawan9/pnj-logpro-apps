@@ -18,6 +18,7 @@ export interface IMasterRepository {
   completeFleetRental(uuid: string): Promise<Fleet>
   uploadFleetLampiran(uuid: string, file: File): Promise<Fleet>
   deleteFleetLampiran(uuid: string, filePath: string): Promise<Fleet>
+  deleteFleet(uuid: string): Promise<void>
 
   // Driver
   getDrivers(): Promise<Driver[]>
@@ -26,6 +27,7 @@ export interface IMasterRepository {
   toggleDriverStatus(uuid: string): Promise<Driver>
   uploadDriverLampiran(uuid: string, file: File): Promise<Driver>
   deleteDriverLampiran(uuid: string, filePath: string): Promise<Driver>
+  deleteDriver(uuid: string): Promise<void>
 
   // Project
   getProjects(): Promise<Project[]>

@@ -5,7 +5,8 @@ import { Plus, Trash2 } from 'lucide-react'
 import { SJItem } from '../../domain/entities/SuratJalan'
 import type { CustomerStockAvailableItem } from '@/features/stock/application/use-cases/GetCustomerStockDetail'
 
-const UNIT_OPTIONS = ['pcs', 'unit', 'set', 'kg', 'ton', 'liter', 'dus', 'karton', 'roll', 'meter', 'lainnya']
+const UNIT_OPTIONS = ['pcs', 'unit', 'set', 'kg', 'ton', 'liter', 'dus', 'karton', 'roll', 'meter']
+const UNIT_OTHER_VALUE = 'lainnya'
 
 function createEmptyItem(): SJItem {
   return {
@@ -297,13 +298,30 @@ export default function SJFormItemsSection({
                     </td>
 
                     <td className="pt-1.5 px-1">
-                      <select
-                        className="form-input w-full text-sm"
-                        value={item.unit}
-                        onChange={e => update(item.id, 'unit', e.target.value)}
-                      >
-                        {UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
-                      </select>
+                      {(() => {
+                        const matchedUnit = UNIT_OPTIONS.find(u => u.toLowerCase() === (item.unit ?? '').toLowerCase())
+                        const isCustomUnit = !matchedUnit
+                        return (
+                          <>
+                            <select
+                              className="form-input w-full text-sm"
+                              value={isCustomUnit ? UNIT_OTHER_VALUE : matchedUnit}
+                              onChange={e => update(item.id, 'unit', e.target.value === UNIT_OTHER_VALUE ? '' : e.target.value)}
+                            >
+                              {UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
+                              <option value={UNIT_OTHER_VALUE}>{UNIT_OTHER_VALUE}</option>
+                            </select>
+                            {isCustomUnit && (
+                              <input
+                                className="form-input w-full text-sm mt-2"
+                                value={item.unit}
+                                onChange={e => update(item.id, 'unit', e.target.value)}
+                                placeholder="Tulis satuan..."
+                              />
+                            )}
+                          </>
+                        )
+                      })()}
                     </td>
 
                     <td className="pt-1.5 px-1">

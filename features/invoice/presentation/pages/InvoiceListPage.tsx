@@ -59,14 +59,14 @@ export default function InvoiceListPage() {
   const customerOptions = useMemo(() => [
     { value: 'all', label: 'Semua Customer' },
     ...customers
-      .map(customer => ({ value: customer.name, label: customer.name }))
+      .map(customer => ({ value: customer.uuid, label: customer.name }))
       .sort((a, b) => a.label.localeCompare(b.label)),
   ], [customers])
 
   const projectOptions = useMemo(() => [
     { value: 'all', label: 'Semua Proyek' },
     ...projects
-      .map(project => ({ value: project.code, label: `${project.code} - ${project.name}` }))
+      .map(project => ({ value: project.uuid, label: `${project.code} - ${project.name}` }))
       .sort((a, b) => a.label.localeCompare(b.label)),
   ], [projects])
 

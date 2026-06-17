@@ -5,7 +5,8 @@ import type { InvoiceItem } from '../../domain/entities/Invoice'
 
 type PartialItem = Omit<InvoiceItem, 'id' | 'invoice_id'>
 
-const CARGO_UNIT_OPTIONS = ['pcs', 'unit', 'set', 'kg', 'ton', 'collie', 'liter', 'dus', 'karton', 'roll', 'meter', 'batang', 'lainnya']
+const CARGO_UNIT_OPTIONS = ['pcs', 'unit', 'set', 'kg', 'ton', 'collie', 'liter', 'dus', 'karton', 'roll', 'meter', 'batang', 'pallet', 'buruh']
+const CARGO_UNIT_OTHER_VALUE = 'lainnya'
 
 interface Props {
   items: PartialItem[]
@@ -88,13 +89,31 @@ export default function DeliveryInvoiceItemsSection({
                       />
                     </td>
                     <td className="py-2 px-1">
-                      <select
-                        className="form-input w-full text-sm"
-                        value={item.cargo_unit ?? item.unit}
-                        onChange={event => onChange(item.uuid, 'cargo_unit', event.target.value)}
-                      >
-                        {CARGO_UNIT_OPTIONS.map(unit => <option key={unit} value={unit}>{unit}</option>)}
-                      </select>
+                      {(() => {
+                        const cargoUnit = item.cargo_unit ?? item.unit ?? ''
+                        const matchedUnit = CARGO_UNIT_OPTIONS.find(u => u.toLowerCase() === cargoUnit.toLowerCase())
+                        const isCustomUnit = !matchedUnit
+                        return (
+                          <>
+                            <select
+                              className="form-input w-full text-sm"
+                              value={isCustomUnit ? CARGO_UNIT_OTHER_VALUE : matchedUnit}
+                              onChange={event => onChange(item.uuid, 'cargo_unit', event.target.value === CARGO_UNIT_OTHER_VALUE ? '' : event.target.value)}
+                            >
+                              {CARGO_UNIT_OPTIONS.map(unit => <option key={unit} value={unit}>{unit}</option>)}
+                              <option value={CARGO_UNIT_OTHER_VALUE}>{CARGO_UNIT_OTHER_VALUE}</option>
+                            </select>
+                            {isCustomUnit && (
+                              <input
+                                className="form-input w-full text-sm mt-2"
+                                value={cargoUnit}
+                                onChange={event => onChange(item.uuid, 'cargo_unit', event.target.value)}
+                                placeholder="Tulis satuan..."
+                              />
+                            )}
+                          </>
+                        )
+                      })()}
                     </td>
                     <td className="py-2 px-1">
                       <input

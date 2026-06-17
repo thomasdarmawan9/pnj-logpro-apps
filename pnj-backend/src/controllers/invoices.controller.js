@@ -13,6 +13,11 @@ const list = asyncHandler(async (req, res) => {
   res.json(paginate(rows, count, page, limit))
 })
 
+const summary = asyncHandler(async (req, res) => {
+  const data = await service.getSummaryStats(req.query)
+  res.json(success(data))
+})
+
 const getOne = asyncHandler(async (req, res) => {
   const data = await service.getByUuid(req.params.uuid)
   res.json(success(data))
@@ -112,6 +117,7 @@ const downloadLampiran = asyncHandler(async (req, res) => {
 
 module.exports = {
   list,
+  summary,
   getOne,
   create,
   update,

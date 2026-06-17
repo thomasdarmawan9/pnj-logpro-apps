@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { Plus, Search, Pencil, ToggleLeft, X, Filter, RotateCcw, ChevronDown } from 'lucide-react'
+import { Plus, Search, Pencil, ToggleLeft, Trash2, X, Filter, RotateCcw, ChevronDown } from 'lucide-react'
 import { useDriver } from '../hooks/useDriver'
 import DriverFormModal from '../components/DriverFormModal'
 import FleetLampiranModal from '../components/FleetLampiranModal'
+import ConfirmDeleteModal from '../components/ConfirmDeleteModal'
 import SIMStatusBadge from '@/components/ui/SIMStatusBadge'
 import { useToast } from '@/components/toast/useToast'
 import { Driver, SIMStatus } from '@/features/master/domain/entities/Driver'
@@ -18,7 +19,7 @@ import { RootState } from '@/store'
 const ROWS_PER_PAGE = 10
 
 export default function DriverListPage() {
-  const { drivers, isLoading, modal, openForm, closeForm, create, update, toggle, refresh } = useDriver()
+  const { drivers, isLoading, modal, openForm, closeForm, create, update, toggle, remove, refresh } = useDriver()
   const { push: pushToast } = useToast()
   const user = useSelector((s: RootState) => s.auth.user)
   const canEdit = user?.role === 'super_admin' || user?.role === 'admin_ops'
@@ -30,6 +31,8 @@ export default function DriverListPage() {
   const [submitting, setSubmitting] = useState(false)
   const [lampiranDriver, setLampiranDriver] = useState<Driver | null>(null)
   const [page, setPage] = useState(1)
+  const [deleteTarget, setDeleteTarget] = useState<Driver | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   const resetFilters = () => { setSearch(''); setFilterStatus('all'); setFilterSIM('all'); setPage(1) }
 
@@ -72,6 +75,7 @@ export default function DriverListPage() {
       }
       if (pendingLampiran.length > 0) await refresh()
       closeForm()
+      setPage(1)
       pushToast({ title: modal.data ? 'Data supir diperbarui' : 'Supir berhasil ditambahkan', variant: 'success' })
     } catch {
       pushToast({ title: 'Gagal menyimpan data supir', variant: 'error' })
@@ -83,6 +87,22 @@ export default function DriverListPage() {
   const handleToggle = async (driver: Driver) => {
     await toggle(driver.uuid)
     pushToast({ title: `Supir ${driver.status === 'active' ? 'dinonaktifkan' : 'diaktifkan'}`, variant: 'success' })
+  }
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      const action = await remove(deleteTarget.uuid)
+      if ((action as { meta?: { requestStatus?: string } }).meta?.requestStatus === 'rejected') {
+        pushToast({ title: (action as { payload?: string }).payload || 'Gagal menghapus supir', variant: 'error' })
+        return
+      }
+      pushToast({ title: 'Supir dihapus', variant: 'success' })
+      setDeleteTarget(null)
+    } finally {
+      setDeleting(false)
+    }
   }
 
   const rowBg = (d: Driver) => {
@@ -288,6 +308,9 @@ export default function DriverListPage() {
 	                        <button onClick={() => handleToggle(d)} className="p-1.5 rounded-lg hover:bg-amber-50" title={d.status === 'active' ? 'Nonaktifkan' : 'Aktifkan'}>
 	                          <ToggleLeft size={13} className="text-amber-600" />
 	                        </button>
+	                        <button onClick={() => setDeleteTarget(d)} className="p-1.5 rounded-lg hover:bg-red-50" title="Hapus">
+	                          <Trash2 size={13} className="text-red-500" />
+	                        </button>
 	                      </div>
 	                    ) : (
 	                      <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Lihat saja</span>
@@ -317,6 +340,14 @@ export default function DriverListPage() {
         paths={lampiranDriver?.lampiran_paths ?? []}
         downloadLampiran={downloadDriverLampiran}
         onClose={() => setLampiranDriver(null)}
+      />
+      <ConfirmDeleteModal
+        open={!!deleteTarget}
+        title="Hapus Supir"
+        description={`Hapus data supir "${deleteTarget?.name}"? Data ini akan dihapus secara permanen.`}
+        isSubmitting={deleting}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
       />
     </div>
   )
