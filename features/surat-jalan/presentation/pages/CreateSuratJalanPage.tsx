@@ -30,6 +30,7 @@ export default function CreateSuratJalanPage() {
 
   const { form, updateField, errors, validate, isDirty } = useSuratJalanForm({ mode: 'create' })
   const [scopeMode, setScopeMode] = useState<'project' | 'customer'>('project')
+  const [armadaMode, setArmadaMode] = useState<'master' | 'tbd'>('master')
   const [driverMode, setDriverMode] = useState<'master' | 'tbd'>('master')
   const [selectedProject, setSelectedProject] = useState<ProjectOption | null>(null)
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
@@ -139,7 +140,7 @@ export default function CreateSuratJalanPage() {
     return list.slice(0, 25)
   }, [customers, customerSearch])
 
-  const canPublish = !!selectedArmada && (
+  const canPublish = (armadaMode === 'tbd' || !!selectedArmada) && (
     driverMode === 'tbd' ||
     (driverMode === 'master' && !!selectedDriver)
   )
@@ -148,7 +149,7 @@ export default function CreateSuratJalanPage() {
     noSJ: 'SJ-2026-090',
     proyek: scopeMode === 'project' ? selectedProject?.name || '-' : 'Tanpa proyek',
     customer: scopeMode === 'project' ? selectedProject?.customer || '-' : selectedCustomer?.name || '-',
-    armada: selectedArmada?.name || '-',
+    armada: armadaMode === 'tbd' ? 'Belum ditentukan' : (selectedArmada?.name || '-'),
     supir: driverMode === 'tbd' ? 'Belum ditentukan' : (selectedDriver?.name || '-'),
     rute: `${form.origin || '-'} → ${form.destination || '-'}`,
     tanggal: formatLongDate(form.sj_date),
@@ -164,7 +165,8 @@ export default function CreateSuratJalanPage() {
       ...form,
       project_id: scopeMode === 'project' ? selectedProject?.id || null : null,
       customer_id: scopeMode === 'customer' ? selectedCustomer?.id || null : null,
-      fleet_id: selectedArmada?.id || 0,
+      fleet_id: armadaMode === 'tbd' ? 0 : (selectedArmada?.id || 0),
+      armada_tbd: armadaMode === 'tbd',
       driver_id: driverMode === 'master' ? selectedDriver?.id || null : null,
       driver_name_manual: driverMode === 'tbd' ? 'Belum Ditentukan' : null,
       publish,
@@ -361,13 +363,17 @@ export default function CreateSuratJalanPage() {
           </div>
 
           <SJFormArmadaSection
+            mode={armadaMode}
             value={selectedArmada}
             options={armadaOptionsFromApi}
-            onChange={(armada) => {
-              setSelectedArmada(armada)
-              updateField('fleet_id', armada.id)
+            onModeChange={mode => {
+              setArmadaMode(mode)
+              if (mode === 'tbd') { setSelectedArmada(null); updateField('fleet_id', 0) }
             }}
-            showTBDWarning
+            onChange={armada => {
+              setSelectedArmada(armada)
+              updateField('fleet_id', armada?.id ?? 0)
+            }}
             errors={errors}
           />
 
@@ -486,7 +492,7 @@ export default function CreateSuratJalanPage() {
               className="px-4 py-2 rounded-lg text-white"
               style={{ backgroundColor: canPublish ? 'var(--green-primary)' : '#A7D7B2' }}
               disabled={!canPublish || isSubmitting || isMasterLoading}
-              title={!canPublish ? 'Pilih armada terlebih dahulu' : undefined}
+              title={!canPublish ? 'Lengkapi armada dan supir terlebih dahulu' : undefined}
             >
               {isSubmitting ? 'Menyimpan...' : 'Buat & Terbitkan →'}
             </button>

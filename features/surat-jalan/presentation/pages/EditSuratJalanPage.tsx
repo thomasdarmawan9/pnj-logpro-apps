@@ -33,6 +33,7 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
   const { selectedSJ, isDetailLoading } = useSuratJalanDetail(uuid)
   const { form, setForm, updateField, errors, validate } = useSuratJalanForm({ mode: 'edit' })
 
+    const [armadaMode, setArmadaMode] = useState<'master' | 'tbd'>('master')
   const [driverMode, setDriverMode] = useState<'master' | 'tbd'>('master')
   const [selectedArmada, setSelectedArmada] = useState<ArmadaOption | null>(null)
   const [selectedDriver, setSelectedDriver] = useState<DriverOption | null>(null)
@@ -90,7 +91,9 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
         internal_notes: selectedSJ.internal_notes || '',
         publish: false,
       })
-      setSelectedArmada(armadaOptions.find(a => a.id === selectedSJ.fleet_id) || null)
+      const foundArmada = armadaOptions.find(a => a.id === selectedSJ.fleet_id) || null
+      setSelectedArmada(foundArmada)
+      setArmadaMode(foundArmada?.isTBD || !selectedSJ.fleet_id ? 'tbd' : 'master')
       setSelectedDriver(driverOptions.find(d => d.id === selectedSJ.driver_id) || null)
       setLampiranPaths(selectedSJ.lampiran_paths ?? [])
       if (selectedSJ.driver_id) setDriverMode('master')
@@ -130,7 +133,7 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
     dispatch(updateSuratJalan({
       uuid: selectedSJ.uuid,
       dto: {
-        fleet_id: selectedArmada?.id,
+        fleet_id: armadaMode === 'tbd' ? 0 : selectedArmada?.id,
         driver_id: driverMode === 'master' ? selectedDriver?.id || null : null,
         driver_name_manual: driverMode === 'tbd' ? 'Belum Ditentukan' : null,
         origin: form.origin,
@@ -203,18 +206,17 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
           </div>
 
           <SJFormArmadaSection
+            mode={armadaMode}
             value={selectedArmada}
             options={armadaOptions}
-            onChange={(armada) => {
-              if (isAssigned) {
-                setSelectedArmada(armada)
-                updateField('fleet_id', armada.id)
-              } else {
-                setSelectedArmada(armada)
-                updateField('fleet_id', armada.id)
-              }
+            onModeChange={mode => {
+              setArmadaMode(mode)
+              if (mode === 'tbd') { setSelectedArmada(null); updateField('fleet_id', 0) }
             }}
-            showTBDWarning
+            onChange={armada => {
+              setSelectedArmada(armada)
+              updateField('fleet_id', armada?.id ?? 0)
+            }}
             errors={errors}
           />
 

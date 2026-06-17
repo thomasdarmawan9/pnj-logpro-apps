@@ -4,6 +4,7 @@ export interface CreateSJDto {
   project_id: number | null
   customer_id: number | null
   fleet_id: number
+  armada_tbd?: boolean
   driver_id: number | null
   driver_name_manual: string | null
   sj_date: string

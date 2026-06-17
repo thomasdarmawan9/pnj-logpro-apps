@@ -18,8 +18,8 @@ export function validateCreateSJ(dto: CreateSJDto): ValidationResult {
   }
 
   if (dto.publish) {
-    if (!dto.fleet_id || dto.fleet_id === 0) {
-      errors.fleet_id = 'Pilih armada untuk menerbitkan SJ'
+    if (!dto.armada_tbd && (!dto.fleet_id || dto.fleet_id === 0)) {
+      errors.fleet_id = 'Pilih armada atau tandai "Belum Ditentukan" untuk menerbitkan SJ'
     }
     if (!dto.driver_id && !dto.driver_name_manual?.trim()) {
       errors.driver = 'Supir wajib diisi untuk menerbitkan SJ'
