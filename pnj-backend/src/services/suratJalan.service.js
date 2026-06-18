@@ -518,14 +518,14 @@ async function assign(uuid, payload, actor) {
     }, t)
 
     await sj.update({
-      fleet_id:           fleet.id,
+      fleet_id:           fleet?.id ?? null,
       driver_id:          driver ? driver.id : null,
       driver_name_manual: payload.driver_name_manual || null,
       status:             STATUS.ASSIGNED,
       updated_by:         actor?.id || null,
     }, { transaction: t })
 
-    await syncAutoStockDisbursementsForSJ(sj, actor, t, { fleet, driver })
+    await syncAutoStockDisbursementsForSJ(sj, actor, t, { fleet: fleet ?? null, driver: driver ?? null })
 
     return repo.findByUuid(sj.uuid, { transaction: t })
   })

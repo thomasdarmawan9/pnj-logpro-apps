@@ -11,7 +11,7 @@ interface AssignModalProps {
   open: boolean
   sj: SuratJalan | null
   onClose: () => void
-  onConfirm: (input: { fleet_id: number; driver_id: number | null; driver_name_manual: string | null }) => void
+  onConfirm: (input: { fleet_id: number | null; driver_id: number | null; driver_name_manual: string | null }) => void
 }
 
 export default function AssignModal({ open, sj, onClose, onConfirm }: AssignModalProps) {
@@ -59,10 +59,10 @@ export default function AssignModal({ open, sj, onClose, onConfirm }: AssignModa
       subtitle={sj ? `${sj.sj_number} · ${sj.customer.name}` : undefined}
     >
       <div className="space-y-4">
-        <div className="text-sm text-gray-600">Konfirmasi armada dan supir sebelum menerbitkan.</div>
+        <div className="text-sm text-gray-600">Terbitkan SJ. Armada dan supir bersifat opsional dan bisa diisi setelah terbit.</div>
 
         <label className="text-xs font-medium" style={{ color: '#374151' }}>
-          Armada *
+          Armada <span className="text-gray-400 font-normal">(opsional)</span>
           <select
             className="form-input w-full mt-1"
             value={fleetId}
@@ -92,7 +92,7 @@ export default function AssignModal({ open, sj, onClose, onConfirm }: AssignModa
 
         {mode === 'master' ? (
           <label className="text-xs font-medium" style={{ color: '#374151' }}>
-            Supir *
+            Supir <span className="text-gray-400 font-normal">(opsional)</span>
             <select
               className="form-input w-full mt-1"
               value={driverId || ''}
@@ -106,7 +106,7 @@ export default function AssignModal({ open, sj, onClose, onConfirm }: AssignModa
           </label>
         ) : (
           <label className="text-xs font-medium" style={{ color: '#374151' }}>
-            Nama supir *
+            Nama supir <span className="text-gray-400 font-normal">(opsional)</span>
             <input
               className="form-input w-full mt-1"
               value={manualName}
@@ -125,7 +125,7 @@ export default function AssignModal({ open, sj, onClose, onConfirm }: AssignModa
             Batal
           </button>
           <button
-            onClick={() => onConfirm({ fleet_id: fleetId, driver_id: mode === 'master' ? driverId : null, driver_name_manual: mode === 'manual' ? manualName : null })}
+            onClick={() => onConfirm({ fleet_id: fleetId || null, driver_id: mode === 'master' ? driverId : null, driver_name_manual: mode === 'manual' ? (manualName.trim() || null) : null })}
             className="px-4 py-2 rounded-lg text-white"
             style={{ backgroundColor: 'var(--green-primary)' }}
           >

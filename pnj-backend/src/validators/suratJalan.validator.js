@@ -83,20 +83,10 @@ const updateSJSchema = Joi.object({
 
 const assignSJSchema = Joi.object({
   fleet_uuid:          Joi.string().uuid({ version: ['uuidv4'] }),
-  fleet_id:            Joi.number().integer().min(1),
+  fleet_id:            Joi.number().integer().min(1).allow(null),
   driver_uuid:         Joi.string().uuid({ version: ['uuidv4'] }).allow(null),
   driver_id:           Joi.number().integer().min(1).allow(null),
   driver_name_manual:  Joi.string().trim().max(100).allow('', null),
-}).custom((val, helpers) => {
-  if (!val.fleet_uuid && !val.fleet_id) {
-    return helpers.error('any.custom', { message: 'Fleet wajib dipilih.' })
-  }
-  if (!val.driver_uuid && !val.driver_id && !(val.driver_name_manual && val.driver_name_manual.trim())) {
-    return helpers.error('any.custom', { message: 'Supir wajib diisi.' })
-  }
-  return val
-}).messages({
-  'any.custom': '{{#message}}',
 })
 
 const deliverSJSchema = Joi.object({
