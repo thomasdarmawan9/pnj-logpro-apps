@@ -469,8 +469,20 @@ const exportAgingARCustomerPdf = asyncHandler(async (req, res) => {
   // Optional status filter: ?status=outstanding|paid|sent|draft|void
   const statusFilter = req.query.status && req.query.status !== 'all' ? req.query.status : null
   if (statusFilter) {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
     data.projects.forEach(project => {
-      project.invoices = project.invoices.filter(inv => inv.status === statusFilter)
+      project.invoices = project.invoices.filter(inv => {
+        if (statusFilter === 'outstanding') {
+          // Tangkap invoice berstatus 'outstanding' ATAU 'sent' yang sudah lewat jatuh tempo
+          const isExplicitlyOutstanding = inv.status === 'outstanding'
+          const isSentOverdue = inv.status === 'sent'
+            && Number(inv.remaining_amount) > 0
+            && new Date(inv.due_date) < today
+          return isExplicitlyOutstanding || isSentOverdue
+        }
+        return inv.status === statusFilter
+      })
     })
   }
 
@@ -493,7 +505,9 @@ const exportAgingARCustomerPdf = asyncHandler(async (req, res) => {
     },
   })
 
-  const filterLabel = statusFilter ? ` | Filter: ${STATUS_LABELS[statusFilter] || statusFilter}` : ''
+  const filterLabel = statusFilter
+    ? ` | Filter: ${statusFilter === 'outstanding' ? 'Outstanding (termasuk Terbit jatuh tempo)' : (STATUS_LABELS[statusFilter] || statusFilter)}`
+    : ''
   doc.pipe(res)
   drawPdfTitle(doc, `Detail Aging AR Customer - ${data.customer_name}`, `Dicetak ${formatDateShort(new Date())}${filterLabel} | NPWP: ${data.npwp || '-'} | PKP: ${data.is_pkp ? 'Ya' : 'Tidak'}`)
   drawPdfKeyValues(doc, [

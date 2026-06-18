@@ -579,7 +579,7 @@ export default function AgingARCustomerDetailPage() {
                     <option value="all">Semua Status</option>
                     <option value="draft">Draft</option>
                     <option value="sent">Terbit</option>
-                    <option value="outstanding">Outstanding</option>
+                    <option value="outstanding">Outstanding (jatuh tempo)</option>
                     <option value="paid">Lunas</option>
                     <option value="void">Void</option>
                   </select>
@@ -588,9 +588,9 @@ export default function AgingARCustomerDetailPage() {
                 <p className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>
                   {pdfStatusFilter === 'all'
                     ? 'PDF akan memuat semua invoice.'
-                    : `PDF hanya memuat invoice berstatus "${
-                        { draft: 'Draft', sent: 'Terbit', outstanding: 'Outstanding', paid: 'Lunas', void: 'Void' }[pdfStatusFilter]
-                      }".`
+                    : pdfStatusFilter === 'outstanding'
+                      ? 'PDF memuat invoice berstatus Outstanding + invoice Terbit yang sudah melewati jatuh tempo.'
+                      : `PDF hanya memuat invoice berstatus "${{ draft: 'Draft', sent: 'Terbit', paid: 'Lunas', void: 'Void' }[pdfStatusFilter]}".`
                   }
                 </p>
               </div>
