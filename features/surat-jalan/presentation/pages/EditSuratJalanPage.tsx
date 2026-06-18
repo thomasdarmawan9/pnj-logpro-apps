@@ -205,6 +205,16 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
               Tanggal SJ
               <input type="date" className="form-input w-full mt-1 disabled" value={selectedSJ.sj_date} disabled readOnly />
             </label>
+
+            <label className="text-xs font-medium mt-4 block" style={{ color: '#374151' }}>
+              Nama Pengirim <span className="text-gray-400 font-normal">(opsional)</span>
+              <input
+                className="form-input w-full mt-1"
+                value={form.sender_name || ''}
+                onChange={e => updateField('sender_name', e.target.value || null)}
+                placeholder="contoh: Thomas Darmawan"
+              />
+            </label>
           </div>
 
           <SJFormArmadaSection
@@ -290,16 +300,6 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
                 rows={3}
                 value={form.cargo_description || ''}
                 onChange={e => updateField('cargo_description', e.target.value)}
-              />
-            </label>
-
-            <label className="text-xs font-medium mt-4 block" style={{ color: '#374151' }}>
-              Nama Pengirim <span className="text-gray-400 font-normal">(opsional)</span>
-              <input
-                className="form-input w-full mt-1"
-                value={form.sender_name || ''}
-                onChange={e => updateField('sender_name', e.target.value || null)}
-                placeholder="contoh: Thomas Darmawan"
               />
             </label>
           </div>
