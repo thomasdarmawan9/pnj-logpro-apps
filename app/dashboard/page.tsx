@@ -1,6 +1,9 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { useSelector } from 'react-redux'
+import { RootState } from '@/store'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import MetricCard from '@/components/dashboard/MetricCard'
 import DonutChart from '@/components/dashboard/DonutChart'
@@ -40,6 +43,15 @@ const PERIOD_OPTIONS: { value: PeriodFilter; label: string }[] = [
 const EMPTY_META = { total: 0, page: 1, limit: 10, totalPages: 1 }
 
 export default function DashboardPage() {
+  const router = useRouter()
+  const role = useSelector((state: RootState) => state.auth.user?.role ?? null)
+
+  useEffect(() => {
+    if (role !== null && role !== 'super_admin' && role !== 'admin_finance') {
+      router.push('/surat-jalan')
+    }
+  }, [role, router])
+
   const [moduleFilter, setModuleFilter] = useState<ModuleFilter>('all')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('this_month')
@@ -86,6 +98,8 @@ export default function DashboardPage() {
   }
 
   const isFilterActive = appliedModule !== 'all' || appliedStatus !== 'all' || appliedPeriod !== 'all'
+
+  if (role === null || (role !== 'super_admin' && role !== 'admin_finance')) return null
 
   return (
     <DashboardLayout>
