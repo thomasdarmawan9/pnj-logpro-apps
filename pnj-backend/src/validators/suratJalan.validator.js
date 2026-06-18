@@ -35,7 +35,7 @@ const createSJSchema = Joi.object({
   customer_uuid:       Joi.string().uuid({ version: ['uuidv4'] }),
   customer_id:         Joi.number().integer().min(1).allow(null),
   fleet_uuid:          Joi.string().uuid({ version: ['uuidv4'] }),
-  fleet_id:            Joi.number().integer().min(0),
+  fleet_id:            Joi.number().integer().min(0).allow(null),
   driver_uuid:         Joi.string().uuid({ version: ['uuidv4'] }).allow(null),
   driver_id:           Joi.number().integer().min(1).allow(null),
   driver_name_manual:  Joi.string().trim().max(100).allow('', null),
@@ -46,6 +46,7 @@ const createSJSchema = Joi.object({
   items:               Joi.array().items(sjItemSchema).allow(null).default(null),
   operational_cost:    Joi.number().precision(2).min(0).default(0),
   internal_notes:      Joi.string().trim().allow('', null),
+  sender_name:         Joi.string().trim().max(255).allow('', null),
   publish:             Joi.boolean().default(false),
 }).oxor('project_uuid', 'project_id')
   .oxor('customer_uuid', 'customer_id')
@@ -82,6 +83,7 @@ const updateSJSchema = Joi.object({
   items:               Joi.array().items(sjItemSchema).allow(null),
   operational_cost:    Joi.number().precision(2).min(0),
   internal_notes:      Joi.string().trim().allow('', null),
+  sender_name:         Joi.string().trim().max(255).allow('', null),
   lampiran_paths:      Joi.array().items(Joi.string().trim().max(255)).allow(null),
 }).min(1).messages({
   'object.min': 'Minimal satu field harus diubah.',

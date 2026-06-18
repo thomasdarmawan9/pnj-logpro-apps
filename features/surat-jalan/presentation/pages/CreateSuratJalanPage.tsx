@@ -165,7 +165,7 @@ export default function CreateSuratJalanPage() {
       ...form,
       project_id: scopeMode === 'project' ? selectedProject?.id || null : null,
       customer_id: scopeMode === 'customer' ? selectedCustomer?.id || null : null,
-      fleet_id: armadaMode === 'tbd' ? 0 : (selectedArmada?.id || 0),
+      fleet_id: armadaMode === 'tbd' ? 0 : (selectedArmada?.id ?? null),
       armada_tbd: armadaMode === 'tbd',
       driver_id: driverMode === 'master' ? selectedDriver?.id || null : null,
       driver_name_manual: driverMode === 'tbd' ? 'Belum Ditentukan' : null,

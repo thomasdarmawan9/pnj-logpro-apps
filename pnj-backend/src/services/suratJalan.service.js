@@ -281,7 +281,7 @@ async function resolveMasters({ project_uuid, project_id, customer_uuid, custome
     customer_uuid || customer_id
       ? Customer.findOne({ where: customer_uuid ? { uuid: customer_uuid } : { id: customer_id }, transaction: t })
       : null,
-    fleet_uuid || fleet_id !== undefined
+    fleet_uuid || (fleet_id !== undefined && fleet_id !== null)
       ? Fleet.findOne({ where: fleet_uuid ? { uuid: fleet_uuid } : fleet_id === 0 ? { plate_number: 'TBD' } : { id: fleet_id }, transaction: t })
       : null,
     driver_uuid || driver_id
@@ -294,7 +294,7 @@ async function resolveMasters({ project_uuid, project_id, customer_uuid, custome
   if (project && customer && Number(project.customer_id) !== Number(customer.id)) {
     throw new BadRequestError('Customer tidak sesuai dengan project yang dipilih.')
   }
-  if ((fleet_uuid || fleet_id !== undefined) && !fleet) throw new NotFoundError('Fleet tidak ditemukan.')
+  if ((fleet_uuid || (fleet_id !== undefined && fleet_id !== null)) && !fleet) throw new NotFoundError('Fleet tidak ditemukan.')
   if ((driver_uuid || driver_id) && !driver)    throw new NotFoundError('Driver tidak ditemukan.')
 
   if (fleet && !fleet.is_tbd && fleet.status !== 'active') {
@@ -384,7 +384,7 @@ async function create(payload, actor) {
       sj_number:                 sjNumber,
       project_id:                project?.id || null,
       customer_id:               project?.customer_id || customerId,
-      fleet_id:                  fleet.id,
+      fleet_id:                  fleet?.id ?? null,
       driver_id:                 driver ? driver.id : null,
       driver_name_manual:        payload.driver_name_manual || null,
       sj_date:                   payload.sj_date,
