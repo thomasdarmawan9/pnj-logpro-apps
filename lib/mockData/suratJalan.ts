@@ -27,6 +27,7 @@ export const MOCK_SURAT_JALAN: SuratJalan[] = [
     items: null,
     void_reason: null,
     internal_notes: null,
+    sender_name: null,
     created_by: 1, created_at: '2026-03-12T08:50:00Z', updated_at: '2026-03-14T14:30:00Z',
   },
   {
@@ -55,6 +56,7 @@ export const MOCK_SURAT_JALAN: SuratJalan[] = [
     items: null,
     void_reason: null,
     internal_notes: 'Perhatikan kondisi barang elektronik',
+    sender_name: null,
     created_by: 1, created_at: '2026-03-11T10:00:00Z', updated_at: '2026-03-13T16:00:00Z',
   },
   {
@@ -83,6 +85,7 @@ export const MOCK_SURAT_JALAN: SuratJalan[] = [
     items: null,
     void_reason: null,
     internal_notes: null,
+    sender_name: null,
     created_by: 1, created_at: '2026-03-12T09:00:00Z', updated_at: '2026-03-12T09:15:00Z',
   },
   {
@@ -111,6 +114,7 @@ export const MOCK_SURAT_JALAN: SuratJalan[] = [
     items: null,
     void_reason: null,
     internal_notes: null,
+    sender_name: null,
     created_by: 1, created_at: '2026-03-09T08:00:00Z', updated_at: '2026-03-11T18:45:00Z',
   },
   {
@@ -139,6 +143,7 @@ export const MOCK_SURAT_JALAN: SuratJalan[] = [
     items: null,
     void_reason: null,
     internal_notes: null,
+    sender_name: null,
     created_by: 1, created_at: '2026-03-08T07:00:00Z', updated_at: '2026-03-10T20:00:00Z',
   },
   {
@@ -167,6 +172,7 @@ export const MOCK_SURAT_JALAN: SuratJalan[] = [
     items: null,
     void_reason: null,
     internal_notes: null,
+    sender_name: null,
     created_by: 1, created_at: '2026-03-15T08:00:00Z', updated_at: '2026-03-15T08:00:00Z',
   },
   {
@@ -195,6 +201,7 @@ export const MOCK_SURAT_JALAN: SuratJalan[] = [
     items: null,
     void_reason: null,
     internal_notes: null,
+    sender_name: null,
     created_by: 1, created_at: '2026-03-07T08:00:00Z', updated_at: '2026-03-09T11:00:00Z',
   },
   {
@@ -223,6 +230,7 @@ export const MOCK_SURAT_JALAN: SuratJalan[] = [
     items: null,
     void_reason: null,
     internal_notes: 'Hati-hati barang fragile',
+    sender_name: null,
     created_by: 1, created_at: '2026-03-06T09:00:00Z', updated_at: '2026-03-08T07:30:00Z',
   },
   {
@@ -251,6 +259,7 @@ export const MOCK_SURAT_JALAN: SuratJalan[] = [
     items: null,
     void_reason: 'Kendaraan mengalami kerusakan di perjalanan, SJ dibatalkan',
     internal_notes: null,
+    sender_name: null,
     created_by: 1, created_at: '2026-03-05T08:00:00Z', updated_at: '2026-03-07T15:00:00Z',
   },
   {
@@ -279,6 +288,7 @@ export const MOCK_SURAT_JALAN: SuratJalan[] = [
     items: null,
     void_reason: null,
     internal_notes: null,
+    sender_name: null,
     created_by: 1, created_at: '2026-03-03T08:00:00Z', updated_at: '2026-03-05T22:00:00Z',
   },
   {
@@ -307,6 +317,7 @@ export const MOCK_SURAT_JALAN: SuratJalan[] = [
     items: null,
     void_reason: null,
     internal_notes: null,
+    sender_name: null,
     created_by: 1, created_at: '2026-03-02T08:00:00Z', updated_at: '2026-03-04T17:30:00Z',
   },
   {
@@ -335,6 +346,7 @@ export const MOCK_SURAT_JALAN: SuratJalan[] = [
     items: null,
     void_reason: null,
     internal_notes: 'Menunggu konfirmasi jadwal dari customer',
+    sender_name: null,
     created_by: 1, created_at: '2026-03-01T14:00:00Z', updated_at: '2026-03-01T14:00:00Z',
   },
   {
@@ -363,6 +375,7 @@ export const MOCK_SURAT_JALAN: SuratJalan[] = [
     items: null,
     void_reason: null,
     internal_notes: null,
+    sender_name: null,
     created_by: 1, created_at: '2026-02-26T08:00:00Z', updated_at: '2026-02-28T19:00:00Z',
   },
   {
@@ -391,6 +404,7 @@ export const MOCK_SURAT_JALAN: SuratJalan[] = [
     items: null,
     void_reason: null,
     internal_notes: null,
+    sender_name: null,
     created_by: 1, created_at: '2026-02-23T09:00:00Z', updated_at: '2026-02-23T09:00:00Z',
   },
   {
@@ -419,6 +433,7 @@ export const MOCK_SURAT_JALAN: SuratJalan[] = [
     items: null,
     void_reason: null,
     internal_notes: null,
+    sender_name: null,
     created_by: 1, created_at: '2026-02-18T08:00:00Z', updated_at: '2026-02-20T23:00:00Z',
   },
 ]
