@@ -151,12 +151,8 @@ function InvoiceTable({
             {invoices.map(inv => {
               const isPaid = inv.status === 'paid' || inv.remaining_amount <= 0
 
-              // Rincian item: "Deskripsi - qty unit - keterangan" per item, joined by newline
-              const rincianItems = inv.items.map(it => {
-                const parts = [it.description || '-', `${it.qty} ${it.unit}`]
-                if (it.cargo_notes) parts.push(it.cargo_notes)
-                return parts.join(' - ')
-              })
+              // Rincian item — format berbeda untuk rental vs pengiriman
+              const isRental = inv.service_type === 'rental'
 
               // Rute pengiriman from attached SJs
               const routes = inv.attached_sj_numbers
@@ -175,11 +171,35 @@ function InvoiceTable({
                   {resolveServiceLabel(inv.service_type, inv.custom_service_name)}
                 </td>
                 <td className="px-3 py-2.5" style={{ color: 'var(--text-secondary)', minWidth: 200 }}>
-                  {rincianItems.length > 0
-                    ? rincianItems.map((line, i) => (
-                        <div key={i} className="leading-relaxed">{line}</div>
-                      ))
-                    : <span style={{ color: '#D1D5DB' }}>—</span>
+                  {inv.items.length === 0
+                    ? <span style={{ color: '#D1D5DB' }}>—</span>
+                    : isRental
+                      ? <div className="space-y-3">
+                          {inv.items.map((it, i) => {
+                            const durasiHari = (it.period_start && it.period_end)
+                              ? Math.round((new Date(it.period_end).getTime() - new Date(it.period_start).getTime()) / 86_400_000)
+                              : null
+                            return (
+                              <div key={i} className="space-y-0.5">
+                                <div className="font-medium" style={{ color: 'var(--text-primary)' }}>{it.fleet_label || it.description || '-'}</div>
+                                <div>Unit disewa: {it.qty} unit</div>
+                                {durasiHari !== null
+                                  ? <div>Durasi: {durasiHari} hari</div>
+                                  : it.qty > 0 && it.unit.toLowerCase() !== 'unit'
+                                    ? <div>Durasi: {it.qty} {it.unit.toLowerCase()}</div>
+                                    : null
+                                }
+                              </div>
+                            )
+                          })}
+                        </div>
+                      : <div>
+                          {inv.items.map((it, i) => {
+                            const parts = [it.description || '-', `${it.qty} ${it.unit}`]
+                            if (it.cargo_notes) parts.push(it.cargo_notes)
+                            return <div key={i} className="leading-relaxed">{parts.join(' - ')}</div>
+                          })}
+                        </div>
                   }
                 </td>
                 <td className="px-3 py-2.5" style={{ color: 'var(--text-secondary)', minWidth: 160 }}>
