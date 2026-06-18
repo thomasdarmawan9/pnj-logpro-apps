@@ -162,10 +162,9 @@ export default function CreateSuratJalanPage() {
       ...form,
       project_id: scopeMode === 'project' ? selectedProject?.id || null : null,
       customer_id: scopeMode === 'customer' ? selectedCustomer?.id || null : null,
-      fleet_id: armadaMode === 'tbd' ? 0 : (selectedArmada?.id ?? null),
-      armada_tbd: armadaMode === 'tbd',
+      fleet_id: selectedArmada?.id ?? null,
       driver_id: driverMode === 'master' ? selectedDriver?.id || null : null,
-      driver_name_manual: driverMode === 'tbd' ? 'Belum Ditentukan' : null,
+      driver_name_manual: null,
       publish,
     }))
     setIsSubmitting(false)
@@ -375,11 +374,11 @@ export default function CreateSuratJalanPage() {
             options={armadaOptionsFromApi}
             onModeChange={mode => {
               setArmadaMode(mode)
-              if (mode === 'tbd') { setSelectedArmada(null); updateField('fleet_id', 0) }
+              if (mode === 'tbd') { setSelectedArmada(null); updateField('fleet_id', null) }
             }}
             onChange={armada => {
               setSelectedArmada(armada)
-              updateField('fleet_id', armada?.id ?? 0)
+              updateField('fleet_id', armada?.id ?? null)
             }}
             errors={errors}
           />
