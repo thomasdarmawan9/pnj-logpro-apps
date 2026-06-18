@@ -10,6 +10,7 @@ export interface ProjectDetailInvoiceItem {
   unit: string
   unit_price: number
   subtotal: number
+  cargo_notes: string | null
 }
 
 export interface ProjectDetailPayment {
@@ -41,6 +42,8 @@ export interface ProjectDetailInvoice {
   aging_bucket: AgingBucket | null
   sent_at: string | null
   notes: string | null
+  service_type: string
+  custom_service_name: string | null
   items: ProjectDetailInvoiceItem[]
   payments: ProjectDetailPayment[]
   attached_sj_numbers: string[]

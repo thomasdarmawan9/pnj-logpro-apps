@@ -108,8 +108,10 @@ function buildInvoiceDetails(invoices, asOf) {
       remaining_amount: remaining,
       days_overdue,
       aging_bucket,
-      sent_at:          plain.sent_at ? new Date(plain.sent_at).toISOString() : null,
-      notes:            plain.notes || null,
+      sent_at:              plain.sent_at ? new Date(plain.sent_at).toISOString() : null,
+      notes:                plain.notes || null,
+      service_type:         plain.service_type || 'delivery',
+      custom_service_name:  plain.custom_service_name || null,
       items: (plain.items || []).map(it => ({
         uuid:         it.uuid,
         fleet_label:  it.fleet_label,
@@ -120,6 +122,7 @@ function buildInvoiceDetails(invoices, asOf) {
         unit:         it.unit || 'Unit',
         unit_price:   round2(it.unit_price),
         subtotal:     round2(it.subtotal),
+        cargo_notes:  it.cargo_notes || null,
       })),
       payments: regularPayments.map(p => ({
         uuid:            p.uuid,
@@ -810,8 +813,10 @@ async function getProjectDetail(projectId, opts = {}) {
       remaining_amount: remaining,
       days_overdue,
       aging_bucket,
-      sent_at:          plain.sent_at ? new Date(plain.sent_at).toISOString() : null,
-      notes:            plain.notes || null,
+      sent_at:              plain.sent_at ? new Date(plain.sent_at).toISOString() : null,
+      notes:                plain.notes || null,
+      service_type:         plain.service_type || 'delivery',
+      custom_service_name:  plain.custom_service_name || null,
       items: (plain.items || []).map(it => ({
         uuid:         it.uuid,
         fleet_label:  it.fleet_label,
@@ -822,6 +827,7 @@ async function getProjectDetail(projectId, opts = {}) {
         unit:         it.unit || 'Unit',
         unit_price:   round2(it.unit_price),
         subtotal:     round2(it.subtotal),
+        cargo_notes:  it.cargo_notes || null,
       })),
       payments: regularPayments.map(p => ({
         uuid:            p.uuid,

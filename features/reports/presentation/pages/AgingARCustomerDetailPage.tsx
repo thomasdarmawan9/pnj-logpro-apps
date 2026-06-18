@@ -97,18 +97,31 @@ function safeFilename(value: string) {
   return value.replace(/[^a-zA-Z0-9_\-.]/g, '_')
 }
 
+function resolveServiceLabel(serviceType: string, customName: string | null): string {
+  if (serviceType === 'delivery') return 'Pengiriman'
+  if (serviceType === 'rental') return 'Penyewaan'
+  if (serviceType === 'other') return customName || 'Lainnya'
+  return customName || serviceType || '-'
+}
+
 function InvoiceTable({
   invoices,
+  suratJalan,
   totalInvoiced,
   totalPaid,
   totalOutstanding,
 }: {
   invoices: ProjectDetailInvoice[]
+  suratJalan: ProjectDetailSuratJalan[]
   totalInvoiced: number
   totalPaid: number
   totalOutstanding: number
 }) {
   const hasOutstanding = totalOutstanding > 0
+
+  // Build SJ lookup by sj_number for route resolution
+  const sjByNumber = Object.fromEntries(suratJalan.map(sj => [sj.sj_number, sj]))
+
   return (
     <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-card)' }}>
       <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border-light)' }}>
@@ -128,31 +141,80 @@ function InvoiceTable({
               <th className="px-3 py-2.5 text-left font-semibold" style={{ color: 'var(--text-secondary)' }}>Tgl Invoice</th>
               <th className="px-3 py-2.5 text-left font-semibold" style={{ color: 'var(--text-secondary)' }}>Jatuh Tempo</th>
               <th className="px-3 py-2.5 text-left font-semibold" style={{ color: 'var(--text-secondary)' }}>Status</th>
-              <th className="px-3 py-2.5 text-right font-semibold" style={{ color: 'var(--text-secondary)' }}>Total</th>
-              <th className="px-3 py-2.5 text-right font-semibold" style={{ color: 'var(--text-secondary)' }}>Terbayar</th>
-              <th className="px-3 py-2.5 text-right font-semibold" style={{ color: 'var(--text-secondary)' }}>Sisa</th>
+              <th className="px-3 py-2.5 text-left font-semibold" style={{ color: 'var(--text-secondary)' }}>Jasa</th>
+              <th className="px-3 py-2.5 text-left font-semibold" style={{ color: 'var(--text-secondary)' }}>Rincian Item</th>
+              <th className="px-3 py-2.5 text-left font-semibold" style={{ color: 'var(--text-secondary)' }}>Rute Pengiriman</th>
+              <th className="px-3 py-2.5 text-right font-semibold" style={{ color: 'var(--text-secondary)' }}>Detail Nominal</th>
             </tr>
           </thead>
           <tbody>
             {invoices.map(inv => {
               const isPaid = inv.status === 'paid' || inv.remaining_amount <= 0
+
+              // Rincian item: "Deskripsi - qty unit - keterangan" per item, joined by newline
+              const rincianItems = inv.items.map(it => {
+                const parts = [it.description || '-', `${it.qty} ${it.unit}`]
+                if (it.cargo_notes) parts.push(it.cargo_notes)
+                return parts.join(' - ')
+              })
+
+              // Rute pengiriman from attached SJs
+              const routes = inv.attached_sj_numbers
+                .map(num => sjByNumber[num])
+                .filter(Boolean)
+                .map(sj => `${sj.origin} → ${sj.destination}`)
+                .filter((v, i, arr) => arr.indexOf(v) === i) // deduplicate
+
               return (
               <tr key={inv.uuid} className="border-t" style={{ borderColor: '#E5E7EB', backgroundColor: isPaid ? '#F0FDF4' : undefined }}>
                 <td className="px-4 py-2.5 font-mono" style={{ color: 'var(--text-primary)' }}>#{inv.invoice_number}</td>
-                <td className="px-3 py-2.5" style={{ color: 'var(--text-secondary)' }}>{formatDate(inv.invoice_date)}</td>
-                <td className="px-3 py-2.5" style={{ color: 'var(--text-secondary)' }}>{formatDate(inv.due_date)}</td>
+                <td className="px-3 py-2.5 whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>{formatDate(inv.invoice_date)}</td>
+                <td className="px-3 py-2.5 whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>{formatDate(inv.due_date)}</td>
                 <td className="px-3 py-2.5"><StatusBadge status={inv.status} config={INVOICE_STATUS_CONFIG} /></td>
-                <td className="px-3 py-2.5 text-right font-mono" style={{ color: 'var(--text-primary)' }}>{formatRupiah(inv.total_amount)}</td>
-                <td className="px-3 py-2.5 text-right font-mono" style={{ color: '#15803D' }}>
-                  {inv.paid_amount > 0 ? formatRupiah(inv.paid_amount) : <span style={{ color: '#D1D5DB' }}>—</span>}
-                  {inv.has_down_payment && (inv.down_payment_amount ?? 0) > 0 && (
-                    <div className="text-[11px] font-sans font-semibold mt-0.5" style={{ color: '#166534' }}>
-                      DP {formatRupiah(inv.down_payment_amount ?? 0)}
-                    </div>
-                  )}
+                <td className="px-3 py-2.5 whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>
+                  {resolveServiceLabel(inv.service_type, inv.custom_service_name)}
                 </td>
-                <td className="px-3 py-2.5 text-right font-mono font-semibold" style={{ color: inv.remaining_amount > 0 ? '#B45309' : '#15803D' }}>
-                  {inv.remaining_amount > 0 ? formatRupiah(inv.remaining_amount) : 'Lunas'}
+                <td className="px-3 py-2.5" style={{ color: 'var(--text-secondary)', minWidth: 200 }}>
+                  {rincianItems.length > 0
+                    ? rincianItems.map((line, i) => (
+                        <div key={i} className="leading-relaxed">{line}</div>
+                      ))
+                    : <span style={{ color: '#D1D5DB' }}>—</span>
+                  }
+                </td>
+                <td className="px-3 py-2.5" style={{ color: 'var(--text-secondary)', minWidth: 160 }}>
+                  {routes.length > 0
+                    ? routes.map((route, i) => (
+                        <div key={i} className="leading-relaxed">{route}</div>
+                      ))
+                    : <span style={{ color: '#D1D5DB' }}>—</span>
+                  }
+                </td>
+                <td className="px-3 py-2.5 text-right" style={{ minWidth: 160 }}>
+                  <div className="space-y-0.5">
+                    <div className="flex justify-between gap-3">
+                      <span style={{ color: 'var(--text-secondary)' }}>Total</span>
+                      <span className="font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>{formatRupiah(inv.total_amount)}</span>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <span style={{ color: 'var(--text-secondary)' }}>Terbayar</span>
+                      <span className="font-mono" style={{ color: '#15803D' }}>
+                        {inv.paid_amount > 0 ? formatRupiah(inv.paid_amount) : <span style={{ color: '#D1D5DB' }}>—</span>}
+                      </span>
+                    </div>
+                    {inv.has_down_payment && (inv.down_payment_amount ?? 0) > 0 && (
+                      <div className="flex justify-between gap-3">
+                        <span style={{ color: 'var(--text-secondary)' }}>DP</span>
+                        <span className="font-mono text-[11px]" style={{ color: '#166534' }}>{formatRupiah(inv.down_payment_amount ?? 0)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between gap-3 pt-0.5" style={{ borderTop: '1px solid #E5E7EB' }}>
+                      <span className="font-semibold" style={{ color: 'var(--text-secondary)' }}>Sisa</span>
+                      <span className="font-mono font-bold" style={{ color: inv.remaining_amount > 0 ? '#B45309' : '#15803D' }}>
+                        {inv.remaining_amount > 0 ? formatRupiah(inv.remaining_amount) : 'Lunas'}
+                      </span>
+                    </div>
+                  </div>
                 </td>
               </tr>
               )
@@ -160,17 +222,26 @@ function InvoiceTable({
           </tbody>
           <tfoot>
             <tr style={{ backgroundColor: '#F3F4F6', borderTop: '2px solid var(--border-light)' }}>
-              <td colSpan={4} className="px-4 py-2.5 text-xs font-bold" style={{ color: 'var(--text-secondary)' }}>
+              <td colSpan={7} className="px-4 py-2.5 text-xs font-bold" style={{ color: 'var(--text-secondary)' }}>
                 TOTAL ({invoices.length} invoice)
               </td>
-              <td className="px-3 py-2.5 text-right font-mono text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
-                {formatRupiah(totalInvoiced)}
-              </td>
-              <td className="px-3 py-2.5 text-right font-mono text-sm font-bold" style={{ color: '#15803D' }}>
-                {formatRupiah(totalPaid)}
-              </td>
-              <td className="px-3 py-2.5 text-right font-mono text-sm font-bold" style={{ color: hasOutstanding ? '#B45309' : '#15803D' }}>
-                {formatRupiah(totalOutstanding)}
+              <td className="px-3 py-2.5 text-right">
+                <div className="space-y-0.5">
+                  <div className="flex justify-between gap-3">
+                    <span className="font-bold" style={{ color: 'var(--text-secondary)' }}>Total</span>
+                    <span className="font-mono font-bold" style={{ color: 'var(--text-primary)' }}>{formatRupiah(totalInvoiced)}</span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="font-bold" style={{ color: 'var(--text-secondary)' }}>Terbayar</span>
+                    <span className="font-mono font-bold" style={{ color: '#15803D' }}>{formatRupiah(totalPaid)}</span>
+                  </div>
+                  <div className="flex justify-between gap-3 pt-0.5" style={{ borderTop: '1px solid #D1D5DB' }}>
+                    <span className="font-bold" style={{ color: 'var(--text-secondary)' }}>Sisa</span>
+                    <span className="font-mono font-bold" style={{ color: hasOutstanding ? '#B45309' : '#15803D' }}>
+                      {hasOutstanding ? formatRupiah(totalOutstanding) : 'Lunas'}
+                    </span>
+                  </div>
+                </div>
               </td>
             </tr>
           </tfoot>
@@ -513,6 +584,7 @@ function ProjectSection({
         <div className="mt-5 space-y-4">
           <InvoiceTable
             invoices={project.invoices}
+            suratJalan={project.surat_jalan}
             totalInvoiced={project.total_invoiced}
             totalPaid={project.total_paid}
             totalOutstanding={project.total_outstanding}
