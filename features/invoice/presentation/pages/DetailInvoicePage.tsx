@@ -69,12 +69,20 @@ export default function DetailInvoicePage({ uuid }: Props) {
   const [isSavingLampiran, setIsSavingLampiran] = useState(false)
 
   useEffect(() => {
+    if (role !== null && role !== 'super_admin' && role !== 'admin_finance') {
+      router.replace('/surat-jalan')
+    }
+  }, [role, router])
+
+  useEffect(() => {
     if (invoice) setLampiranPaths(invoice.lampiran_paths ?? [])
   }, [invoice])
 
   const now = new Date()
   const isOverdue = invoice?.status === InvoiceStatus.OUTSTANDING && new Date(invoice.due_date) < now
   const overdueCount = isOverdue ? Math.floor((now.getTime() - new Date(invoice!.due_date).getTime()) / (1000 * 60 * 60 * 24)) : 0
+
+  if (role === null || (role !== 'super_admin' && role !== 'admin_finance')) return null
 
   if (isLoading || !invoice) {
     return (

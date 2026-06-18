@@ -48,6 +48,12 @@ export default function InvoiceListPage() {
   const currentInvoice = selectedInvoice ?? list.find(i => i.uuid === activeUuid) ?? null
 
   useEffect(() => {
+    if (role !== null && role !== 'super_admin' && role !== 'admin_finance') {
+      router.replace('/surat-jalan')
+    }
+  }, [role, router])
+
+  useEffect(() => {
     if (error) pushToast({ title: 'Kesalahan', description: error, variant: 'error' })
   }, [error, pushToast])
 
@@ -131,6 +137,8 @@ export default function InvoiceListPage() {
     URL.revokeObjectURL(url)
   }
 
+  if (role === null || (role !== 'super_admin' && role !== 'admin_finance')) return null
+
   return (
     <DashboardLayout>
       <div className="flex items-center justify-between mb-6">
@@ -138,7 +146,7 @@ export default function InvoiceListPage() {
           <div className="text-xs text-gray-500">Dashboard / Invoice</div>
           <h1 className="text-2xl font-bold">Invoice</h1>
         </div>
-        {(role === 'super_admin' || role === 'admin_ops') && (
+        {role === 'super_admin' && (
           <button
             onClick={() => router.push('/invoice/create')}
             className="flex items-center gap-2 px-4 py-2 rounded-xl text-white"

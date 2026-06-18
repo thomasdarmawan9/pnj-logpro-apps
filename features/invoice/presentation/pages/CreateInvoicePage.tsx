@@ -117,9 +117,9 @@ export default function CreateInvoicePage() {
   } = useInvoiceItems()
 
   useEffect(() => {
-    if (role !== null && role !== 'super_admin' && role !== 'admin_ops') {
+    if (role !== null && role !== 'super_admin' && role !== 'admin_finance') {
       pushToast({ title: 'Akses Ditolak', description: 'Anda tidak memiliki akses ke halaman ini.', variant: 'error' })
-      router.replace('/dashboard')
+      router.replace('/surat-jalan')
     }
   }, [role, router, pushToast])
 
@@ -230,7 +230,7 @@ export default function CreateInvoicePage() {
       .slice(0, 25)
   }, [availableSJs, selectedSJs, sjSearch])
 
-  if (role === null || (role !== 'super_admin' && role !== 'admin_ops')) return null
+  if (role === null || (role !== 'super_admin' && role !== 'admin_finance')) return null
 
   const effectiveServiceType = resolveEffectiveInvoiceServiceType(serviceType, customServiceName)
   const isDeliveryLikeService = effectiveServiceType !== 'rental'

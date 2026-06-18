@@ -18,7 +18,7 @@ import { StatusLampiran, StatusOperasional } from '@/features/surat-jalan/domain
 const mainNavItems = [
   { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard', roles: ['super_admin', 'admin_finance'] },
   { icon: FileText, label: 'Surat Jalan', href: '/surat-jalan', roles: ['super_admin', 'admin_ops', 'admin_finance'] },
-  { icon: Receipt, label: 'Invoice', href: '/invoice', roles: ['super_admin', 'admin_ops', 'admin_finance'] },
+  { icon: Receipt, label: 'Invoice', href: '/invoice', roles: ['super_admin', 'admin_finance'] },
   { icon: Package, label: 'Manajemen Stok', href: '/stok', roles: ['super_admin', 'admin_ops', 'admin_finance'] },
 ]
 
