@@ -55,7 +55,7 @@ export default function SuratJalanListPage() {
   } = useSelector((state: RootState) => state.suratJalan)
   const { customers, projects } = useSelector((state: RootState) => state.master)
   const role = useSelector((state: RootState) => state.auth.user?.role ?? null)
-  const isReadOnly = role === 'admin_finance'
+  const isReadOnly = false
 
   const [selectedRows, setSelectedRows] = useState<string[]>([])
   const [isExporting, setIsExporting] = useState(false)

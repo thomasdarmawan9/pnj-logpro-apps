@@ -62,7 +62,7 @@ export default function DetailInvoicePage({ uuid }: Props) {
   const { invoice, isLoading } = useInvoiceDetail(uuid)
   const { attachableSJ, modals } = useSelector((state: RootState) => state.invoice)
   const role = useSelector((state: RootState) => state.auth.user?.role ?? null)
-  const isReadOnly = role === 'admin_finance'
+  const isReadOnly = false
   const canRecordPayment = role === 'super_admin' || role === 'admin_finance'
   const [activeTab, setActiveTab] = useState<'items' | 'sj' | 'payments' | 'lampiran'>('items')
   const [lampiranPaths, setLampiranPaths] = useState<string[]>([])

@@ -4,7 +4,7 @@ const express          = require('express')
 const router           = express.Router()
 
 const { authenticate } = require('../middlewares/auth.middleware')
-const { isAnyRole, isSuperAdmin, isFinanceOrAbove, isOpsOrAbove } = require('../middlewares/rbac.middleware')
+const { isAnyRole, isFinanceOrAbove } = require('../middlewares/rbac.middleware')
 const { validate }     = require('../middlewares/validate.middleware')
 const { uuidParam, uuidFilenameParam } = require('../validators/common.validator')
 const {
@@ -30,7 +30,7 @@ router.get('/',
 )
 
 router.post('/',
-  isOpsOrAbove,
+  isAnyRole,
   validate(createInvoiceSchema),
   logActivity('create_invoice', 'invoice'),
   controller.create,
@@ -55,7 +55,7 @@ router.get('/:uuid',
 )
 
 router.put('/:uuid',
-  isSuperAdmin,
+  isAnyRole,
   validate(uuidParam, 'params'),
   validate(updateInvoiceSchema),
   logActivity('update_invoice', 'invoice'),
@@ -63,14 +63,14 @@ router.put('/:uuid',
 )
 
 router.patch('/:uuid/send',
-  isSuperAdmin,
+  isAnyRole,
   validate(uuidParam, 'params'),
   logActivity('send_invoice', 'invoice'),
   controller.send,
 )
 
 router.patch('/:uuid/mark-outstanding',
-  isSuperAdmin,
+  isAnyRole,
   validate(uuidParam, 'params'),
   logActivity('mark_outstanding', 'invoice'),
   controller.markOutstanding,
@@ -85,7 +85,7 @@ router.post('/:uuid/payments',
 )
 
 router.patch('/:uuid/void',
-  isSuperAdmin,
+  isAnyRole,
   validate(uuidParam, 'params'),
   validate(voidInvoiceSchema),
   logActivity('void_invoice', 'invoice'),
@@ -93,7 +93,7 @@ router.patch('/:uuid/void',
 )
 
 router.post('/:uuid/attach-sj',
-  isSuperAdmin,
+  isAnyRole,
   validate(uuidParam, 'params'),
   validate(attachSJSchema),
   logActivity('attach_sj', 'invoice'),
@@ -101,7 +101,7 @@ router.post('/:uuid/attach-sj',
 )
 
 router.delete('/:uuid/detach-sj/:sjUuid',
-  isSuperAdmin,
+  isAnyRole,
   validate(detachSJParamSchema, 'params'),
   logActivity('detach_sj', 'invoice'),
   controller.detachSJ,
@@ -127,7 +127,7 @@ router.post('/:uuid/generate-pdf',
 
 // ── Lampiran ──────────────────────────────────────────────────────────────
 router.post('/:uuid/lampiran',
-  isSuperAdmin,
+  isAnyRole,
   validate(uuidParam, 'params'),
   uploadLampiran.single('file'),
   processLampiran('invoice-lampiran'),
@@ -135,7 +135,7 @@ router.post('/:uuid/lampiran',
 )
 
 router.delete('/:uuid/lampiran/:filename',
-  isSuperAdmin,
+  isAnyRole,
   validate(uuidFilenameParam, 'params'),
   controller.deleteLampiran,
 )

@@ -213,8 +213,8 @@ export default function EditInvoicePage({ uuid }: Props) {
   }, [dispatch, fleets.length, drivers.length])
 
   useEffect(() => {
-    if (role !== null && role !== 'super_admin') {
-      router.replace('/dashboard')
+    if (role !== null && role !== 'super_admin' && role !== 'admin_finance') {
+      router.replace('/surat-jalan')
     }
   }, [role, router])
 
@@ -513,7 +513,7 @@ export default function EditInvoicePage({ uuid }: Props) {
     }
   }
 
-  if (role === null || role !== 'super_admin') return null
+  if (role === null || (role !== 'super_admin' && role !== 'admin_finance')) return null
 
   if (isLoading || !invoice) {
     return (

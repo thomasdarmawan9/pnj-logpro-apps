@@ -4,7 +4,7 @@ const express          = require('express')
 const router           = express.Router()
 
 const { authenticate } = require('../middlewares/auth.middleware')
-const { isAnyRole, isOpsOrAbove } = require('../middlewares/rbac.middleware')
+const { isAnyRole } = require('../middlewares/rbac.middleware')
 const {
   upload,
   compressImage,
@@ -34,7 +34,7 @@ router.get('/',
 )
 
 router.post('/',
-  isOpsOrAbove,
+  isAnyRole,
   validate(createSJSchema),
   logActivity('create_sj', 'surat_jalan'),
   controller.create,
@@ -53,7 +53,7 @@ router.get('/:uuid',
 )
 
 router.put('/:uuid',
-  isOpsOrAbove,
+  isAnyRole,
   validate(uuidParam, 'params'),
   validate(updateSJSchema),
   logActivity('update_sj', 'surat_jalan'),
@@ -61,7 +61,7 @@ router.put('/:uuid',
 )
 
 router.patch('/:uuid/assign',
-  isOpsOrAbove,
+  isAnyRole,
   validate(uuidParam, 'params'),
   validate(assignSJSchema),
   logActivity('assign_sj', 'surat_jalan'),
@@ -69,7 +69,7 @@ router.patch('/:uuid/assign',
 )
 
 router.post('/:uuid/pod',
-  isOpsOrAbove,
+  isAnyRole,
   validate(uuidParam, 'params'),
   upload.single('photo'),
   compressImage('pod'),
@@ -83,7 +83,7 @@ router.get('/:uuid/pod',
 )
 
 router.patch('/:uuid/deliver',
-  isOpsOrAbove,
+  isAnyRole,
   validate(uuidParam, 'params'),
   validate(deliverSJSchema),
   logActivity('deliver_sj', 'surat_jalan'),
@@ -91,7 +91,7 @@ router.patch('/:uuid/deliver',
 )
 
 router.patch('/:uuid/void',
-  isOpsOrAbove,
+  isAnyRole,
   validate(uuidParam, 'params'),
   validate(voidSJSchema),
   logActivity('void_sj', 'surat_jalan'),
@@ -99,7 +99,7 @@ router.patch('/:uuid/void',
 )
 
 router.delete('/:uuid',
-  isOpsOrAbove,
+  isAnyRole,
   validate(uuidParam, 'params'),
   logActivity('delete_sj', 'surat_jalan'),
   controller.remove,
@@ -120,7 +120,7 @@ router.post('/:uuid/generate-pdf',
 
 // ── Lampiran ──────────────────────────────────────────────────────────────
 router.post('/:uuid/lampiran',
-  isOpsOrAbove,
+  isAnyRole,
   validate(uuidParam, 'params'),
   uploadLampiran.single('file'),
   processLampiran('sj-lampiran'),
@@ -128,7 +128,7 @@ router.post('/:uuid/lampiran',
 )
 
 router.delete('/:uuid/lampiran/:filename',
-  isOpsOrAbove,
+  isAnyRole,
   validate(uuidFilenameParam, 'params'),
   controller.deleteLampiran,
 )

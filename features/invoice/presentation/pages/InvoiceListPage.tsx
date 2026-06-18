@@ -41,7 +41,7 @@ export default function InvoiceListPage() {
   const { selectedInvoice, attachableSJ, modals } = useSelector((state: RootState) => state.invoice)
   const { customers, projects } = useSelector((state: RootState) => state.master)
   const role = useSelector((state: RootState) => state.auth.user?.role ?? null)
-  const isReadOnly = role === 'admin_finance'
+  const isReadOnly = false
   const [selectedRows, setSelectedRows] = useState<string[]>([])
   const [activeUuid, setActiveUuid] = useState<string | null>(null)
 
@@ -146,7 +146,7 @@ export default function InvoiceListPage() {
           <div className="text-xs text-gray-500">Dashboard / Invoice</div>
           <h1 className="text-2xl font-bold">Invoice</h1>
         </div>
-        {role === 'super_admin' && (
+        {(role === 'super_admin' || role === 'admin_finance') && (
           <button
             onClick={() => router.push('/invoice/create')}
             className="flex items-center gap-2 px-4 py-2 rounded-xl text-white"

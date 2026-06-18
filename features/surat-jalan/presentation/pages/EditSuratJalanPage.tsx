@@ -42,14 +42,9 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
   const [isLoadingStockItems, setIsLoadingStockItems] = useState(false)
 
   useEffect(() => {
-    if (role === 'admin_finance') {
-      pushToast({ title: 'Akses Ditolak', description: 'Anda tidak memiliki akses mengubah Surat Jalan.', variant: 'error' })
-      router.replace(`/surat-jalan/${uuid}`)
-      return
-    }
     if (!fleets.length) dispatch(fetchFleets())
     if (!drivers.length) dispatch(fetchDrivers())
-  }, [dispatch, fleets.length, drivers.length, role, router, pushToast, uuid])
+  }, [dispatch, fleets.length, drivers.length])
 
   const armadaOptions = useMemo(() => fleets
     .filter(fleet => fleet.status === 'active' || fleet.id === selectedSJ?.fleet_id)

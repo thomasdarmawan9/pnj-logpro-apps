@@ -44,11 +44,6 @@ export default function CreateSuratJalanPage() {
   const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false)
 
   useEffect(() => {
-    if (role === 'admin_finance') {
-      pushToast({ title: 'Akses Ditolak', description: 'Anda tidak memiliki akses membuat Surat Jalan.', variant: 'error' })
-      router.replace('/surat-jalan')
-      return
-    }
     if (!projects.length) dispatch(fetchProjects())
     if (!customers.length) dispatch(fetchCustomers())
     if (!fleets.length) dispatch(fetchFleets())
