@@ -340,6 +340,16 @@ export default function CreateSuratJalanPage() {
                 {errors?.project_id && <div className="text-xs text-red-600 mt-1">{errors.project_id}</div>}
               </label>
             )}
+
+            <label className="text-xs font-medium mt-4 block" style={{ color: '#374151' }}>
+              Nama Pengirim <span className="text-gray-400 font-normal">(opsional)</span>
+              <input
+                className="form-input w-full mt-1"
+                value={form.sender_name || ''}
+                onChange={e => updateField('sender_name', e.target.value || null)}
+                placeholder="contoh: Thomas Darmawan"
+              />
+            </label>
           </div>
 
           <div className="rounded-xl bg-white p-6 border mt-4" style={{ borderColor: 'var(--border-card)' }}>
@@ -359,16 +369,6 @@ export default function CreateSuratJalanPage() {
               No. Surat Jalan (otomatis)
               <input className="form-input w-full mt-1 disabled italic" value="SJ-2026-090" disabled readOnly />
               <div className="text-[11px] text-gray-400 mt-1">Nomor otomatis dibuat oleh sistem</div>
-            </label>
-
-            <label className="text-xs font-medium mt-4 block" style={{ color: '#374151' }}>
-              Nama Pengirim <span className="text-gray-400 font-normal">(opsional)</span>
-              <input
-                className="form-input w-full mt-1"
-                value={form.sender_name || ''}
-                onChange={e => updateField('sender_name', e.target.value || null)}
-                placeholder="contoh: Thomas Darmawan"
-              />
             </label>
           </div>
 
