@@ -121,7 +121,7 @@ export default function GeneratePDFModal({ open, sj, onClose }: GeneratePDFModal
             <div>
               <label className="text-xs font-medium text-gray-600 block mb-2">Jumlah Rangkap</label>
               <div className="flex gap-2">
-                {[1, 2, 3].map(n => (
+                {[1, 2, 3, 4].map(n => (
                   <button
                     key={n}
                     type="button"
@@ -138,7 +138,7 @@ export default function GeneratePDFModal({ open, sj, onClose }: GeneratePDFModal
                 ))}
               </div>
               <p className="text-xs text-gray-400 mt-1.5">
-                Menghasilkan {copies} rangkap surat jalan
+                {copies === 1 ? '1 rangkap' : `${copies} rangkap`} — tiap rangkap 1 halaman, warna header berbeda
               </p>
             </div>
 

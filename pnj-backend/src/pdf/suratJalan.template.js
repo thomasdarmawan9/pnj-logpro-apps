@@ -122,7 +122,7 @@ function drawLogo(doc, company, x, y, size) {
 }
 
 // Warna background baris data tabel per salinan (index 0-based)
-const COPY_ROW_BG = [null, '#FFFDE7', '#FCE4EC']   // copy1: putih, copy2: cream, copy3: pink
+const COPY_ROW_BG = [null, '#FFFDE7', '#FCE4EC', '#E3F2FD']   // copy1: putih, copy2: cream, copy3: pink, copy4: biru muda
 
 // ── Render satu salinan SJ ─────────────────────────────────────────────────
 function renderCopy(doc, sj, company, options, Y0, copyIndex = 0) {
