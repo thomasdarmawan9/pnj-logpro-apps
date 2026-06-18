@@ -5,8 +5,8 @@ import { Plus, Trash2 } from 'lucide-react'
 import { SJItem } from '../../domain/entities/SuratJalan'
 import type { CustomerStockAvailableItem } from '@/features/stock/application/use-cases/GetCustomerStockDetail'
 
-const UNIT_OPTIONS = ['pcs', 'unit', 'set', 'kg', 'ton', 'liter', 'dus', 'karton', 'roll', 'meter']
-const UNIT_OTHER_VALUE = 'lainnya'
+const UNIT_OPTIONS = ['pcs', 'unit', 'set', 'kg', 'ton', 'liter', 'dus', 'karton', 'roll', 'meter', 'collie']
+const UNIT_OTHER_VALUE = 'Lainnya'
 
 function createEmptyItem(): SJItem {
   return {
