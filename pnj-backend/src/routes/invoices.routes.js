@@ -4,7 +4,7 @@ const express          = require('express')
 const router           = express.Router()
 
 const { authenticate } = require('../middlewares/auth.middleware')
-const { isAnyRole, isSuperAdmin, isFinanceOrAbove } = require('../middlewares/rbac.middleware')
+const { isAnyRole, isSuperAdmin, isFinanceOrAbove, isOpsOrAbove } = require('../middlewares/rbac.middleware')
 const { validate }     = require('../middlewares/validate.middleware')
 const { uuidParam, uuidFilenameParam } = require('../validators/common.validator')
 const {
@@ -30,7 +30,7 @@ router.get('/',
 )
 
 router.post('/',
-  isSuperAdmin,
+  isOpsOrAbove,
   validate(createInvoiceSchema),
   logActivity('create_invoice', 'invoice'),
   controller.create,

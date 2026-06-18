@@ -138,7 +138,7 @@ export default function InvoiceListPage() {
           <div className="text-xs text-gray-500">Dashboard / Invoice</div>
           <h1 className="text-2xl font-bold">Invoice</h1>
         </div>
-        {role === 'super_admin' && (
+        {(role === 'super_admin' || role === 'admin_ops') && (
           <button
             onClick={() => router.push('/invoice/create')}
             className="flex items-center gap-2 px-4 py-2 rounded-xl text-white"
