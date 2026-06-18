@@ -14,7 +14,7 @@ export default function useSuratJalanForm({ mode, initial }: UseSuratJalanFormOp
   const [form, setForm] = useState<CreateSJDto>({
     project_id: initial?.project_id ?? null,
     customer_id: initial?.customer_id ?? null,
-    fleet_id: initial?.fleet_id || 0,
+    fleet_id: initial?.fleet_id ?? null,
     driver_id: initial?.driver_id ?? null,
     driver_name_manual: initial?.driver_name_manual ?? '',
     sj_date: initial?.sj_date || new Date().toISOString().slice(0, 10),

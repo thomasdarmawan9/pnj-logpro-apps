@@ -3,7 +3,7 @@ import { SJItem } from '../../domain/entities/SuratJalan'
 export interface CreateSJDto {
   project_id: number | null
   customer_id: number | null
-  fleet_id: number
+  fleet_id: number | null
   armada_tbd?: boolean
   driver_id: number | null
   driver_name_manual: string | null
