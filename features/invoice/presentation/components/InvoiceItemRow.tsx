@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { GripVertical, Trash2 } from 'lucide-react'
+import { useEffect, useRef, useState, useMemo } from 'react'
+import { GripVertical, Trash2, Search, ChevronDown, Check } from 'lucide-react'
 import { InvoiceItem } from '../../domain/entities/Invoice'
 import type { InvoiceServiceType } from '../../domain/entities/Invoice'
 import { apiRequestAllPages } from '@/lib/apiClient'
@@ -104,6 +104,9 @@ export default function InvoiceItemRow({
   sourceLabel = null,
 }: Props) {
   const [fleetOptions, setFleetOptions] = useState<FleetOption[]>([])
+  const [fleetSearch, setFleetSearch] = useState('')
+  const [fleetOpen, setFleetOpen] = useState(false)
+  const fleetPickerRef = useRef<HTMLDivElement>(null)
   const [qtyDraft, setQtyDraft] = useState<string | null>(null)
   const duration = calcDuration(item.period_start, item.period_end)
   const subtotalFormatted = item.subtotal > 0 ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(item.subtotal) : '—'
@@ -128,6 +131,19 @@ export default function InvoiceItemRow({
       })
     return () => { alive = false }
   }, [])
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (!fleetPickerRef.current?.contains(e.target as Node)) setFleetOpen(false)
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const filteredFleets = useMemo(() => {
+    const q = fleetSearch.trim().toLowerCase()
+    return (q ? fleetOptions.filter(f => f.label.toLowerCase().includes(q)) : fleetOptions).slice(0, 25)
+  }, [fleetOptions, fleetSearch])
 
   return (
     <div
@@ -166,24 +182,59 @@ export default function InvoiceItemRow({
       {/* Armada */}
       <div className="mb-3">
         <label className="text-xs font-medium text-gray-600 mb-1 block">Armada</label>
-        <select
-          className={`form-input w-full text-sm mb-2 ${errors[`${errPrefix}.fleet_id`] ? 'border-red-400' : ''}`}
-          value={item.fleet_id ?? 0}
-          onChange={e => {
-            const fleetId = Number(e.target.value)
-            if (fleetId === 0) return
-            const fleet = fleetOptions.find(f => f.id === fleetId)
-            if (fleet) {
-              onChange(item.uuid, 'fleet_id', fleet.id)
-              onChange(item.uuid, 'fleet_label', fleet.label)
-            }
-          }}
-        >
-          <option value={0}>Pilih armada atau input manual...</option>
-          {fleetOptions.map(f => (
-            <option key={f.id} value={f.id}>{f.label}</option>
-          ))}
-        </select>
+        <div ref={fleetPickerRef} className="relative mb-2">
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+              <Search size={14} />
+            </span>
+            <input
+              type="text"
+              className={`form-input w-full text-sm ${errors[`${errPrefix}.fleet_id`] ? 'border-red-400' : ''}`}
+              style={{ paddingLeft: 38, paddingRight: 36 }}
+              value={fleetSearch}
+              placeholder={item.fleet_id ? (fleetOptions.find(f => f.id === item.fleet_id)?.label ?? 'Armada dipilih') : 'Cari armada dari master...'}
+              onFocus={() => { setFleetOpen(true); setFleetSearch('') }}
+              onChange={e => { setFleetSearch(e.target.value); setFleetOpen(true) }}
+              onBlur={() => setFleetSearch('')}
+            />
+            <button
+              type="button"
+              onClick={() => setFleetOpen(o => !o)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-gray-100"
+              aria-label="Buka daftar armada"
+            >
+              <ChevronDown size={14} className="text-gray-400" />
+            </button>
+          </div>
+          {fleetOpen && (
+            <div className="absolute z-30 mt-1 w-full rounded-lg border bg-white shadow-lg overflow-hidden" style={{ borderColor: 'var(--border-card)' }}>
+              <div className="max-h-52 overflow-y-auto">
+                {filteredFleets.length > 0 ? filteredFleets.map(f => {
+                  const selected = item.fleet_id === f.id
+                  return (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onMouseDown={e => {
+                        e.preventDefault()
+                        onChange(item.uuid, 'fleet_id', f.id)
+                        onChange(item.uuid, 'fleet_label', f.label)
+                        setFleetOpen(false)
+                        setFleetSearch('')
+                      }}
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-green-50 flex items-center gap-2"
+                    >
+                      <span className="w-4 text-green-600 shrink-0">{selected && <Check size={13} />}</span>
+                      <span className="truncate">{f.label}</span>
+                    </button>
+                  )
+                }) : (
+                  <div className="px-3 py-3 text-sm text-gray-500">Armada tidak ditemukan</div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
         <label className="text-xs text-gray-500 mb-1 block">{serviceType === 'rental' ? 'Jenis kendaraan di invoice *' : 'Armada di invoice *'}</label>
         <input
           className={`form-input w-full text-sm ${errors[`${errPrefix}.fleet_label`] ? 'border-red-400' : ''}`}
