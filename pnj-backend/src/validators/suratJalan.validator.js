@@ -56,14 +56,6 @@ const createSJSchema = Joi.object({
   if (!hasProject && !hasCustomer) {
     return helpers.error('any.custom', { message: 'Pilih project atau customer.' })
   }
-  if (val.publish) {
-    if (!val.fleet_uuid && !val.fleet_id) {
-      return helpers.error('any.custom', { message: 'Fleet wajib dipilih untuk menerbitkan SJ.' })
-    }
-    if (!val.driver_uuid && !val.driver_id && !(val.driver_name_manual && val.driver_name_manual.trim())) {
-      return helpers.error('any.custom', { message: 'Supir wajib diisi untuk menerbitkan SJ.' })
-    }
-  }
   return val
 }).messages({
   'any.custom': '{{#message}}',

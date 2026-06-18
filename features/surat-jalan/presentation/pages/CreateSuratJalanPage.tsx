@@ -140,10 +140,7 @@ export default function CreateSuratJalanPage() {
     return list.slice(0, 25)
   }, [customers, customerSearch])
 
-  const canPublish = (armadaMode === 'tbd' || !!selectedArmada) && (
-    driverMode === 'tbd' ||
-    (driverMode === 'master' && !!selectedDriver)
-  )
+  const canPublish = true
 
   const summary = useMemo(() => ({
     noSJ: 'SJ-2026-090',
