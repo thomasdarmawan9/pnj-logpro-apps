@@ -471,6 +471,7 @@ const exportAgingARCustomerPdf = asyncHandler(async (req, res) => {
   if (statusFilter) {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
+
     data.projects.forEach(project => {
       project.invoices = project.invoices.filter(inv => {
         if (statusFilter === 'outstanding') {
@@ -483,7 +484,20 @@ const exportAgingARCustomerPdf = asyncHandler(async (req, res) => {
         }
         return inv.status === statusFilter
       })
+
+      // Recalculate project-level totals dari invoices yang sudah difilter
+      const nonVoid = project.invoices.filter(i => i.status !== 'void')
+      project.invoice_count     = nonVoid.length
+      project.total_invoiced    = nonVoid.reduce((s, i) => s + Number(i.total_amount    || 0), 0)
+      project.total_paid        = nonVoid.reduce((s, i) => s + Number(i.paid_amount     || 0), 0)
+      project.total_outstanding = nonVoid.reduce((s, i) => s + Number(i.remaining_amount || 0), 0)
     })
+
+    // Recalculate customer-level totals (untuk summary cards di header PDF)
+    data.invoice_count     = data.projects.reduce((s, p) => s + p.invoice_count,     0)
+    data.total_invoiced    = data.projects.reduce((s, p) => s + p.total_invoiced,    0)
+    data.total_paid        = data.projects.reduce((s, p) => s + p.total_paid,        0)
+    data.total_outstanding = data.projects.reduce((s, p) => s + p.total_outstanding, 0)
   }
 
   const { projectRows, invoiceRows, sjRows } = customerDetailRows(data)
