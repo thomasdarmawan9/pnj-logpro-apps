@@ -50,6 +50,7 @@ export default function useSuratJalanForm({ mode, initial }: UseSuratJalanFormOp
     !!form.destination.trim() ||
     !!form.cargo_description?.trim() ||
     !!form.internal_notes?.trim() ||
+    !!form.sender_name?.trim() ||
     form.items.length > 0
   ), [form])
 

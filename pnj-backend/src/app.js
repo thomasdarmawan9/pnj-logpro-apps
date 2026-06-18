@@ -14,6 +14,11 @@ const { errorHandler } = require('./middlewares/errorHandler.middleware')
 
 const app = express()
 
+// 0. Trust proxy — app berjalan di belakang Nginx reverse proxy.
+//    Diperlukan agar express-rate-limit bisa membaca X-Forwarded-For
+//    dengan benar dan mengidentifikasi IP klien yang sesungguhnya.
+app.set('trust proxy', 1)
+
 // 1. Security headers
 app.use(helmet())
 
