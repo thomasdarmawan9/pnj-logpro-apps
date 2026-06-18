@@ -30,7 +30,7 @@ module.exports = (sequelize) => {
     },
     fleet_id: {
       type:      DataTypes.BIGINT,
-      allowNull: false,
+      allowNull: true,
     },
     driver_id: {
       type:      DataTypes.BIGINT,
