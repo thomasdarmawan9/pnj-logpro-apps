@@ -407,8 +407,9 @@ export async function exportAgingARCustomerExcel(customerId: number) {
   return apiDownload(`/reports/aging-ar/customers/${customerId}/export/excel`)
 }
 
-export async function exportAgingARCustomerPdf(customerId: number) {
-  return apiDownload(`/reports/aging-ar/customers/${customerId}/export/pdf`)
+export async function exportAgingARCustomerPdf(customerId: number, status?: string) {
+  const query = status && status !== 'all' ? `?status=${encodeURIComponent(status)}` : ''
+  return apiDownload(`/reports/aging-ar/customers/${customerId}/export/pdf${query}`)
 }
 
 export async function exportProfitLossReport(filters: ProfitLossFilterDto) {

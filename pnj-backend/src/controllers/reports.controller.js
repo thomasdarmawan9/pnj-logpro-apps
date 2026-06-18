@@ -455,11 +455,29 @@ const exportAgingARCustomerExcel = asyncHandler(async (req, res) => {
   await sendWorkbook(res, workbook, filename)
 })
 
+const STATUS_LABELS = {
+  draft:       'Draft',
+  sent:        'Terbit',
+  outstanding: 'Outstanding',
+  paid:        'Lunas',
+  void:        'Void',
+}
+
 const exportAgingARCustomerPdf = asyncHandler(async (req, res) => {
   const data = await agingArSvc.getCustomerDetail(Number(req.params.id))
+
+  // Optional status filter: ?status=outstanding|paid|sent|draft|void
+  const statusFilter = req.query.status && req.query.status !== 'all' ? req.query.status : null
+  if (statusFilter) {
+    data.projects.forEach(project => {
+      project.invoices = project.invoices.filter(inv => inv.status === statusFilter)
+    })
+  }
+
   const { projectRows, invoiceRows, sjRows } = customerDetailRows(data)
   const date = new Date().toISOString().slice(0, 10)
-  const filename = `aging-ar-customer-${safeFilename(data.customer_name)}-${date}.pdf`
+  const statusSuffix = statusFilter ? `-${statusFilter}` : ''
+  const filename = `aging-ar-customer-${safeFilename(data.customer_name)}${statusSuffix}-${date}.pdf`
 
   res.setHeader('Content-Type', 'application/pdf')
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
@@ -475,8 +493,9 @@ const exportAgingARCustomerPdf = asyncHandler(async (req, res) => {
     },
   })
 
+  const filterLabel = statusFilter ? ` | Filter: ${STATUS_LABELS[statusFilter] || statusFilter}` : ''
   doc.pipe(res)
-  drawPdfTitle(doc, `Detail Aging AR Customer - ${data.customer_name}`, `Dicetak ${formatDateShort(new Date())} | NPWP: ${data.npwp || '-'} | PKP: ${data.is_pkp ? 'Ya' : 'Tidak'}`)
+  drawPdfTitle(doc, `Detail Aging AR Customer - ${data.customer_name}`, `Dicetak ${formatDateShort(new Date())}${filterLabel} | NPWP: ${data.npwp || '-'} | PKP: ${data.is_pkp ? 'Ya' : 'Tidak'}`)
   drawPdfKeyValues(doc, [
     { label: 'Total Ditagihkan', value: formatIDR(data.total_invoiced), color: '#1D4ED8' },
     { label: 'Total Terbayar', value: formatIDR(data.total_paid), color: '#15803D' },

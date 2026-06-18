@@ -16,6 +16,7 @@ import {
   ChevronRight,
   Download,
   Printer,
+  X,
 } from 'lucide-react'
 import { RootState } from '@/store'
 import { useAgingARCustomerDetail } from '../hooks/useAgingARCustomerDetail'
@@ -322,6 +323,8 @@ export default function AgingARCustomerDetailPage() {
   const [isExportingExcel, setIsExportingExcel] = useState(false)
   const [isExportingPdf, setIsExportingPdf] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
+  const [showPdfModal, setShowPdfModal] = useState(false)
+  const [pdfStatusFilter, setPdfStatusFilter] = useState<string>('all')
 
   const { data, isLoading, error } = useAgingARCustomerDetail(
     Number.isNaN(customerId) ? null : customerId
@@ -394,8 +397,10 @@ export default function AgingARCustomerDetailPage() {
     setExportError(null)
     setIsExportingPdf(true)
     try {
-      const blob = await exportAgingARCustomerPdf(customerId)
-      downloadBlob(blob, `${exportFilenameBase}.pdf`)
+      const statusSuffix = pdfStatusFilter !== 'all' ? `-${pdfStatusFilter}` : ''
+      const blob = await exportAgingARCustomerPdf(customerId, pdfStatusFilter)
+      downloadBlob(blob, `${exportFilenameBase}${statusSuffix}.pdf`)
+      setShowPdfModal(false)
     } catch (err) {
       setExportError(err instanceof Error ? err.message : 'Gagal cetak PDF.')
     } finally {
@@ -466,13 +471,13 @@ export default function AgingARCustomerDetailPage() {
               {isExportingExcel ? 'Mengekspor...' : 'Export Excel'}
             </button>
             <button
-              onClick={handleExportPdf}
-              disabled={isExportingExcel || isExportingPdf}
+              onClick={() => { setShowPdfModal(true); setExportError(null) }}
+              disabled={isExportingExcel}
               className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl transition-all hover:brightness-95 disabled:opacity-60"
               style={{ backgroundColor: 'var(--green-primary)', border: '1px solid var(--green-primary)', color: '#FFFFFF' }}
             >
               <Printer size={12} />
-              {isExportingPdf ? 'Mencetak...' : 'Cetak PDF'}
+              Cetak PDF
             </button>
           </div>
         </div>
@@ -525,6 +530,101 @@ export default function AgingARCustomerDetailPage() {
           <ProjectSection key={project.project_id ?? 'non-project'} project={project} />
         ))}
       </div>
+
+      {/* PDF Export Modal */}
+      {showPdfModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowPdfModal(false)} />
+          <div className="relative rounded-2xl shadow-2xl w-full max-w-sm mx-4 animate-modalEnter" style={{ backgroundColor: 'var(--bg-card)' }}>
+
+            {/* Modal Header */}
+            <div className="flex items-start justify-between px-6 pt-5 pb-4" style={{ borderBottom: '1px solid var(--border-light)' }}>
+              <div>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ backgroundColor: '#F0FDF4' }}>
+                    <Printer size={15} style={{ color: 'var(--green-primary)' }} />
+                  </div>
+                  <span className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>Cetak PDF</span>
+                </div>
+                <p className="text-xs mt-1.5 ml-10" style={{ color: 'var(--text-secondary)' }}>
+                  {data.customer_name}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowPdfModal(false)}
+                className="mt-0.5 rounded-lg p-1.5 transition-colors hover:bg-gray-100"
+                style={{ color: 'var(--text-secondary)' }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="px-6 py-5 space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
+                  Filter Status Invoice
+                </label>
+                <div className="relative">
+                  <select
+                    value={pdfStatusFilter}
+                    onChange={e => setPdfStatusFilter(e.target.value)}
+                    className="w-full appearance-none text-sm font-medium rounded-xl px-4 py-2.5 pr-9 outline-none transition-all"
+                    style={{
+                      backgroundColor: 'var(--bg-input, #F9FAFB)',
+                      border: '1px solid var(--border-card)',
+                      color: 'var(--text-primary)',
+                    }}
+                  >
+                    <option value="all">Semua Status</option>
+                    <option value="draft">Draft</option>
+                    <option value="sent">Terbit</option>
+                    <option value="outstanding">Outstanding</option>
+                    <option value="paid">Lunas</option>
+                    <option value="void">Void</option>
+                  </select>
+                  <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--text-secondary)' }} />
+                </div>
+                <p className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>
+                  {pdfStatusFilter === 'all'
+                    ? 'PDF akan memuat semua invoice.'
+                    : `PDF hanya memuat invoice berstatus "${
+                        { draft: 'Draft', sent: 'Terbit', outstanding: 'Outstanding', paid: 'Lunas', void: 'Void' }[pdfStatusFilter]
+                      }".`
+                  }
+                </p>
+              </div>
+
+              {exportError && (
+                <div className="text-xs px-3 py-2 rounded-xl" style={{ backgroundColor: '#FEF2F2', color: '#B91C1C', border: '1px solid #FECACA' }}>
+                  {exportError}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end gap-2 px-6 pb-5">
+              <button
+                onClick={() => setShowPdfModal(false)}
+                className="text-sm font-medium px-4 py-2 rounded-xl transition-all hover:brightness-95"
+                style={{ backgroundColor: 'var(--bg-input, #F3F4F6)', color: 'var(--text-secondary)', border: '1px solid var(--border-light)' }}
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleExportPdf}
+                disabled={isExportingPdf}
+                className="inline-flex items-center gap-1.5 text-sm font-semibold px-4 py-2 rounded-xl transition-all hover:brightness-95 disabled:opacity-60"
+                style={{ backgroundColor: 'var(--green-primary)', color: '#FFFFFF' }}
+              >
+                <Printer size={13} />
+                {isExportingPdf ? 'Mencetak...' : 'Cetak'}
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   )
 }
