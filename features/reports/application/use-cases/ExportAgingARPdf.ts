@@ -42,6 +42,9 @@ export async function exportAgingARPdf(data: AgingARSummary): Promise<void> {
   doc.setTextColor(0, 0, 0)
   doc.setFont('helvetica', 'normal')
 
+  // Hanya tampilkan customer yang punya piutang aktif (total_outstanding > 0)
+  const activeCustomers = data.customers.filter(c => c.total_outstanding > 0)
+
   const summaryItems = [
     ['Total Piutang Aktif', rp(data.total_outstanding)],
     ['Belum Jatuh Tempo', rp(data.bucket_totals[AgingBucket.CURRENT])],
@@ -49,7 +52,7 @@ export async function exportAgingARPdf(data: AgingARSummary): Promise<void> {
     ['31–60 Hari', rp(data.bucket_totals[AgingBucket.DAYS_31_60])],
     ['61–90 Hari', rp(data.bucket_totals[AgingBucket.DAYS_61_90])],
     ['> 90 Hari', rp(data.bucket_totals[AgingBucket.OVER_90])],
-    ['Jumlah Customer', `${data.customer_count} customer`],
+    ['Jumlah Customer', `${activeCustomers.length} customer`],
     ['Jumlah Invoice', `${data.invoice_count} invoice`],
   ]
 
@@ -72,7 +75,7 @@ export async function exportAgingARPdf(data: AgingARSummary): Promise<void> {
   // ── Tabel ─────────────────────────────────────────────────────────────────
   const tableHead = [['No', 'Customer', 'NPWP', 'Belum JT', '1–30 Hari', '31–60 Hari', '61–90 Hari', '> 90 Hari', 'Total Piutang']]
 
-  const tableBody = data.customers.map((c, i) => [
+  const tableBody = activeCustomers.map((c, i) => [
     String(i + 1),
     c.customer_name,
     c.npwp || '—',
@@ -129,12 +132,12 @@ export async function exportAgingARPdf(data: AgingARSummary): Promise<void> {
       }
       // 61-90 hari col (index 6) highlight if > 0
       if (!isLastRow && hookData.column.index === 6) {
-        const raw = data.customers[hookData.row.index]?.bucket_totals[AgingBucket.DAYS_61_90] ?? 0
+        const raw = activeCustomers[hookData.row.index]?.bucket_totals[AgingBucket.DAYS_61_90] ?? 0
         if (raw > 0) hookData.cell.styles.fillColor = [254, 243, 199]
       }
       // >90 hari col (index 7) highlight if > 0
       if (!isLastRow && hookData.column.index === 7) {
-        const raw = data.customers[hookData.row.index]?.bucket_totals[AgingBucket.OVER_90] ?? 0
+        const raw = activeCustomers[hookData.row.index]?.bucket_totals[AgingBucket.OVER_90] ?? 0
         if (raw > 0) hookData.cell.styles.fillColor = [254, 226, 226]
       }
     },
