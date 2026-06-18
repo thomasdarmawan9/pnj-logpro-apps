@@ -78,8 +78,8 @@ function estimateCompactContentHeight(doc, invoice) {
     tableH += Math.max(MIN_ROW, hQtyEff + PAD * 2)
   }
   tableH += 10 // spacer bawah tabel
-  // 257 = perkiraan overhead kompak (aktual ~250pt) + 7pt safety margin
-  return 257 + tableH
+  // 272 = perkiraan overhead kompak (aktual ~250pt + sigH 65pt) + 7pt safety margin
+  return 272 + tableH
 }
 
 // ── Draw horizontal rule ───────────────────────────────────────────────────
@@ -887,7 +887,7 @@ function drawSignatures(doc, invoice, company, startY, ctx = null) {
   const { L, R, W } = pageGeom(doc, ctx)
   const compact = !!ctx?.compact
   const colW   = W / 2
-  const sigH   = compact ? 50 : 70   // space untuk tanda tangan / materai
+  const sigH   = compact ? 65 : 85   // space untuk tanda tangan / materai
   const fsz    = compact ? 8.5 : 9
 
   let y = startY + (compact ? 5 : 6)
