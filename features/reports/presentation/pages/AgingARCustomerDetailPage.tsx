@@ -134,8 +134,10 @@ function InvoiceTable({
             </tr>
           </thead>
           <tbody>
-            {invoices.map(inv => (
-              <tr key={inv.uuid} className="border-t" style={{ borderColor: '#E5E7EB' }}>
+            {invoices.map(inv => {
+              const isPaid = inv.status === 'paid' || inv.remaining_amount <= 0
+              return (
+              <tr key={inv.uuid} className="border-t" style={{ borderColor: '#E5E7EB', backgroundColor: isPaid ? '#F0FDF4' : undefined }}>
                 <td className="px-4 py-2.5 font-mono" style={{ color: 'var(--text-primary)' }}>#{inv.invoice_number}</td>
                 <td className="px-3 py-2.5" style={{ color: 'var(--text-secondary)' }}>{formatDate(inv.invoice_date)}</td>
                 <td className="px-3 py-2.5" style={{ color: 'var(--text-secondary)' }}>{formatDate(inv.due_date)}</td>
@@ -153,7 +155,8 @@ function InvoiceTable({
                   {inv.remaining_amount > 0 ? formatRupiah(inv.remaining_amount) : 'Lunas'}
                 </td>
               </tr>
-            ))}
+              )
+            })}
           </tbody>
           <tfoot>
             <tr style={{ backgroundColor: '#F3F4F6', borderTop: '2px solid var(--border-light)' }}>
