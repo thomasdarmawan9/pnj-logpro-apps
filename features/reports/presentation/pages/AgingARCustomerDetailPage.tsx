@@ -105,6 +105,8 @@ function resolveServiceLabel(serviceType: string, customName: string | null): st
   return customName || serviceType || '-'
 }
 
+const INVOICE_PAGE_SIZE = 10
+
 function InvoiceTable({
   invoices,
   suratJalan,
@@ -119,6 +121,16 @@ function InvoiceTable({
   totalOutstanding: number
 }) {
   const hasOutstanding = totalOutstanding > 0
+  const [page, setPage] = useState(1)
+
+  const totalPages = Math.max(1, Math.ceil(invoices.length / INVOICE_PAGE_SIZE))
+  // Reset ke halaman 1 jika data berubah (misal expand/collapse proyek lain)
+  useEffect(() => { setPage(1) }, [invoices])
+
+  const start  = (page - 1) * INVOICE_PAGE_SIZE
+  const paged  = invoices.slice(start, start + INVOICE_PAGE_SIZE)
+  const from   = invoices.length === 0 ? 0 : start + 1
+  const to     = Math.min(start + INVOICE_PAGE_SIZE, invoices.length)
 
   // Build SJ lookup by sj_number for route resolution
   const sjByNumber = Object.fromEntries(suratJalan.map(sj => [sj.sj_number, sj]))
@@ -149,7 +161,7 @@ function InvoiceTable({
             </tr>
           </thead>
           <tbody>
-            {invoices.map(inv => {
+            {paged.map(inv => {
               const isPaid = inv.status === 'paid' || inv.remaining_amount <= 0
 
               // Rincian item — format berbeda untuk rental vs pengiriman
@@ -268,6 +280,91 @@ function InvoiceTable({
           </tfoot>
         </table>
       </div>
+
+      {/* Pagination bar — hanya tampil jika lebih dari 1 halaman */}
+      {totalPages > 1 && (
+        <div
+          className="flex items-center justify-between px-5 py-3 text-xs"
+          style={{ borderTop: '1px solid var(--border-light)' }}
+        >
+          {/* Info */}
+          <span style={{ color: 'var(--text-secondary)' }}>
+            Menampilkan <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{from}–{to}</span> dari{' '}
+            <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{invoices.length}</span> invoice
+          </span>
+
+          {/* Kontrol halaman */}
+          <div className="flex items-center gap-1">
+            {/* Tombol First */}
+            <button
+              onClick={() => setPage(1)}
+              disabled={page === 1}
+              className="px-2 py-1 rounded-lg font-medium transition-all disabled:opacity-40"
+              style={{ backgroundColor: 'var(--bg-input, #F3F4F6)', color: 'var(--text-secondary)', border: '1px solid var(--border-light)' }}
+            >
+              «
+            </button>
+
+            {/* Tombol Prev */}
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="px-2.5 py-1 rounded-lg font-medium transition-all disabled:opacity-40"
+              style={{ backgroundColor: 'var(--bg-input, #F3F4F6)', color: 'var(--text-secondary)', border: '1px solid var(--border-light)' }}
+            >
+              ‹
+            </button>
+
+            {/* Nomor halaman */}
+            {Array.from({ length: totalPages }, (_, i) => i + 1)
+              .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
+              .reduce<(number | 'ellipsis')[]>((acc, p, idx, arr) => {
+                if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push('ellipsis')
+                acc.push(p)
+                return acc
+              }, [])
+              .map((item, idx) =>
+                item === 'ellipsis' ? (
+                  <span key={`e-${idx}`} className="px-1" style={{ color: 'var(--text-secondary)' }}>…</span>
+                ) : (
+                  <button
+                    key={item}
+                    onClick={() => setPage(item as number)}
+                    className="min-w-[28px] px-2 py-1 rounded-lg font-medium transition-all"
+                    style={
+                      page === item
+                        ? { backgroundColor: 'var(--green-primary)', color: '#FFFFFF', border: '1px solid var(--green-primary)' }
+                        : { backgroundColor: 'var(--bg-input, #F3F4F6)', color: 'var(--text-secondary)', border: '1px solid var(--border-light)' }
+                    }
+                  >
+                    {item}
+                  </button>
+                )
+              )
+            }
+
+            {/* Tombol Next */}
+            <button
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="px-2.5 py-1 rounded-lg font-medium transition-all disabled:opacity-40"
+              style={{ backgroundColor: 'var(--bg-input, #F3F4F6)', color: 'var(--text-secondary)', border: '1px solid var(--border-light)' }}
+            >
+              ›
+            </button>
+
+            {/* Tombol Last */}
+            <button
+              onClick={() => setPage(totalPages)}
+              disabled={page === totalPages}
+              className="px-2 py-1 rounded-lg font-medium transition-all disabled:opacity-40"
+              style={{ backgroundColor: 'var(--bg-input, #F3F4F6)', color: 'var(--text-secondary)', border: '1px solid var(--border-light)' }}
+            >
+              »
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
