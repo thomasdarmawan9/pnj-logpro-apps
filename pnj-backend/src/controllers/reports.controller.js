@@ -66,6 +66,37 @@ function safeFilename(value) {
   return String(value || 'export').replace(/[^a-zA-Z0-9_\-.]/g, '_')
 }
 
+function resolveServiceLabel(serviceType, customName) {
+  if (serviceType === 'delivery') return 'Pengiriman'
+  if (serviceType === 'rental')   return 'Penyewaan'
+  if (serviceType === 'other')    return customName || 'Lainnya'
+  return customName || serviceType || '-'
+}
+
+function buildRincianItem(items, serviceType) {
+  if (!items || items.length === 0) return '-'
+  if (serviceType === 'rental') {
+    return items.map(it => {
+      const lines = [it.fleet_label || it.description || '-']
+      lines.push(`Unit disewa: ${it.qty} unit`)
+      if (it.period_start && it.period_end) {
+        const durasiHari = Math.round(
+          (new Date(it.period_end) - new Date(it.period_start)) / 86_400_000
+        )
+        lines.push(`Durasi: ${durasiHari} hari`)
+      } else if (it.qty > 0 && it.unit && it.unit.toLowerCase() !== 'unit') {
+        lines.push(`Durasi: ${it.qty} ${it.unit.toLowerCase()}`)
+      }
+      return lines.join('\n')
+    }).join('\n\n')
+  }
+  return items.map(it => {
+    const parts = [it.description || '-', `${it.qty} ${it.unit}`]
+    if (it.cargo_notes) parts.push(it.cargo_notes)
+    return parts.join(' - ')
+  }).join('\n')
+}
+
 function statusLabel(status) {
   const labels = {
     draft:       'Draft',
@@ -191,18 +222,41 @@ function customerDetailRows(data) {
   const sjRows = []
   const projectRows = data.projects.map(project => {
     const projectName = project.project_id ? project.project_name : 'Proyek Customer'
+
+    // Build SJ lookup by sj_number for route resolution
+    const sjByNumber = Object.fromEntries(
+      (project.surat_jalan || []).map(sj => [sj.sj_number, sj])
+    )
+
     for (const inv of project.invoices) {
+      const remaining = Number(inv.remaining_amount || 0)
+      const detailNominal = [
+        `Total    : ${formatIDR(inv.total_amount)}`,
+        `Terbayar : ${inv.paid_amount > 0 ? formatIDR(inv.paid_amount) : '-'}`,
+        `Sisa     : ${remaining > 0 ? formatIDR(remaining) : 'Lunas'}`,
+      ].join('\n')
+
+      const routes = (inv.attached_sj_numbers || [])
+        .map(num => sjByNumber[num])
+        .filter(Boolean)
+        .map(sj => `${sj.origin} → ${sj.destination}`)
+        .filter((v, i, arr) => arr.indexOf(v) === i)
+
       invoiceRows.push({
-        project_name:      projectName,
-        invoice_number:    inv.invoice_number,
-        invoice_date:      formatDateShort(inv.invoice_date),
-        due_date:          formatDateShort(inv.due_date),
-        status:            statusLabel(inv.status),
-        total_amount:      Number(inv.total_amount || 0),
-        paid_amount:       Number(inv.paid_amount || 0),
-        remaining_amount:  Number(inv.remaining_amount || 0),
-        remaining_display: Number(inv.remaining_amount || 0) > 0 ? formatIDR(inv.remaining_amount) : 'Lunas',
-        attached_sj:       (inv.attached_sj_numbers || []).join(', ') || '-',
+        project_name:     projectName,
+        invoice_number:   inv.invoice_number,
+        invoice_date:     formatDateShort(inv.invoice_date),
+        due_date:         formatDateShort(inv.due_date),
+        status:           statusLabel(inv.status),
+        jasa:             resolveServiceLabel(inv.service_type, inv.custom_service_name),
+        rincian_item:     buildRincianItem(inv.items, inv.service_type),
+        rute_pengiriman:  routes.length > 0 ? routes.join('\n') : '-',
+        detail_nominal:   detailNominal,
+        // numeric fields kept for Excel export + _bg logic
+        total_amount:     Number(inv.total_amount || 0),
+        paid_amount:      Number(inv.paid_amount || 0),
+        remaining_amount: remaining,
+        attached_sj:      (inv.attached_sj_numbers || []).join(', ') || '-',
       })
     }
     for (const sj of project.surat_jalan) {
@@ -365,6 +419,9 @@ const exportAgingARCustomerExcel = asyncHandler(async (req, res) => {
     { header: 'Tgl Invoice', key: 'invoice_date', width: 14 },
     { header: 'Jatuh Tempo', key: 'due_date', width: 14 },
     { header: 'Status', key: 'status', width: 16 },
+    { header: 'Jasa', key: 'jasa', width: 16 },
+    { header: 'Rincian Item', key: 'rincian_item', width: 40 },
+    { header: 'Rute Pengiriman', key: 'rute_pengiriman', width: 40 },
     { header: 'Total', key: 'total_amount', width: 18 },
     { header: 'Terbayar', key: 'paid_amount', width: 18 },
     { header: 'Sisa', key: 'remaining_amount', width: 18 },
@@ -445,19 +502,17 @@ const exportAgingARCustomerPdf = asyncHandler(async (req, res) => {
   })), { title: 'Ringkasan Proyek / Proyek Customer', repeatTitle: 'Ringkasan Proyek / Proyek Customer' })
 
   drawPdfTable(doc, [
-    { key: 'project_name', label: 'Proyek', width: 130 },
-    { key: 'invoice_number', label: 'No. Invoice', width: 80 },
-    { key: 'invoice_date', label: 'Tgl Inv', width: 56 },
-    { key: 'due_date', label: 'Jatuh Tempo', width: 58 },
-    { key: 'status', label: 'Status', width: 64 },
-    { key: 'total_display', label: 'Total', width: 92, align: 'right' },
-    { key: 'paid_display', label: 'Terbayar', width: 92, align: 'right' },
-    { key: 'remaining_display', label: 'Sisa', width: 92, align: 'right' },
-    { key: 'attached_sj', label: 'SJ Terkait', width: 90 },
+    { key: 'project_name',    label: 'Proyek',           width: 118 },
+    { key: 'invoice_number',  label: 'No. Invoice',      width: 76 },
+    { key: 'invoice_date',    label: 'Tgl Inv',          width: 52 },
+    { key: 'due_date',        label: 'Jatuh Tempo',      width: 54 },
+    { key: 'status',          label: 'Status',           width: 58 },
+    { key: 'jasa',            label: 'Jasa',             width: 58 },
+    { key: 'rincian_item',    label: 'Rincian Item',     width: 138 },
+    { key: 'rute_pengiriman', label: 'Rute Pengiriman',  width: 100 },
+    { key: 'detail_nominal',  label: 'Detail Nominal',   width: 111 },
   ], invoiceRows.map(row => ({
     ...row,
-    total_display: formatIDR(row.total_amount),
-    paid_display: formatIDR(row.paid_amount),
     _bg: row.remaining_amount <= 0 ? '#F0FDF4' : undefined,
   })), { title: 'Daftar Invoice', repeatTitle: 'Daftar Invoice' })
 
