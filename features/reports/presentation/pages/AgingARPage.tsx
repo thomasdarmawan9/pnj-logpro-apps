@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { useSelector } from 'react-redux'
-import { Download, RefreshCw, DollarSign, Clock, Search, SlidersHorizontal, CheckCircle, AlertTriangle } from 'lucide-react'
+import { Download, FileText, RefreshCw, DollarSign, Clock, Search, SlidersHorizontal, CheckCircle, AlertTriangle } from 'lucide-react'
 import { RootState } from '@/store'
 import { useAgingAR } from '../hooks/useAgingAR'
 import { useReportExport } from '../hooks/useReportExport'
@@ -17,7 +17,7 @@ export default function AgingARPage() {
   const router = useRouter()
   const user = useSelector((state: RootState) => state.auth.user)
   const { data, filters, isLoading, lastRefreshed, refresh, setFilters } = useAgingAR()
-  const { isExporting, exportAgingAR } = useReportExport()
+  const { isExporting, isExportingPdf, exportAgingAR, exportAgingARPdfFn } = useReportExport()
   const [customerOptions, setCustomerOptions] = useState<Array<{ value: number; label: string }>>([])
 
   useEffect(() => {
@@ -114,6 +114,15 @@ export default function AgingARPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => data && exportAgingARPdfFn(data)}
+            disabled={isExportingPdf || !data}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all disabled:opacity-50"
+            style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-card)', color: '#DC2626' }}
+          >
+            {isExportingPdf ? <RefreshCw size={14} className="animate-spin" /> : <FileText size={14} />}
+            Export PDF
+          </button>
           <button
             onClick={() => data && exportAgingAR(data)}
             disabled={isExporting || !data}
