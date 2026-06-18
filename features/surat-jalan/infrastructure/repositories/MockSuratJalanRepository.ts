@@ -28,7 +28,7 @@ function toNumber(value: number | string | null | undefined) {
 function normalizeSJ(sj: ApiSJ): SuratJalan {
   const projectId = toNumber(sj.project_id ?? sj.project?.id)
   const customerId = Number(sj.customer_id || sj.customer?.id || 0)
-  const fleetId = Number(sj.fleet_id || sj.fleet?.id || 0)
+  const fleetId = toNumber(sj.fleet_id ?? sj.fleet?.id)
 
   return {
     ...sj,
@@ -47,12 +47,12 @@ function normalizeSJ(sj: ApiSJ): SuratJalan {
       name: sj.customer?.name || 'Data customer tidak tersedia',
     },
     fleet_id: fleetId,
-    fleet: {
-      id: Number(sj.fleet?.id || fleetId),
-      name: sj.fleet?.name || 'Data armada tidak tersedia',
-      plate_number: sj.fleet?.plate_number || '-',
-      is_tbd: Boolean(sj.fleet?.is_tbd),
-    },
+    fleet: (fleetId && sj.fleet) ? {
+      id: Number(sj.fleet.id || fleetId),
+      name: sj.fleet.name || '-',
+      plate_number: sj.fleet.plate_number || '-',
+      is_tbd: Boolean(sj.fleet.is_tbd),
+    } : null,
     driver_id: toNumber(sj.driver_id),
     driver: sj.driver ? { ...sj.driver, id: Number(sj.driver.id) } : null,
     operational_cost: Number(sj.operational_cost || 0),
@@ -72,7 +72,7 @@ function applyFrontendFilters(list: SuratJalan[], filters: SJFilterState) {
         sj.sj_number.toLowerCase().includes(q) ||
         sj.customer.name.toLowerCase().includes(q) ||
         (sj.project?.name || '').toLowerCase().includes(q) ||
-        sj.fleet.plate_number.toLowerCase().includes(q)
+        (sj.fleet?.plate_number || '').toLowerCase().includes(q)
       if (!match) return false
     }
     if (filters.statusOps !== 'all' && sj.status !== filters.statusOps) return false

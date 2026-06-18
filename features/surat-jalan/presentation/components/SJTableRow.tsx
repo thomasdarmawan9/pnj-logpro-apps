@@ -105,14 +105,14 @@ export default function SJTableRow({ sj, checked, onToggle, onAction, role }: SJ
       </td>
       <td className="px-4 py-3">
         <div className="text-sm font-semibold flex items-center gap-2">
-          {sj.fleet.is_tbd ? (
+          {!sj.fleet ? '-' : sj.fleet.is_tbd ? (
             <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">Belum Ditentukan</span>
           ) : (
             `${sj.fleet.name} (${sj.fleet.plate_number})`
           )}
         </div>
         <div className="text-xs text-gray-500 flex items-center gap-1">
-          {sj.driver?.name || sj.driver_name_manual || 'Belum ada supir'}
+          {sj.driver?.name || sj.driver_name_manual || '-'}
         </div>
       </td>
       <td className="px-4 py-3">

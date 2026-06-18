@@ -131,7 +131,7 @@ export default function DetailSuratJalanPage({ uuid }: DetailSuratJalanPageProps
         sj_date: selectedSJ!.sj_date,
         origin: selectedSJ!.origin,
         destination: selectedSJ!.destination,
-        fleet_label: `${selectedSJ!.fleet.name} ${selectedSJ!.fleet.plate_number}`,
+        fleet_label: selectedSJ!.fleet ? `${selectedSJ!.fleet.name} ${selectedSJ!.fleet.plate_number}` : '-',
         driver_name: selectedSJ!.driver?.name || selectedSJ!.driver_name_manual || '-',
         status: selectedSJ!.status,
       },
@@ -246,7 +246,7 @@ export default function DetailSuratJalanPage({ uuid }: DetailSuratJalanPageProps
 
                   <div className="rounded-xl bg-gray-50 p-4">
                     <div className="text-xs text-gray-500">Armada</div>
-                    <div className="text-sm font-semibold">{selectedSJ.fleet.name} ({selectedSJ.fleet.plate_number})</div>
+                    <div className="text-sm font-semibold">{selectedSJ.fleet ? `${selectedSJ.fleet.name} (${selectedSJ.fleet.plate_number})` : '-'}</div>
                     <div className="text-xs text-gray-500 mt-2">Supir</div>
                     <div className="text-sm">{selectedSJ.driver?.name || selectedSJ.driver_name_manual || '-'}</div>
                   </div>

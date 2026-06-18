@@ -136,7 +136,7 @@ export default function SuratJalanListPage() {
         sj_date: currentSJ.sj_date,
         origin: currentSJ.origin,
         destination: currentSJ.destination,
-        fleet_label: `${currentSJ.fleet.name} ${currentSJ.fleet.plate_number}`,
+        fleet_label: currentSJ.fleet ? `${currentSJ.fleet.name} ${currentSJ.fleet.plate_number}` : '-',
         driver_name: currentSJ.driver?.name || currentSJ.driver_name_manual || '-',
         status: currentSJ.status,
       },

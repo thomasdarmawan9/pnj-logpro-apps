@@ -43,13 +43,13 @@ export interface SuratJalan {
     uuid?: string
     name: string
   }
-  fleet_id: number
+  fleet_id: number | null
   fleet: {
     id: number
     name: string
     plate_number: string
     is_tbd: boolean
-  }
+  } | null
   driver_id: number | null
   driver: {
     id: number
