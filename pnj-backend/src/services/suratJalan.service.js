@@ -396,6 +396,7 @@ async function create(payload, actor) {
       status,
       invoice_attachment_status: 'no_invoice',
       internal_notes:            payload.internal_notes || null,
+      sender_name:               payload.sender_name || null,
       created_by:                actor?.id || null,
       updated_by:                actor?.id || null,
     }, { transaction: t })
@@ -448,7 +449,7 @@ async function update(uuid, payload, actor) {
 
     const passthrough = [
       'driver_name_manual', 'sj_date', 'origin', 'destination',
-      'cargo_description', 'operational_cost', 'internal_notes',
+      'cargo_description', 'operational_cost', 'internal_notes', 'sender_name',
     ]
     for (const k of passthrough) {
       if (k in payload) updates[k] = payload[k]

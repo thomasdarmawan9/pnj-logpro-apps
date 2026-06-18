@@ -89,6 +89,7 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
         items: selectedSJ.items ?? [],
         operational_cost: selectedSJ.operational_cost,
         internal_notes: selectedSJ.internal_notes || '',
+        sender_name: selectedSJ.sender_name ?? null,
         publish: false,
       })
       const foundArmada = armadaOptions.find(a => a.id === selectedSJ.fleet_id) || null
@@ -141,6 +142,7 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
         cargo_description: form.cargo_description || null,
         items: form.items.length > 0 ? form.items : null,
         internal_notes: form.internal_notes || null,
+        sender_name: form.sender_name || null,
         lampiran_paths: lampiranPaths.length > 0 ? lampiranPaths : null,
       },
     }))
@@ -288,6 +290,16 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
                 rows={3}
                 value={form.cargo_description || ''}
                 onChange={e => updateField('cargo_description', e.target.value)}
+              />
+            </label>
+
+            <label className="text-xs font-medium mt-4 block" style={{ color: '#374151' }}>
+              Nama Pengirim <span className="text-gray-400 font-normal">(opsional)</span>
+              <input
+                className="form-input w-full mt-1"
+                value={form.sender_name || ''}
+                onChange={e => updateField('sender_name', e.target.value || null)}
+                placeholder="contoh: Thomas Darmawan"
               />
             </label>
           </div>

@@ -450,6 +450,16 @@ export default function CreateSuratJalanPage() {
                 placeholder="contoh: Kendaraan operasional untuk periode sewa"
               />
             </label>
+
+            <label className="text-xs font-medium mt-4 block" style={{ color: '#374151' }}>
+              Nama Pengirim <span className="text-gray-400 font-normal">(opsional)</span>
+              <input
+                className="form-input w-full mt-1"
+                value={form.sender_name || ''}
+                onChange={e => updateField('sender_name', e.target.value || null)}
+                placeholder="contoh: Thomas Darmawan"
+              />
+            </label>
           </div>
 
           <SJFormItemsSection

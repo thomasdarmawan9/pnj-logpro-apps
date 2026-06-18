@@ -14,5 +14,6 @@ export interface CreateSJDto {
   items: SJItem[]
   operational_cost: number
   internal_notes: string | null
+  sender_name: string | null
   publish: boolean
 }

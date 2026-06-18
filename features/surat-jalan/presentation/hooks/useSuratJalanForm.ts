@@ -24,6 +24,7 @@ export default function useSuratJalanForm({ mode, initial }: UseSuratJalanFormOp
     items: initial?.items || [],
     operational_cost: initial?.operational_cost || 0,
     internal_notes: initial?.internal_notes || '',
+    sender_name: initial?.sender_name ?? null,
     publish: initial?.publish || false,
   })
 

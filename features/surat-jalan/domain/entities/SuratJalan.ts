@@ -75,6 +75,7 @@ export interface SuratJalan {
   lampiran_paths: string[] | null
   void_reason: string | null
   internal_notes: string | null
+  sender_name: string | null
   created_by: number
   created_at: string
   updated_at: string

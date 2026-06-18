@@ -221,6 +221,14 @@ function renderCopy(doc, sj, company, options, Y0, copyIndex = 0) {
        .text(projLabel, L + W * 0.62, KEP_Y + 12, { width: W * 0.38, align: 'right' })
   }
 
+  // Nama Pengirim di sebelah kanan (opsional)
+  if (sj.sender_name) {
+    const senderLabel = `Pengirim : ${sj.sender_name}`
+    const senderY = (sj.project?.name || sj.project?.code) ? KEP_Y + 22 : KEP_Y + 12
+    doc.font('Helvetica').fontSize(8).fillColor(C_DARK)
+       .text(senderLabel, L + W * 0.62, senderY, { width: W * 0.38, align: 'right' })
+  }
+
   // ── 4. Intro teks ────────────────────────────────────────────────────────
   const INTRO_Y = KEP_Y + KEP_H
   doc.font('Helvetica-Bold').fontSize(8.5).fillColor(C_DARK)
