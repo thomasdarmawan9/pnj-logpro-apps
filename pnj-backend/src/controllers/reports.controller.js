@@ -172,7 +172,7 @@ function drawPdfTable(doc, columns, rows, opts = {}) {
     }
     const y = doc.y
     let x = left
-    const bg = rowIndex % 2 === 0 ? '#FFFFFF' : '#F9FAFB'
+    const bg = row._bg ?? (rowIndex % 2 === 0 ? '#FFFFFF' : '#F9FAFB')
     doc.rect(left, y, right - left, rowHeight).fillAndStroke(bg, '#E5E7EB')
     columns.forEach(col => {
       const value = row[col.key] === undefined || row[col.key] === null || row[col.key] === '' ? '-' : String(row[col.key])
@@ -458,6 +458,7 @@ const exportAgingARCustomerPdf = asyncHandler(async (req, res) => {
     ...row,
     total_display: formatIDR(row.total_amount),
     paid_display: formatIDR(row.paid_amount),
+    _bg: row.remaining_amount <= 0 ? '#F0FDF4' : undefined,
   })), { title: 'Daftar Invoice', repeatTitle: 'Daftar Invoice' })
 
   drawPdfTable(doc, [
