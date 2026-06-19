@@ -179,6 +179,7 @@ export default function InvoiceListPage() {
               <th className="px-4 py-3 text-left">No. Invoice</th>
               <th className="px-4 py-3 text-left">Tgl Invoice</th>
               <th className="px-4 py-3 text-left">Tipe Jasa</th>
+              <th className="px-4 py-3 text-left">Rincian Item</th>
               <th className="px-4 py-3 text-left">Customer</th>
               <th className="px-4 py-3 text-right">Total</th>
               <th className="px-4 py-3 text-left">Status</th>
@@ -189,14 +190,14 @@ export default function InvoiceListPage() {
           <tbody className="text-sm">
             {isLoading && Array.from({ length: 5 }).map((_, idx) => (
               <tr key={idx} className="border-t" style={{ borderColor: 'var(--border-card)' }}>
-                <td colSpan={9} className="px-4 py-4">
+                <td colSpan={10} className="px-4 py-4">
                   <div className="h-4 bg-gray-100 rounded w-full animate-pulse" />
                 </td>
               </tr>
             ))}
             {!isLoading && list.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-4 py-12 text-center text-gray-500">
+                <td colSpan={10} className="px-4 py-12 text-center text-gray-500">
                   Tidak ada invoice yang cocok dengan filter ini.
                 </td>
               </tr>

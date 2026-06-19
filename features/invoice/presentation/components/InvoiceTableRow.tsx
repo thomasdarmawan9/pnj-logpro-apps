@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import { Eye, Pencil, Send, Printer, AlertTriangle, DollarSign, Paperclip, MoreHorizontal, Wallet } from 'lucide-react'
 import { Invoice, InvoiceStatus } from '../../domain/entities/Invoice'
 import { resolveEffectiveInvoiceServiceType } from '../../domain/services/invoiceServiceType'
+import { buildInvoiceItemSummary } from '../utils/itemSummary'
 import InvoiceStatusBadge from './InvoiceStatusBadge'
 
 function formatRupiah(amount: number): string {
@@ -37,6 +38,7 @@ export default function InvoiceTableRow({ invoice, checked, onToggle, onAction, 
   const overdue = invoice.status === InvoiceStatus.OUTSTANDING && new Date(invoice.due_date) < new Date()
   const overdayCount = overdue ? daysOverdue(invoice.due_date) : 0
   const effectiveServiceType = resolveEffectiveInvoiceServiceType(invoice.service_type, invoice.custom_service_name)
+  const itemSummary = buildInvoiceItemSummary(invoice)
   const canAttachSJ = effectiveServiceType !== 'rental'
   const isReadOnly = role === 'admin_finance'
   const canRecordPayment = role === 'super_admin' || role === 'admin_finance'
@@ -121,7 +123,30 @@ export default function InvoiceTableRow({ invoice, checked, onToggle, onAction, 
           {serviceTypeLabel}
         </span>
       </td>
-      <td className="px-4 py-3">
+      <td className="px-4 py-3 align-top max-w-xs">
+        {itemSummary.length === 0 ? (
+          <span className="text-xs text-gray-400">-</span>
+        ) : effectiveServiceType === 'rental' ? (
+          <div className="space-y-1.5">
+            {itemSummary.map((line, idx) => (
+              <div key={idx} className="leading-snug">
+                <div className="text-sm font-medium text-gray-800">{line.primary}</div>
+                {line.detail && <div className="text-xs text-gray-500">{line.detail}</div>}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <ul className="space-y-0.5">
+            {itemSummary.map((line, idx) => (
+              <li key={idx} className="text-sm text-gray-700 leading-snug flex gap-1.5">
+                <span className="text-gray-400">•</span>
+                <span>{line.primary}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </td>
+      <td className="px-4 py-3 align-top">
         <div className="text-sm font-semibold">{invoice.customer.name}</div>
         <div className="text-xs text-gray-500">{invoice.project?.name || '-'}</div>
       </td>
