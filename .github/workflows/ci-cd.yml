@@ -70,43 +70,40 @@ jobs:
         if: env.SONAR_TOKEN != ''
         uses: SonarSource/sonarqube-scan-action@v4
 
-  # ── Deploy ke VPS (hanya saat push ke main, setelah CI lulus) ───────────
+  # ── Deploy ke VPS (self-hosted runner DI VPS; tanpa SSH masuk) ──────────
+  # Runner berjalan di VPS & menarik job via koneksi keluar (443), lalu
+  # men-deploy ke direktori live secara lokal.
   deploy:
     name: Deploy to VPS
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, vps]
     needs: [frontend, backend]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          script: |
-            set -e
-            cd /var/www/logproapp/app
+      - name: Deploy ke direktori live
+        run: |
+          set -e
+          cd /var/www/logproapp/app
 
-            echo ">> Pull kode terbaru..."
-            git fetch origin main
-            git reset --hard origin/main
+          echo ">> Pull kode terbaru..."
+          git fetch origin main
+          git reset --hard origin/main
 
-            echo ">> Install dependency backend..."
-            cd pnj-backend
-            npm ci --omit=dev
+          echo ">> Install dependency backend..."
+          cd pnj-backend
+          npm ci --omit=dev
 
-            echo ">> Jalankan migrasi database (production)..."
-            # sequelize-cli baca config production (use_env_variable DATABASE_URL).
-            # Preload dotenv agar variabel dari .env tersedia di proses non-interaktif,
-            # dan paksa NODE_ENV=production (default sequelize-cli = development).
-            NODE_ENV=production NODE_OPTIONS='-r dotenv/config' npm run db:migrate
+          echo ">> Jalankan migrasi database (production)..."
+          # sequelize-cli baca config production (use_env_variable DATABASE_URL).
+          # Preload dotenv agar variabel dari .env tersedia, dan paksa
+          # NODE_ENV=production (default sequelize-cli = development).
+          NODE_ENV=production NODE_OPTIONS='-r dotenv/config' npm run db:migrate
 
-            echo ">> Install dependency & build frontend..."
-            cd /var/www/logproapp/app
-            npm ci
-            NODE_ENV=production npm run build
+          echo ">> Install dependency & build frontend..."
+          cd /var/www/logproapp/app
+          npm ci
+          NODE_ENV=production npm run build
 
-            echo ">> Restart service..."
-            pm2 restart pnj-backend pnj-pdf-worker pnj-frontend --update-env
+          echo ">> Restart service..."
+          pm2 restart pnj-backend pnj-pdf-worker pnj-frontend --update-env
 
-            echo ">> Deploy selesai."
+          echo ">> Deploy selesai."
