@@ -99,13 +99,13 @@ export default function InvoiceTableRow({ invoice, checked, onToggle, onAction, 
 
   return (
     <tr className="border-t hover:bg-gray-50/50 transition-colors" style={{ borderColor: 'var(--border-card)', ...rowStyle }}>
-      <td className="px-4 py-3">
+      <td className="px-3 py-2.5">
         <input type="checkbox" checked={checked} onChange={() => onToggle(invoice.uuid)} className="rounded" />
       </td>
-      <td className="px-4 py-3">
+      <td className="px-3 py-2.5">
         <button
           onClick={() => onAction('detail', invoice.uuid)}
-          className="font-mono text-sm font-semibold hover:underline"
+          className="font-mono text-xs font-semibold hover:underline"
           style={{ fontFamily: 'var(--font-mono)', color: 'var(--green-primary)' }}
         >
           #{invoice.invoice_number}
@@ -117,28 +117,28 @@ export default function InvoiceTableRow({ invoice, checked, onToggle, onAction, 
           </div>
         )}
       </td>
-      <td className="px-4 py-3 text-sm text-gray-600">{formatDate(invoice.invoice_date)}</td>
-      <td className="px-4 py-3">
+      <td className="px-3 py-2.5 text-xs text-gray-600">{formatDate(invoice.invoice_date)}</td>
+      <td className="px-3 py-2.5">
         <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold" style={serviceTypeStyle}>
           {serviceTypeLabel}
         </span>
       </td>
-      <td className="px-4 py-3 align-top max-w-xs">
+      <td className="px-3 py-2.5 align-top max-w-xs">
         {itemSummary.length === 0 ? (
           <span className="text-xs text-gray-400">-</span>
         ) : effectiveServiceType === 'rental' ? (
           <div className="space-y-1.5">
             {itemSummary.map((line, idx) => (
               <div key={idx} className="leading-snug">
-                <div className="text-sm font-medium text-gray-800">{line.primary}</div>
-                {line.detail && <div className="text-xs text-gray-500">{line.detail}</div>}
+                <div className="text-xs font-medium text-gray-800">{line.primary}</div>
+                {line.detail && <div className="text-[11px] text-gray-500">{line.detail}</div>}
               </div>
             ))}
           </div>
         ) : (
           <ul className="space-y-0.5">
             {itemSummary.map((line, idx) => (
-              <li key={idx} className="text-sm text-gray-700 leading-snug flex gap-1.5">
+              <li key={idx} className="text-xs text-gray-700 leading-snug flex gap-1.5">
                 <span className="text-gray-400">•</span>
                 <span>{line.primary}</span>
               </li>
@@ -146,14 +146,14 @@ export default function InvoiceTableRow({ invoice, checked, onToggle, onAction, 
           </ul>
         )}
       </td>
-      <td className="px-4 py-3 align-top">
-        <div className="text-sm font-semibold">{invoice.customer.name}</div>
-        <div className="text-xs text-gray-500">{invoice.project?.name || '-'}</div>
+      <td className="px-3 py-2.5 align-top">
+        <div className="text-xs font-semibold">{invoice.customer.name}</div>
+        <div className="text-[11px] text-gray-500">{invoice.project?.name || '-'}</div>
       </td>
-      <td className="px-4 py-3 text-sm text-right font-bold font-mono" style={{ fontFamily: 'var(--font-mono)' }}>{formatRupiah(invoice.total_amount)}</td>
-      <td className="px-4 py-3"><InvoiceStatusBadge status={invoice.status} /></td>
-      <td className="px-4 py-3">
-        <div className="text-sm text-gray-600">{formatDate(invoice.due_date)}</div>
+      <td className="px-3 py-2.5 text-xs text-right font-bold font-mono" style={{ fontFamily: 'var(--font-mono)' }}>{formatRupiah(invoice.total_amount)}</td>
+      <td className="px-3 py-2.5"><InvoiceStatusBadge status={invoice.status} /></td>
+      <td className="px-3 py-2.5">
+        <div className="text-xs text-gray-600">{formatDate(invoice.due_date)}</div>
         {overdue && (
           <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-600 mt-0.5">
             <AlertTriangle size={11} />
@@ -161,7 +161,7 @@ export default function InvoiceTableRow({ invoice, checked, onToggle, onAction, 
           </span>
         )}
       </td>
-      <td className="px-4 py-3">
+      <td className="px-3 py-2.5">
         <div className="relative">
           <button
             ref={buttonRef}

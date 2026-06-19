@@ -175,16 +175,16 @@ export default function InvoiceListPage() {
         <table className="min-w-full">
           <thead className="bg-gray-50 text-xs text-gray-500 sticky top-0">
             <tr>
-              <th className="px-4 py-3 text-left w-8">□</th>
-              <th className="px-4 py-3 text-left">No. Invoice</th>
-              <th className="px-4 py-3 text-left">Tgl Invoice</th>
-              <th className="px-4 py-3 text-left">Tipe Jasa</th>
-              <th className="px-4 py-3 text-left">Rincian Item</th>
-              <th className="px-4 py-3 text-left">Customer</th>
-              <th className="px-4 py-3 text-right">Total</th>
-              <th className="px-4 py-3 text-left">Status</th>
-              <th className="px-4 py-3 text-left">Jatuh Tempo</th>
-              <th className="px-4 py-3 text-right">Aksi</th>
+              <th className="px-3 py-2.5 text-left w-8">□</th>
+              <th className="px-3 py-2.5 text-left">No. Invoice</th>
+              <th className="px-3 py-2.5 text-left">Tgl Invoice</th>
+              <th className="px-3 py-2.5 text-left">Tipe Jasa</th>
+              <th className="px-3 py-2.5 text-left">Rincian Item</th>
+              <th className="px-3 py-2.5 text-left">Customer</th>
+              <th className="px-3 py-2.5 text-right">Total</th>
+              <th className="px-3 py-2.5 text-left">Status</th>
+              <th className="px-3 py-2.5 text-left">Jatuh Tempo</th>
+              <th className="px-3 py-2.5 text-right">Aksi</th>
             </tr>
           </thead>
           <tbody className="text-sm">
