@@ -95,8 +95,11 @@ jobs:
             cd pnj-backend
             npm ci --omit=dev
 
-            echo ">> Jalankan migrasi database..."
-            npm run db:migrate
+            echo ">> Jalankan migrasi database (production)..."
+            # sequelize-cli baca config production (use_env_variable DATABASE_URL).
+            # Preload dotenv agar variabel dari .env tersedia di proses non-interaktif,
+            # dan paksa NODE_ENV=production (default sequelize-cli = development).
+            NODE_ENV=production NODE_OPTIONS='-r dotenv/config' npm run db:migrate
 
             echo ">> Install dependency & build frontend..."
             cd /var/www/logproapp/app
