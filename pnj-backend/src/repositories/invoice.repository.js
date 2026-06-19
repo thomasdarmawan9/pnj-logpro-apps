@@ -146,8 +146,13 @@ function list({
 
   return Invoice.findAndCountAll({
     where,
-    include:  HEADER_INCLUDES,
-    order:    [['invoice_date', 'DESC'], ['created_at', 'DESC']],
+    include:  [...HEADER_INCLUDES, ITEM_INCLUDE],
+    order:    [
+      ['invoice_date', 'DESC'],
+      ['created_at', 'DESC'],
+      [{ model: InvoiceItem, as: 'items' }, 'sort_order', 'ASC'],
+      [{ model: InvoiceItem, as: 'items' }, 'id', 'ASC'],
+    ],
     offset:   (page - 1) * limit,
     limit,
     distinct: true,
