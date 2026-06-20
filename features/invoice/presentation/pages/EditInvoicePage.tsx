@@ -67,6 +67,7 @@ export default function EditInvoicePage({ uuid }: Props) {
   const [routeOrigin, setRouteOrigin] = useState('')
   const [routeDestination, setRouteDestination] = useState('')
   const [cargoDescription, setCargoDescription] = useState('')
+  const [manualSjNumbers, setManualSjNumbers] = useState('')
   const bankAccounts = useSelector((state: RootState) => state.settings.bankAccounts).filter(b => b.is_active)
   const fleets = useSelector((state: RootState) => state.master.fleets)
   const drivers = useSelector((state: RootState) => state.master.drivers)
@@ -95,6 +96,7 @@ export default function EditInvoicePage({ uuid }: Props) {
       setRouteOrigin(invoice.origin ?? '')
       setRouteDestination(invoice.destination ?? '')
       setCargoDescription(invoice.cargo_description ?? '')
+      setManualSjNumbers(invoice.manual_sj_numbers ?? '')
       setTaxPercent(invoice.tax_percent)
       setTaxEnabled(invoice.tax_percent > 0)
       setPphPercent(invoice.pph_percent > 0 ? invoice.pph_percent : 2)
@@ -469,6 +471,7 @@ export default function EditInvoicePage({ uuid }: Props) {
         origin: isDeliveryLikeInvoice ? routeOrigin || null : null,
         destination: isDeliveryLikeInvoice ? routeDestination || null : null,
         cargo_description: isDeliveryLikeInvoice ? cargoDescription || null : null,
+        manual_sj_numbers: isDeliveryLikeInvoice ? manualSjNumbers.trim() || null : null,
         lampiran_paths: lampiranPaths.length > 0 ? lampiranPaths : null,
         items: itemPayload,
         down_payment: dpPayload,
@@ -487,6 +490,7 @@ export default function EditInvoicePage({ uuid }: Props) {
             origin: isDeliveryLikeInvoice ? routeOrigin || null : null,
             destination: isDeliveryLikeInvoice ? routeDestination || null : null,
             cargo_description: isDeliveryLikeInvoice ? cargoDescription || null : null,
+            manual_sj_numbers: isDeliveryLikeInvoice ? manualSjNumbers.trim() || null : null,
             ...(canEditItems && isDeliveryLikeInvoice ? { delivery_pricing_mode: deliveryPricingMode } : {}),
             ...(canEditItems ? { items: itemPayload } : {}),
             tax_percent: taxEnabled ? taxPercent : 0,
@@ -665,6 +669,21 @@ export default function EditInvoicePage({ uuid }: Props) {
                     placeholder="contoh: Kendaraan operasional untuk periode sewa"
                     disabled={!canEditItems}
                   />
+                </label>
+
+                <label className="text-xs font-medium mt-4 block" style={{ color: '#374151' }}>
+                  Nomor SJ
+                  <textarea
+                    className="form-input w-full mt-1 disabled:bg-gray-50 disabled:text-gray-500"
+                    rows={2}
+                    value={manualSjNumbers}
+                    onChange={event => setManualSjNumbers(event.target.value)}
+                    placeholder="Contoh: SJ-001, SJ-002 / Tanda Terima 123"
+                    disabled={!canEditItems}
+                  />
+                  <span className="text-xs text-gray-400 mt-1 block font-normal">
+                    Nomor surat jalan manual yang tampil di invoice. Untuk SJ dari database, gunakan tombol Lampirkan SJ di halaman detail.
+                  </span>
                 </label>
               </div>
               <DeliveryInvoiceItemsSection

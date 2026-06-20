@@ -13,6 +13,7 @@ export interface UpdateInvoiceDto {
   origin?: string | null
   destination?: string | null
   cargo_description?: string | null
+  manual_sj_numbers?: string | null
   items?: CreateInvoiceItemDto[]
   lampiran_paths?: string[] | null
   /**

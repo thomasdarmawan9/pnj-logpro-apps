@@ -174,6 +174,7 @@ const updateInvoiceSchema = Joi.object({
   origin:           Joi.string().trim().max(200).allow('', null),
   destination:      Joi.string().trim().max(200).allow('', null),
   cargo_description: Joi.string().trim().allow('', null),
+  manual_sj_numbers: Joi.string().trim().max(1000).allow('', null),
   items:           Joi.array().items(itemSchema).min(1),
   lampiran_paths:  Joi.array().items(Joi.string().trim().max(255)).allow(null),
   // DP edit:
