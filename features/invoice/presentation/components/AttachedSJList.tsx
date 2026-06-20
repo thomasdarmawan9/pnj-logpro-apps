@@ -24,7 +24,7 @@ interface Props {
 
 export default function AttachedSJList({ attachedSj, invoiceStatus, role, onAttach, onDetach }: Props) {
   const canManage = invoiceStatus !== InvoiceStatus.PAID && invoiceStatus !== InvoiceStatus.VOID
-  const canEdit = canManage && role === 'super_admin'
+  const canEdit = canManage && (role === 'super_admin' || role === 'admin_finance')
 
   return (
     <div>
@@ -79,7 +79,7 @@ export default function AttachedSJList({ attachedSj, invoiceStatus, role, onAtta
                     <button className="p-1.5 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-blue-50">
                       <ExternalLink size={14} />
                     </button>
-                    {canManage && (
+                    {canEdit && (
                       <button
                         onClick={() => onDetach(sj.uuid)}
                         className="flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-lg border font-medium"

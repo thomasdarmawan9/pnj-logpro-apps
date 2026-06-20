@@ -99,6 +99,8 @@ export default function DetailInvoicePage({ uuid }: Props) {
     role === 'super_admin'
   const effectiveInvoiceServiceType = resolveEffectiveInvoiceServiceType(invoice.service_type, invoice.custom_service_name)
   const isRentalInvoice = effectiveInvoiceServiceType === 'rental'
+  // Kaitkan/lepas SJ: hanya super_admin & admin_finance, invoice non-rental & belum final.
+  const canManageSJ = !isReadOnly && !isRentalInvoice && canManage && (role === 'super_admin' || role === 'admin_finance')
   const serviceLabel = isRentalInvoice
     ? 'Jasa Penyewaan'
     : invoice.service_type === 'other'
@@ -400,7 +402,7 @@ export default function DetailInvoicePage({ uuid }: Props) {
                   {canRecordPayment && <button onClick={() => dispatch(openRecordPaymentModal())} className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: 'var(--green-primary)' }}>
                     <DollarSign size={14} />Catat Pembayaran
                   </button>}
-                  {!isReadOnly && !isRentalInvoice && <button onClick={async () => {
+                  {canManageSJ && <button onClick={async () => {
                     const result = await dispatch(fetchAttachableSJ(invoice.uuid))
                     if (fetchAttachableSJ.rejected.match(result)) {
                       pushToast({
@@ -513,9 +515,18 @@ export default function DetailInvoicePage({ uuid }: Props) {
         invoice={invoice}
         sj={invoice.attached_sj.find(s => s.uuid === modals.detachSJ.sjUuid) ?? null}
         onClose={() => dispatch(closeDetachSJModal())}
-        onConfirm={() => {
+        onConfirm={async () => {
           if (!modals.detachSJ.sjUuid) return
-          dispatch(detachSJ({ invoiceUuid: uuid, sjUuid: modals.detachSJ.sjUuid })).then(() => pushToast({ title: 'SJ Dilepas', variant: 'info' }))
+          const result = await dispatch(detachSJ({ invoiceUuid: uuid, sjUuid: modals.detachSJ.sjUuid }))
+          if (detachSJ.fulfilled.match(result)) {
+            pushToast({ title: 'SJ Dilepas', variant: 'info' })
+            return
+          }
+          pushToast({
+            title: 'Gagal melepas SJ',
+            description: (result.payload as string) || 'Surat Jalan tidak dapat dilepas.',
+            variant: 'error',
+          })
         }}
       />
       <GeneratePDFModal open={modals.generatePDF} invoice={invoice} onClose={() => dispatch(closeGeneratePDFModal())} />

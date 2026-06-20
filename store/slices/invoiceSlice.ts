@@ -304,6 +304,9 @@ const invoiceSlice = createSlice({
         if (state.selectedInvoice?.uuid === action.payload.uuid) state.selectedInvoice = action.payload
         state.modals.detachSJ = { open: false, sjUuid: null }
       })
+      .addCase(detachSJ.rejected, (state, action) => {
+        state.error = action.payload as string
+      })
       .addCase(fetchAttachableSJ.fulfilled, (state, action) => {
         state.attachableSJ = action.payload
       })
