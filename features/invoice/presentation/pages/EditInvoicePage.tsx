@@ -608,7 +608,7 @@ export default function EditInvoicePage({ uuid }: Props) {
                     disabled={!canEditItems}
                   />
                   <p className="text-xs text-gray-400 mt-1">
-                    Nomor surat jalan manual yang tampil di invoice. Untuk SJ dari database, gunakan tombol Lampirkan SJ di halaman detail.
+                    Nomor surat jalan manual yang tampil di invoice
                   </p>
                 </div>
               )}
