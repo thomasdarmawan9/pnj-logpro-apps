@@ -596,6 +596,22 @@ export default function EditInvoicePage({ uuid }: Props) {
                 <input type="date" className="form-input w-full disabled:bg-gray-50 disabled:text-gray-500" value={dueDate} onChange={e => setDueDate(e.target.value)} disabled={!fullEditable} />
                 {isDueDatePast && <p className="text-xs text-amber-600 mt-1">⚠ Tanggal jatuh tempo sudah terlewat</p>}
               </div>
+              {isDeliveryLikeInvoice && (
+                <div>
+                  <label className="text-xs font-medium text-gray-600 block mb-1">Nomor SJ</label>
+                  <textarea
+                    className="form-input w-full text-sm disabled:bg-gray-50 disabled:text-gray-500"
+                    rows={2}
+                    value={manualSjNumbers}
+                    onChange={e => setManualSjNumbers(e.target.value)}
+                    placeholder="Contoh: SJ-001, SJ-002 / Tanda Terima 123"
+                    disabled={!canEditItems}
+                  />
+                  <p className="text-xs text-gray-400 mt-1">
+                    Nomor surat jalan manual yang tampil di invoice. Untuk SJ dari database, gunakan tombol Lampirkan SJ di halaman detail.
+                  </p>
+                </div>
+              )}
               <div>
                 <label className="text-xs font-medium text-gray-600 block mb-1">Catatan ke Customer</label>
                 <textarea className="form-input w-full text-sm disabled:bg-gray-50 disabled:text-gray-500" rows={2} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Catatan tambahan..." disabled={!fullEditable} />
@@ -669,21 +685,6 @@ export default function EditInvoicePage({ uuid }: Props) {
                     placeholder="contoh: Kendaraan operasional untuk periode sewa"
                     disabled={!canEditItems}
                   />
-                </label>
-
-                <label className="text-xs font-medium mt-4 block" style={{ color: '#374151' }}>
-                  Nomor SJ
-                  <textarea
-                    className="form-input w-full mt-1 disabled:bg-gray-50 disabled:text-gray-500"
-                    rows={2}
-                    value={manualSjNumbers}
-                    onChange={event => setManualSjNumbers(event.target.value)}
-                    placeholder="Contoh: SJ-001, SJ-002 / Tanda Terima 123"
-                    disabled={!canEditItems}
-                  />
-                  <span className="text-xs text-gray-400 mt-1 block font-normal">
-                    Nomor surat jalan manual yang tampil di invoice. Untuk SJ dari database, gunakan tombol Lampirkan SJ di halaman detail.
-                  </span>
                 </label>
               </div>
               <DeliveryInvoiceItemsSection
