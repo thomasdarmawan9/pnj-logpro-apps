@@ -6,7 +6,7 @@ const {
   NotFoundError,
   ConflictError,
 } = require('../utils/AppError')
-const { round2 } = require('../utils/stockBalance')
+const { round2, applyStockDelta } = require('../utils/stockBalance')
 
 /**
  * Hitung level stok berdasarkan current vs peak_stock.
@@ -151,7 +151,10 @@ async function purgeOrphanReceipts(receiptIds, t) {
 /**
  * Hapus jenis barang BESERTA seluruh riwayat transaksinya.
  *
- * Aturan: hanya boleh dihapus jika saldo (sisa stock) barang = 0.
+ * Aturan:
+ *  - Jika belum ada transaksi KELUAR → boleh dihapus (walau saldo masih ada).
+ *  - Jika sudah ada transaksi keluar → hanya boleh dihapus bila saldo
+ *    (sisa stock) = 0.
  */
 async function remove(uuid) {
   return sequelize.transaction(async (t) => {
@@ -162,8 +165,12 @@ async function remove(uuid) {
     })
     if (!item) throw new NotFoundError('Stock item tidak ditemukan.')
 
-    if (Number(item.current_stock) !== 0) {
-      throw new ConflictError('Stok harus kosong. Sisa stock barang harus 0 sebelum dapat dihapus.')
+    const disbursementCount = await StockDisbursement.count({
+      where:       { stock_item_id: item.id },
+      transaction: t,
+    })
+    if (disbursementCount > 0 && Number(item.current_stock) !== 0) {
+      throw new ConflictError('Stok harus kosong. Barang sudah memiliki transaksi keluar, sisa stock harus 0 sebelum dapat dihapus.')
     }
 
     // Hapus riwayat masuk (receipt item) + header receipt yang jadi kosong.
@@ -194,7 +201,11 @@ async function remove(uuid) {
  * Hapus satu kategori dari sebuah jenis barang (lintas customer) beserta
  * riwayat transaksi kategori tersebut.
  *
- * Aturan: hanya boleh dihapus jika saldo (sisa stock) kategori = 0.
+ * Aturan:
+ *  - Jika kategori belum ada transaksi KELUAR → boleh dihapus (walau saldo
+ *    masih ada).
+ *  - Jika sudah ada transaksi keluar → hanya boleh dihapus bila saldo
+ *    (sisa stock) kategori = 0.
  */
 async function removeItemCategory(uuid, rawCategoryName) {
   const categoryName = (rawCategoryName !== undefined && rawCategoryName !== null && String(rawCategoryName).trim() !== '')
@@ -228,8 +239,8 @@ async function removeItemCategory(uuid, rawCategoryName) {
     const totalOut = round2(disbursements.reduce((s, d) => s + Number(d.qty || 0), 0))
     const balance  = round2(totalIn - totalOut)
 
-    if (balance !== 0) {
-      throw new ConflictError('Stok harus kosong. Sisa stock kategori harus 0 sebelum dapat dihapus.')
+    if (disbursements.length > 0 && balance !== 0) {
+      throw new ConflictError('Stok harus kosong. Kategori sudah memiliki transaksi keluar, sisa stock harus 0 sebelum dapat dihapus.')
     }
 
     const receiptItemIds = receiptItems.map(ri => ri.id)
@@ -242,6 +253,11 @@ async function removeItemCategory(uuid, rawCategoryName) {
     }
 
     await purgeOrphanReceipts(receiptItems.map(ri => ri.receipt_id), t)
+
+    // Sesuaikan stok global: kurangi sisa stok kategori yang dihapus.
+    if (balance !== 0) {
+      await applyStockDelta(item, -balance, t)
+    }
   })
 }
 

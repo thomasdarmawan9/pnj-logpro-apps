@@ -345,10 +345,10 @@ export default function CustomerStockItemDetailPage({ customerUuid, stockItemCod
                               <button
                                 type="button"
                                 onClick={() => setConfirmDelete(key)}
-                                disabled={isEditing || isDeleting || row.balance !== 0}
+                                disabled={isEditing || isDeleting || (row.totalOut !== 0 && row.balance !== 0)}
                                 className="inline-flex items-center justify-center w-8 h-8 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                                title={row.balance !== 0
-                                  ? 'Tidak bisa dihapus: stok harus kosong (sisa stock 0)'
+                                title={(row.totalOut !== 0 && row.balance !== 0)
+                                  ? 'Tidak bisa dihapus: ada transaksi keluar & sisa stock belum 0'
                                   : (row.categoryName ? `Hapus stok kategori "${row.categoryName}"` : 'Hapus stok tanpa kategori')}
                               >
                                 <Trash2 size={14} className="text-red-400" />

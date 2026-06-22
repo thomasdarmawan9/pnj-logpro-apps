@@ -196,7 +196,8 @@ export default function StockDashboardPage() {
       .map(e => ({
         ...e,
         balance: e.totalIn - e.totalOut,
-        deletable: (e.totalIn - e.totalOut) === 0,
+        // Bisa dihapus jika belum ada transaksi keluar, atau saldo sudah 0.
+        deletable: e.totalOut === 0 || (e.totalIn - e.totalOut) === 0,
       }))
       .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))
   }
@@ -811,21 +812,26 @@ export default function StockDashboardPage() {
                         </span>
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      disabled={!cat.deletable}
-                      onClick={() => setCategoryConfirm({
-                        itemUuid: categoryPopup.uuid,
-                        categoryName: cat.name,
-                        label: cat.name ?? 'Tanpa Kategori',
-                      })}
-                      className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                      style={{ borderColor: 'var(--border-card)' }}
-                      title={cat.deletable ? 'Hapus kategori' : 'Tidak bisa dihapus: stok harus kosong (sisa stock 0)'}
-                    >
-                      <Trash2 size={13} />
-                      Hapus
-                    </button>
+                    <div className="shrink-0 flex flex-col items-end gap-1">
+                      <button
+                        type="button"
+                        disabled={!cat.deletable}
+                        onClick={() => setCategoryConfirm({
+                          itemUuid: categoryPopup.uuid,
+                          categoryName: cat.name,
+                          label: cat.name ?? 'Tanpa Kategori',
+                        })}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                        style={{ borderColor: 'var(--border-card)' }}
+                        title={cat.deletable ? 'Hapus kategori' : 'Tidak bisa dihapus: ada transaksi keluar & sisa stock belum 0'}
+                      >
+                        <Trash2 size={13} />
+                        Hapus
+                      </button>
+                      {!cat.deletable && (
+                        <span className="text-[10px] leading-tight text-red-500 text-right">Sisa stock harus kosong</span>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -848,7 +854,7 @@ export default function StockDashboardPage() {
       <DeleteConfirmModal
         open={modals.deleteConfirm.open && modals.deleteConfirm.type === 'item'}
         title="Hapus Jenis Barang"
-        description={'Apakah Anda yakin ingin menghapus jenis barang ini?\nStok harus kosong — penghapusan hanya bisa dilakukan jika saldo (sisa stock) barang sudah 0.'}
+        description={'Apakah Anda yakin ingin menghapus jenis barang ini?\nBisa dihapus jika belum ada transaksi keluar. Jika sudah ada transaksi keluar, sisa stock harus 0.'}
         isSubmitting={isSubmitting}
         onClose={() => dispatch(closeDeleteConfirm())}
         onConfirm={handleDeleteItem}
@@ -858,7 +864,7 @@ export default function StockDashboardPage() {
         open={!!categoryConfirm}
         title="Hapus Kategori"
         description={categoryConfirm
-          ? `Apakah Anda yakin ingin menghapus kategori "${categoryConfirm.label}"?\nStok harus kosong — penghapusan hanya bisa dilakukan jika saldo (sisa stock) kategori sudah 0.`
+          ? `Apakah Anda yakin ingin menghapus kategori "${categoryConfirm.label}"?\nBisa dihapus jika belum ada transaksi keluar. Jika sudah ada transaksi keluar, sisa stock harus 0.`
           : ''}
         isSubmitting={isDeletingCategory}
         onClose={() => setCategoryConfirm(null)}
