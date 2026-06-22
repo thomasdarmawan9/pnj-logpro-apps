@@ -767,6 +767,10 @@ async function deleteCustomerStockCategory(customerUuid, stockItemCode, rawCateg
     const totalOut = round2(disbursements.reduce((s, d) => s + Number(d.qty || 0), 0))
     const balance  = round2(totalIn - totalOut)
 
+    if (balance !== 0) {
+      throw new ConflictError('Stok harus kosong. Sisa stock kategori harus 0 sebelum dapat dihapus.')
+    }
+
     // Hard-delete receipt items (model tidak paranoid)
     const receiptItemIds = receiptItems.map(ri => ri.id)
     if (receiptItemIds.length > 0) {

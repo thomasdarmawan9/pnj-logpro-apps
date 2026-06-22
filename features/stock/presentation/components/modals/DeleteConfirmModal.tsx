@@ -37,7 +37,7 @@ export default function DeleteConfirmModal({
 
         {/* Body */}
         <div className="px-5 py-4">
-          <p className="text-sm text-gray-600 leading-relaxed">{description}</p>
+          <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line">{description}</p>
           <div className="mt-3 p-3 bg-red-50 rounded-xl border border-red-100">
             <p className="text-xs text-red-700 font-medium">
               Perhatian: Tindakan ini tidak dapat dibatalkan dan akan mempengaruhi saldo (sisa stock).

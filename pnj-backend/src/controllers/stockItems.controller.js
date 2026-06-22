@@ -35,9 +35,14 @@ const remove = asyncHandler(async (req, res) => {
   res.json(success(null, 'Stock item berhasil dihapus.'))
 })
 
+const removeCategory = asyncHandler(async (req, res) => {
+  await service.removeItemCategory(req.params.uuid, req.query.category_name)
+  res.json(success(null, 'Kategori barang berhasil dihapus.'))
+})
+
 const getItemCategories = asyncHandler(async (req, res) => {
   const data = await service.getItemCategories(req.params.uuid, req.query.customer_uuid)
   res.json(success(data))
 })
 
-module.exports = { list, getOne, create, update, toggle, remove, getItemCategories }
+module.exports = { list, getOne, create, update, toggle, remove, removeCategory, getItemCategories }

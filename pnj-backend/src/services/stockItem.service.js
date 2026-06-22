@@ -1,6 +1,6 @@
 'use strict'
 
-const { StockItem, StockReceiptItem, StockReceipt, StockDisbursement, Customer } = require('../models')
+const { sequelize, StockItem, StockReceiptItem, StockReceipt, StockDisbursement, Customer } = require('../models')
 const repo          = require('../repositories/stockItem.repository')
 const {
   NotFoundError,
@@ -134,20 +134,115 @@ async function getItemCategories(uuid, customerUuid) {
   return { unit: si.unit, categories }
 }
 
-async function remove(uuid) {
-  const item = await repo.findByUuid(uuid)
-  if (!item) throw new NotFoundError('Stock item tidak ditemukan.')
-  if (Number(item.current_stock) !== 0) {
-    throw new ConflictError('Stock item masih memiliki saldo (sisa stock). Tidak dapat dihapus.')
+/** Hapus header receipt yang sudah tidak punya item tersisa (dalam transaksi t). */
+async function purgeOrphanReceipts(receiptIds, t) {
+  for (const receiptId of [...new Set(receiptIds)]) {
+    const remaining = await StockReceiptItem.count({
+      where:       { receipt_id: receiptId },
+      transaction: t,
+    })
+    if (remaining === 0) {
+      const header = await StockReceipt.findByPk(receiptId, { transaction: t })
+      if (header) await header.destroy({ transaction: t })
+    }
   }
-  const [receiptCount, disbursementCount] = await Promise.all([
-    StockReceiptItem.count({ where: { stock_item_id: item.id } }),
-    StockDisbursement.count({ where: { stock_item_id: item.id } }),
-  ])
-  if (receiptCount + disbursementCount > 0) {
-    throw new ConflictError('Stock item sudah memiliki riwayat transaksi. Nonaktifkan barang agar riwayat stok tetap tercatat.')
-  }
-  await item.destroy()
 }
 
-module.exports = { computeStockLevel, decorate, list, getByUuid, create, update, toggleActive, remove, getItemCategories }
+/**
+ * Hapus jenis barang BESERTA seluruh riwayat transaksinya.
+ *
+ * Aturan: hanya boleh dihapus jika saldo (sisa stock) barang = 0.
+ */
+async function remove(uuid) {
+  return sequelize.transaction(async (t) => {
+    const item = await StockItem.findOne({
+      where:       { uuid },
+      transaction: t,
+      lock:        t.LOCK.UPDATE,
+    })
+    if (!item) throw new NotFoundError('Stock item tidak ditemukan.')
+
+    if (Number(item.current_stock) !== 0) {
+      throw new ConflictError('Stok harus kosong. Sisa stock barang harus 0 sebelum dapat dihapus.')
+    }
+
+    // Hapus riwayat masuk (receipt item) + header receipt yang jadi kosong.
+    const receiptItems = await StockReceiptItem.findAll({
+      where:       { stock_item_id: item.id },
+      attributes:  ['receipt_id'],
+      transaction: t,
+    })
+    const affectedReceiptIds = receiptItems.map(ri => ri.receipt_id)
+    await StockReceiptItem.destroy({
+      where:       { stock_item_id: item.id },
+      transaction: t,
+      force:       true,
+    })
+    await purgeOrphanReceipts(affectedReceiptIds, t)
+
+    // Hapus riwayat keluar (disbursement) — soft delete.
+    await StockDisbursement.destroy({
+      where:       { stock_item_id: item.id },
+      transaction: t,
+    })
+
+    await item.destroy({ transaction: t })
+  })
+}
+
+/**
+ * Hapus satu kategori dari sebuah jenis barang (lintas customer) beserta
+ * riwayat transaksi kategori tersebut.
+ *
+ * Aturan: hanya boleh dihapus jika saldo (sisa stock) kategori = 0.
+ */
+async function removeItemCategory(uuid, rawCategoryName) {
+  const categoryName = (rawCategoryName !== undefined && rawCategoryName !== null && String(rawCategoryName).trim() !== '')
+    ? String(rawCategoryName).trim()
+    : null
+
+  return sequelize.transaction(async (t) => {
+    const item = await StockItem.findOne({
+      where:       { uuid },
+      transaction: t,
+      lock:        t.LOCK.UPDATE,
+    })
+    if (!item) throw new NotFoundError('Stock item tidak ditemukan.')
+
+    const receiptItems = await StockReceiptItem.findAll({
+      where:       { stock_item_id: item.id, kategori_name: categoryName },
+      attributes:  ['id', 'qty', 'receipt_id'],
+      transaction: t,
+    })
+    const disbursements = await StockDisbursement.findAll({
+      where:       { stock_item_id: item.id, kategori_name: categoryName },
+      attributes:  ['id', 'qty'],
+      transaction: t,
+    })
+
+    if (receiptItems.length === 0 && disbursements.length === 0) {
+      throw new NotFoundError('Kategori tidak ditemukan untuk barang ini.')
+    }
+
+    const totalIn  = round2(receiptItems.reduce((s, r) => s + Number(r.qty || 0), 0))
+    const totalOut = round2(disbursements.reduce((s, d) => s + Number(d.qty || 0), 0))
+    const balance  = round2(totalIn - totalOut)
+
+    if (balance !== 0) {
+      throw new ConflictError('Stok harus kosong. Sisa stock kategori harus 0 sebelum dapat dihapus.')
+    }
+
+    const receiptItemIds = receiptItems.map(ri => ri.id)
+    if (receiptItemIds.length > 0) {
+      await StockReceiptItem.destroy({ where: { id: receiptItemIds }, transaction: t, force: true })
+    }
+    const disbursementIds = disbursements.map(d => d.id)
+    if (disbursementIds.length > 0) {
+      await StockDisbursement.destroy({ where: { id: disbursementIds }, transaction: t })
+    }
+
+    await purgeOrphanReceipts(receiptItems.map(ri => ri.receipt_id), t)
+  })
+}
+
+module.exports = { computeStockLevel, decorate, list, getByUuid, create, update, toggleActive, remove, removeItemCategory, getItemCategories }

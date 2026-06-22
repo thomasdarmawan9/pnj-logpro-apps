@@ -7,7 +7,7 @@ import { ArrowRight, Download, Eye, FileBarChart2, PackagePlus, PackageMinus, Se
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { RootState, AppDispatch } from '@/store'
 import { fetchCustomerStockSummaries, fetchStockItems, fetchStockReceipts, fetchStockDisbursements, deleteStockItem, openDeleteConfirm, closeDeleteConfirm } from '@/store/slices/stockSlice'
-import { apiDownload } from '@/lib/apiClient'
+import { apiDownload, apiRequest } from '@/lib/apiClient'
 import { useToast } from '@/components/toast/useToast'
 import DeleteConfirmModal from '../components/modals/DeleteConfirmModal'
 
@@ -34,6 +34,11 @@ export default function StockDashboardPage() {
   const [isPrintingPdf, setIsPrintingPdf] = useState(false)
   const [isItemListModalOpen, setIsItemListModalOpen] = useState(false)
   const [itemListSearch, setItemListSearch] = useState('')
+  // Popup daftar kategori untuk satu jenis barang (sebelum konfirmasi hapus)
+  const [categoryPopup, setCategoryPopup] = useState<{ uuid: string; name: string; id: number; unit: string } | null>(null)
+  // Konfirmasi hapus satu kategori
+  const [categoryConfirm, setCategoryConfirm] = useState<{ itemUuid: string; categoryName: string | null; label: string } | null>(null)
+  const [isDeletingCategory, setIsDeletingCategory] = useState(false)
 
   // Kategorisasi + customer terkait per jenis barang (diturunkan dari transaksi)
   const itemMeta = useMemo(() => {
@@ -160,9 +165,60 @@ export default function StockDashboardPage() {
     if (!modals.deleteConfirm.uuid) return
     const res = await dispatch(deleteStockItem(modals.deleteConfirm.uuid))
     if (deleteStockItem.fulfilled.match(res)) {
-      pushToast({ title: 'Barang Dihapus', description: 'Jenis barang berhasil dihapus.', variant: 'info' })
+      // Riwayat transaksi barang ikut terhapus → segarkan data terkait.
+      dispatch(fetchStockReceipts())
+      dispatch(fetchStockDisbursements())
+      dispatch(fetchCustomerStockSummaries())
+      pushToast({ title: 'Barang Dihapus', description: 'Jenis barang beserta riwayat transaksinya berhasil dihapus.', variant: 'info' })
     } else {
       pushToast({ title: 'Gagal Menghapus', description: (res.payload as string) || 'Terjadi kesalahan saat menghapus barang.', variant: 'error' })
+    }
+  }
+
+  // Breakdown kategori (masuk/keluar/saldo) untuk satu jenis barang dari state.
+  const getCategoryBreakdown = (stockItemId: number) => {
+    const map = new Map<string, { name: string | null; totalIn: number; totalOut: number }>()
+    const ensure = (name: string | null) => {
+      const key = name ?? ''
+      let entry = map.get(key)
+      if (!entry) { entry = { name: name || null, totalIn: 0, totalOut: 0 }; map.set(key, entry) }
+      return entry
+    }
+    receipts.forEach(r => r.items.forEach(it => {
+      if (it.stock_item_id !== stockItemId) return
+      ensure(it.kategori_name).totalIn += it.qty
+    }))
+    disbursements.forEach(d => {
+      if (d.stock_item_id !== stockItemId) return
+      ensure(d.kategori_name ?? null).totalOut += d.qty
+    })
+    return Array.from(map.values())
+      .map(e => ({
+        ...e,
+        balance: e.totalIn - e.totalOut,
+        deletable: (e.totalIn - e.totalOut) === 0,
+      }))
+      .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))
+  }
+
+  const handleDeleteCategory = async () => {
+    if (!categoryConfirm) return
+    setIsDeletingCategory(true)
+    try {
+      const q = categoryConfirm.categoryName !== null ? `?category_name=${encodeURIComponent(categoryConfirm.categoryName)}` : ''
+      await apiRequest(`/stock/items/${categoryConfirm.itemUuid}/category${q}`, { method: 'DELETE' })
+      await Promise.all([
+        dispatch(fetchStockItems()),
+        dispatch(fetchStockReceipts()),
+        dispatch(fetchStockDisbursements()),
+        dispatch(fetchCustomerStockSummaries()),
+      ])
+      pushToast({ title: 'Kategori Dihapus', description: `Kategori "${categoryConfirm.label}" berhasil dihapus.`, variant: 'info' })
+      setCategoryConfirm(null)
+    } catch (err) {
+      pushToast({ title: 'Gagal Menghapus', description: err instanceof Error ? err.message : 'Terjadi kesalahan saat menghapus kategori.', variant: 'error' })
+    } finally {
+      setIsDeletingCategory(false)
     }
   }
 
@@ -677,7 +733,13 @@ export default function StockDashboardPage() {
                           {!isReadOnly && (
                             <button
                               type="button"
-                              onClick={() => dispatch(openDeleteConfirm({ type: 'item', uuid: row.item.uuid }))}
+                              onClick={() => {
+                                if (row.categories.length > 0) {
+                                  setCategoryPopup({ uuid: row.item.uuid, name: row.item.name, id: row.item.id, unit: row.item.unit })
+                                } else {
+                                  dispatch(openDeleteConfirm({ type: 'item', uuid: row.item.uuid }))
+                                }
+                              }}
                               className="p-1.5 rounded-lg hover:bg-red-50 transition-colors text-red-500"
                               title="Hapus"
                             >
@@ -707,13 +769,100 @@ export default function StockDashboardPage() {
         </div>
       )}
 
+      {/* Popup daftar kategori untuk barang yang punya kategorisasi */}
+      {categoryPopup && (() => {
+        const breakdown = getCategoryBreakdown(categoryPopup.id)
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+            <div className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-xl bg-white shadow-xl border" style={{ borderColor: 'var(--border-card)' }}>
+              <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: 'var(--border-card)' }}>
+                <div>
+                  <h2 className="text-base font-bold text-gray-900">Kategori — {categoryPopup.name}</h2>
+                  <p className="mt-0.5 text-xs text-gray-500">Pilih kategori yang ingin dihapus beserta sisa stoknya</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCategoryPopup(null)}
+                  className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-auto p-4 space-y-2">
+                {breakdown.length === 0 ? (
+                  <div className="py-10 text-center text-sm text-gray-400">Tidak ada kategori</div>
+                ) : breakdown.map(cat => (
+                  <div
+                    key={cat.name ?? '__none__'}
+                    className="flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5"
+                    style={{ borderColor: 'var(--border-card)' }}
+                  >
+                    <div className="min-w-0">
+                      {cat.name ? (
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">{cat.name}</span>
+                      ) : (
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">Tanpa Kategori</span>
+                      )}
+                      <div className="mt-1 text-xs text-gray-500">
+                        Sisa stock:&nbsp;
+                        <span className={`font-bold font-mono ${cat.balance < 0 ? 'text-red-600' : cat.balance === 0 ? 'text-gray-500' : 'text-green-700'}`} style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                          {cat.balance.toLocaleString('id-ID')} {categoryPopup.unit}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={!cat.deletable}
+                      onClick={() => setCategoryConfirm({
+                        itemUuid: categoryPopup.uuid,
+                        categoryName: cat.name,
+                        label: cat.name ?? 'Tanpa Kategori',
+                      })}
+                      className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                      style={{ borderColor: 'var(--border-card)' }}
+                      title={cat.deletable ? 'Hapus kategori' : 'Tidak bisa dihapus: stok harus kosong (sisa stock 0)'}
+                    >
+                      <Trash2 size={13} />
+                      Hapus
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex items-center justify-end border-t px-5 py-3" style={{ borderColor: 'var(--border-card)' }}>
+                <button
+                  type="button"
+                  onClick={() => setCategoryPopup(null)}
+                  className="rounded-lg border px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  style={{ borderColor: 'var(--border-card)' }}
+                >
+                  Tutup
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
       <DeleteConfirmModal
         open={modals.deleteConfirm.open && modals.deleteConfirm.type === 'item'}
         title="Hapus Jenis Barang"
-        description="Apakah Anda yakin ingin menghapus jenis barang ini? Barang hanya dapat dihapus jika belum memiliki saldo (sisa stock) dan belum pernah ada transaksi."
+        description={'Apakah Anda yakin ingin menghapus jenis barang ini?\nStok harus kosong — penghapusan hanya bisa dilakukan jika saldo (sisa stock) barang sudah 0.'}
         isSubmitting={isSubmitting}
         onClose={() => dispatch(closeDeleteConfirm())}
         onConfirm={handleDeleteItem}
+      />
+
+      <DeleteConfirmModal
+        open={!!categoryConfirm}
+        title="Hapus Kategori"
+        description={categoryConfirm
+          ? `Apakah Anda yakin ingin menghapus kategori "${categoryConfirm.label}"?\nStok harus kosong — penghapusan hanya bisa dilakukan jika saldo (sisa stock) kategori sudah 0.`
+          : ''}
+        isSubmitting={isDeletingCategory}
+        onClose={() => setCategoryConfirm(null)}
+        onConfirm={handleDeleteCategory}
       />
     </DashboardLayout>
   )

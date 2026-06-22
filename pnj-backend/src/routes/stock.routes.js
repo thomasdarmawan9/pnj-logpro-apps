@@ -80,6 +80,15 @@ router.patch('/items/:uuid/toggle',
   logActivity('toggle_stock_item', 'master'),
   stockItemsController.toggle,
 )
+router.delete('/items/:uuid/category',
+  isOpsOrAbove,
+  validate(uuidParam, 'params'),
+  logActivity('delete_stock_item_category', 'master', {
+    uuidExtractor: (_b, req) => req.params.uuid,
+    skipBody: true,
+  }),
+  stockItemsController.removeCategory,
+)
 router.delete('/items/:uuid',
   isOpsOrAbove,
   validate(uuidParam, 'params'),
