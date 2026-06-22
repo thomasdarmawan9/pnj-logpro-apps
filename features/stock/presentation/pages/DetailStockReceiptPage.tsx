@@ -56,9 +56,12 @@ export default function DetailStockReceiptPage({ uuid }: Props) {
   useEffect(() => {
     dispatch(fetchReceiptDetail(uuid))
     dispatch(fetchStockItems())
-    if (!customers.length) dispatch(fetchCustomers())
     return () => { dispatch(clearSelectedReceipt()) }
-  }, [dispatch, uuid, customers.length])
+  }, [dispatch, uuid])
+
+  useEffect(() => {
+    if (!customers.length) dispatch(fetchCustomers())
+  }, [dispatch, customers.length])
 
   const customerUuidById = (id: string): string | undefined =>
     id ? customers.find(c => c.id === Number(id))?.uuid : undefined

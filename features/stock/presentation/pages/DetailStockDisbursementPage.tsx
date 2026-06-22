@@ -56,9 +56,12 @@ export default function DetailStockDisbursementPage({ uuid }: Props) {
   useEffect(() => {
     dispatch(fetchDisbursementDetail(uuid))
     dispatch(fetchStockItems())
-    if (!customers.length) dispatch(fetchCustomers())
     return () => { dispatch(clearSelectedDisbursement()) }
-  }, [dispatch, uuid, customers.length])
+  }, [dispatch, uuid])
+
+  useEffect(() => {
+    if (!customers.length) dispatch(fetchCustomers())
+  }, [dispatch, customers.length])
 
   const customerUuidById = (id: string): string | undefined =>
     id ? customers.find(c => c.id === Number(id))?.uuid : undefined
@@ -428,11 +431,11 @@ export default function DetailStockDisbursementPage({ uuid }: Props) {
               </div>
               <div>
                 <div className="text-xs text-gray-500 mb-0.5">No. SJ</div>
-                <div className="font-medium">{d.sj_number_manual ? `SJ ${d.sj_number_manual}` : '—'}</div>
+                <div className="font-medium">{d.delivery_order?.sj_number || d.sj_number_manual || '—'}</div>
               </div>
               <div>
                 <div className="text-xs text-gray-500 mb-0.5">No. Invoice</div>
-                <div className="font-medium">{d.invoice_number_manual ?? '—'}</div>
+                <div className="font-medium">{d.delivery_order?.invoice?.invoice_number || d.invoice_number_manual || '—'}</div>
               </div>
               <div>
                 <div className="text-xs text-gray-500 mb-0.5">Customer</div>
