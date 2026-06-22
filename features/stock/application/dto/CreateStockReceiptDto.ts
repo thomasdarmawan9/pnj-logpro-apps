@@ -15,3 +15,12 @@ export interface CreateStockReceiptDto {
   notes: string | null
   items: CreateStockReceiptItemDto[]
 }
+
+export interface UpdateStockReceiptDto {
+  receipt_date?: string
+  supplier_name?: string | null
+  document_number?: string | null
+  customer_id?: number | null
+  notes?: string | null
+  items?: CreateStockReceiptItemDto[]
+}

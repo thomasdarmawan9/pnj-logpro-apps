@@ -6,7 +6,7 @@ import { CustomerStockSummary } from '@/features/stock/application/use-cases/Get
 import { StockFilters } from '@/features/stock/domain/value-objects/StockBalance'
 import { stockRepository } from '@/features/stock/infrastructure/repositories/MockStockRepository'
 import { CreateStockItemDto } from '@/features/stock/application/dto/CreateStockItemDto'
-import { CreateStockReceiptDto } from '@/features/stock/application/dto/CreateStockReceiptDto'
+import { CreateStockReceiptDto, UpdateStockReceiptDto } from '@/features/stock/application/dto/CreateStockReceiptDto'
 import { CreateStockDisbursementDto } from '@/features/stock/application/dto/CreateStockDisbursementDto'
 
 interface StockState {
@@ -96,6 +96,14 @@ export const createStockReceipt = createAsyncThunk('stock/createReceipt', async 
   try { return await stockRepository.createReceipt(dto) } catch { return rejectWithValue('Gagal menyimpan stok masuk') }
 })
 
+export const updateStockReceipt = createAsyncThunk('stock/updateReceipt', async ({ uuid, dto }: { uuid: string; dto: UpdateStockReceiptDto }, { rejectWithValue }) => {
+  try { return await stockRepository.updateReceipt(uuid, dto) }
+  catch (err) {
+    const message = err instanceof Error ? err.message : 'Gagal memperbarui stok masuk'
+    return rejectWithValue(message)
+  }
+})
+
 export const deleteStockReceipt = createAsyncThunk('stock/deleteReceipt', async (uuid: string, { rejectWithValue }) => {
   try { await stockRepository.deleteReceipt(uuid); return uuid } catch { return rejectWithValue('Gagal menghapus stok masuk') }
 })
@@ -114,6 +122,14 @@ export const fetchDisbursementDetail = createAsyncThunk('stock/fetchDisbursement
 
 export const createStockDisbursement = createAsyncThunk('stock/createDisbursement', async (dto: CreateStockDisbursementDto, { rejectWithValue }) => {
   try { return await stockRepository.createDisbursement(dto) } catch { return rejectWithValue('Gagal menyimpan stok keluar') }
+})
+
+export const updateStockDisbursement = createAsyncThunk('stock/updateDisbursement', async ({ uuid, dto }: { uuid: string; dto: Partial<CreateStockDisbursementDto> }, { rejectWithValue }) => {
+  try { return await stockRepository.updateDisbursement(uuid, dto) }
+  catch (err) {
+    const message = err instanceof Error ? err.message : 'Gagal memperbarui stok keluar'
+    return rejectWithValue(message)
+  }
 })
 
 export const deleteStockDisbursement = createAsyncThunk('stock/deleteDisbursement', async (uuid: string, { rejectWithValue }) => {
@@ -196,6 +212,13 @@ const stockSlice = createSlice({
         })
       })
       .addCase(createStockReceipt.rejected, (state, action) => { state.isSubmitting = false; state.error = action.payload as string })
+      .addCase(updateStockReceipt.pending, state => { state.isSubmitting = true })
+      .addCase(updateStockReceipt.fulfilled, (state, action) => {
+        state.isSubmitting = false
+        state.selectedReceipt = action.payload
+        state.receipts = state.receipts.map(r => r.uuid === action.payload.uuid ? action.payload : r)
+      })
+      .addCase(updateStockReceipt.rejected, (state, action) => { state.isSubmitting = false; state.error = action.payload as string })
       .addCase(deleteStockReceipt.fulfilled, (state, action) => {
         const deleted = state.receipts.find(r => r.uuid === action.payload)
         if (deleted) {
@@ -223,6 +246,13 @@ const stockSlice = createSlice({
         )
       })
       .addCase(createStockDisbursement.rejected, (state, action) => { state.isSubmitting = false; state.error = action.payload as string })
+      .addCase(updateStockDisbursement.pending, state => { state.isSubmitting = true })
+      .addCase(updateStockDisbursement.fulfilled, (state, action) => {
+        state.isSubmitting = false
+        state.selectedDisbursement = action.payload
+        state.disbursements = state.disbursements.map(d => d.uuid === action.payload.uuid ? action.payload : d)
+      })
+      .addCase(updateStockDisbursement.rejected, (state, action) => { state.isSubmitting = false; state.error = action.payload as string })
       .addCase(deleteStockDisbursement.fulfilled, (state, action) => {
         const deleted = state.disbursements.find(d => d.uuid === action.payload)
         if (deleted) {

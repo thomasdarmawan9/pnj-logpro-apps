@@ -5,7 +5,7 @@ import { StockReceipt, StockReceiptItem } from '../../domain/entities/StockRecei
 import { StockDisbursement } from '../../domain/entities/StockDisbursement'
 import { CustomerStockAvailableItem, CustomerStockSummary } from '../../application/use-cases/GetCustomerStockDetail'
 import { CreateStockItemDto } from '../../application/dto/CreateStockItemDto'
-import { CreateStockReceiptDto, CreateStockReceiptItemDto } from '../../application/dto/CreateStockReceiptDto'
+import { CreateStockReceiptDto, CreateStockReceiptItemDto, UpdateStockReceiptDto } from '../../application/dto/CreateStockReceiptDto'
 import { CreateStockDisbursementDto } from '../../application/dto/CreateStockDisbursementDto'
 
 type ApiId = number | string | null
@@ -213,6 +213,21 @@ class MockStockRepository implements IStockRepository {
     return normalizeReceipt(response.data)
   }
 
+  async updateReceipt(uuid: string, dto: UpdateStockReceiptDto): Promise<StockReceipt> {
+    const body: Record<string, unknown> = {}
+    if ('receipt_date' in dto) body.receipt_date = dto.receipt_date
+    if ('supplier_name' in dto) body.supplier_name = dto.supplier_name
+    if ('document_number' in dto) body.document_number = dto.document_number
+    if ('customer_id' in dto) body.customer_id = dto.customer_id
+    if ('notes' in dto) body.notes = dto.notes
+    if (dto.items) body.items = dto.items.map(receiptItemPayload)
+    const response = await apiRequest<ApiReceipt>(`/stock/receipts/${uuid}`, {
+      method: 'PUT',
+      body,
+    })
+    return normalizeReceipt(response.data)
+  }
+
   async deleteReceipt(uuid: string): Promise<void> {
     await apiRequest<null>(`/stock/receipts/${uuid}`, { method: 'DELETE' })
   }
@@ -244,6 +259,14 @@ class MockStockRepository implements IStockRepository {
         customer_id: dto.customer_id,
         notes: dto.notes,
       },
+    })
+    return normalizeDisbursement(response.data)
+  }
+
+  async updateDisbursement(uuid: string, dto: Partial<CreateStockDisbursementDto>): Promise<StockDisbursement> {
+    const response = await apiRequest<ApiDisbursement>(`/stock/disbursements/${uuid}`, {
+      method: 'PUT',
+      body: dto,
     })
     return normalizeDisbursement(response.data)
   }

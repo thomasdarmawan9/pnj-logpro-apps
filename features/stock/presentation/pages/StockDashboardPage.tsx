@@ -97,6 +97,7 @@ export default function StockDashboardPage() {
         type: 'masuk' as const,
         spalNumber: r.document_number ?? '',
         itemName: item.stock_item.name,
+        kategori: item.kategori_name ?? null,
         qty: item.qty,
         unit: item.stock_item.unit,
         sjNumber: null as string | null,
@@ -110,6 +111,7 @@ export default function StockDashboardPage() {
       type: 'keluar' as const,
       spalNumber: '',
       itemName: d.stock_item.name,
+      kategori: d.kategori_name ?? null,
       qty: d.qty,
       unit: d.stock_item.unit,
       sjNumber: d.delivery_order?.sj_number || d.sj_number_manual || null,
@@ -533,6 +535,7 @@ export default function StockDashboardPage() {
                 <th className="px-4 py-3 text-left">Tipe</th>
                 <th className="px-4 py-3 text-left">Nomor SPAL</th>
                 <th className="px-4 py-3 text-left">Barang</th>
+                <th className="px-4 py-3 text-left">Kategori</th>
                 <th className="px-4 py-3 text-right">Qty</th>
                 <th className="px-4 py-3 text-left">SJ</th>
                 <th className="px-4 py-3 text-left">Invoice</th>
@@ -556,6 +559,13 @@ export default function StockDashboardPage() {
                     {txn.spalNumber || '-'}
                   </td>
                   <td className="px-4 py-3 text-gray-800 font-medium">{txn.itemName}</td>
+                  <td className="px-4 py-3">
+                    {txn.kategori ? (
+                      <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">{txn.kategori}</span>
+                    ) : (
+                      <span className="text-xs text-gray-300">—</span>
+                    )}
+                  </td>
                   <td className={`px-4 py-3 text-right font-bold ${txn.type === 'masuk' ? 'text-green-700' : 'text-red-600'}`}>
                     {txn.type === 'masuk' ? '+' : '-'}{txn.qty} {txn.unit}
                   </td>
