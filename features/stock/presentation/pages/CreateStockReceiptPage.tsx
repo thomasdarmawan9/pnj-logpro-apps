@@ -412,7 +412,7 @@ export default function CreateStockReceiptPage() {
                   {/* Baris utama barang */}
                   <div className="grid grid-cols-12 gap-3 items-start p-3 min-w-[820px]">
                     {/* Pilih barang */}
-                    <div className="col-span-5">
+                    <div className="col-span-4">
                       <label className="block text-xs text-gray-500 mb-1">Barang {idx + 1} *</label>
                       <div className="flex gap-1.5">
                         <select
@@ -459,7 +459,7 @@ export default function CreateStockReceiptPage() {
                             placeholder="0"
                           />
                         </div>
-                        <div className="col-span-2">
+                        <div className="col-span-1">
                           <label className="block text-xs text-gray-500 mb-1">Satuan</label>
                           <div className="form-input w-full text-sm text-gray-400 bg-gray-100 whitespace-nowrap overflow-hidden text-ellipsis">{selectedItem?.unit ?? '—'}</div>
                         </div>
@@ -475,7 +475,7 @@ export default function CreateStockReceiptPage() {
                         </div>
                       </>
                     ) : (
-                      <div className="col-span-7 flex items-end pb-0.5">
+                      <div className="col-span-5 flex items-end pb-0.5">
                         <span className="text-xs text-blue-600 font-medium italic px-2">
                           Qty & catatan diatur per kategorisasi
                         </span>
@@ -483,14 +483,16 @@ export default function CreateStockReceiptPage() {
                     )}
 
                     {/* Actions */}
-                    <div className="col-span-1 flex items-end justify-end gap-1 pb-0.5">
+                    <div className="col-span-3 flex items-end justify-end gap-1 pb-0.5">
                       <button
                         type="button"
                         onClick={() => toggleKategorisasi(row.id)}
                         title={row.use_kategorisasi ? 'Nonaktifkan kategorisasi' : 'Aktifkan kategorisasi'}
-                        className={`p-2 rounded-lg transition-colors ${row.use_kategorisasi ? 'text-blue-600 bg-blue-50 hover:bg-blue-100' : 'text-gray-400 hover:bg-gray-200'}`}
+                        className={`shrink-0 flex items-center gap-1 px-2 py-1.5 rounded-xl border text-xs font-semibold transition-colors hover:bg-green-50 ${row.use_kategorisasi ? 'bg-green-50' : ''}`}
+                        style={{ borderColor: 'var(--green-primary)', color: 'var(--green-primary)' }}
                       >
                         {row.use_kategorisasi ? <ChevronUp size={14} /> : <Layers size={14} />}
+                        Kategorisasi
                       </button>
                       <button
                         onClick={() => removeRow(row.id)}

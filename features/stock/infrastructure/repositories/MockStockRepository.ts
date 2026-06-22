@@ -182,6 +182,10 @@ class MockStockRepository implements IStockRepository {
     return normalizeItem(response.data)
   }
 
+  async deleteItem(uuid: string): Promise<void> {
+    await apiRequest<null>(`/stock/items/${uuid}`, { method: 'DELETE' })
+  }
+
   async getReceipts(): Promise<StockReceipt[]> {
     const rows = await apiRequestAllPages<ApiReceipt>('/stock/receipts?period=all', { method: 'GET' })
     return rows.map(normalizeReceipt)

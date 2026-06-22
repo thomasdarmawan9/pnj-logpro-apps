@@ -25,7 +25,7 @@ interface StockState {
   modals: {
     addItem: boolean
     editItem: { open: boolean; item: StockItem | null }
-    deleteConfirm: { open: boolean; type: 'receipt' | 'disbursement' | null; uuid: string | null }
+    deleteConfirm: { open: boolean; type: 'receipt' | 'disbursement' | 'item' | null; uuid: string | null }
   }
 }
 
@@ -68,6 +68,16 @@ export const createStockItem = createAsyncThunk('stock/createItem', async (dto: 
 
 export const updateStockItem = createAsyncThunk('stock/updateItem', async ({ uuid, dto }: { uuid: string; dto: Partial<CreateStockItemDto> & { is_active?: boolean } }, { rejectWithValue }) => {
   try { return await stockRepository.updateItem(uuid, dto) } catch { return rejectWithValue('Gagal memperbarui barang') }
+})
+
+export const deleteStockItem = createAsyncThunk('stock/deleteItem', async (uuid: string, { rejectWithValue }) => {
+  try {
+    await stockRepository.deleteItem(uuid)
+    return uuid
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Gagal menghapus barang'
+    return rejectWithValue(message)
+  }
 })
 
 export const fetchStockReceipts = createAsyncThunk('stock/fetchReceipts', async (_, { rejectWithValue }) => {
@@ -132,7 +142,7 @@ const stockSlice = createSlice({
       state.modals.editItem = { open: true, item: action.payload }
     },
     closeEditItemModal(state) { state.modals.editItem = { open: false, item: null } },
-    openDeleteConfirm(state, action: PayloadAction<{ type: 'receipt' | 'disbursement'; uuid: string }>) {
+    openDeleteConfirm(state, action: PayloadAction<{ type: 'receipt' | 'disbursement' | 'item'; uuid: string }>) {
       state.modals.deleteConfirm = { open: true, ...action.payload }
     },
     closeDeleteConfirm(state) { state.modals.deleteConfirm = { open: false, type: null, uuid: null } },
@@ -160,6 +170,13 @@ const stockSlice = createSlice({
         state.modals.editItem = { open: false, item: null }
       })
       .addCase(updateStockItem.rejected, (state, action) => { state.isSubmitting = false; state.error = action.payload as string })
+      .addCase(deleteStockItem.pending, state => { state.isSubmitting = true })
+      .addCase(deleteStockItem.fulfilled, (state, action) => {
+        state.isSubmitting = false
+        state.items = state.items.filter(i => i.uuid !== action.payload)
+        state.modals.deleteConfirm = { open: false, type: null, uuid: null }
+      })
+      .addCase(deleteStockItem.rejected, (state, action) => { state.isSubmitting = false; state.error = action.payload as string })
       .addCase(fetchStockReceipts.pending, state => { state.isLoading = true })
       .addCase(fetchStockReceipts.fulfilled, (state, action) => { state.isLoading = false; state.receipts = action.payload })
       .addCase(fetchStockReceipts.rejected, (state, action) => { state.isLoading = false; state.error = action.payload as string })

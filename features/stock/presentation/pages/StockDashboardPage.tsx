@@ -3,16 +3,19 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { useRouter } from 'next/navigation'
-import { ArrowRight, Download, Eye, FileBarChart2, PackagePlus, PackageMinus, Search, X } from 'lucide-react'
+import { ArrowRight, Download, Eye, FileBarChart2, PackagePlus, PackageMinus, Search, X, List, Trash2, Package } from 'lucide-react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { RootState, AppDispatch } from '@/store'
-import { fetchCustomerStockSummaries, fetchStockItems, fetchStockReceipts, fetchStockDisbursements } from '@/store/slices/stockSlice'
+import { fetchCustomerStockSummaries, fetchStockItems, fetchStockReceipts, fetchStockDisbursements, deleteStockItem, openDeleteConfirm, closeDeleteConfirm } from '@/store/slices/stockSlice'
 import { apiDownload } from '@/lib/apiClient'
+import { useToast } from '@/components/toast/useToast'
+import DeleteConfirmModal from '../components/modals/DeleteConfirmModal'
 
 export default function StockDashboardPage() {
   const router = useRouter()
   const dispatch = useDispatch<AppDispatch>()
-  const { items, receipts, disbursements, customerSummaries, isLoading } = useSelector((state: RootState) => state.stock)
+  const { push: pushToast } = useToast()
+  const { items, receipts, disbursements, customerSummaries, isLoading, isSubmitting, modals } = useSelector((state: RootState) => state.stock)
   const role = useSelector((state: RootState) => state.auth.user?.role ?? null)
   const isReadOnly = role === 'admin_finance'
 
@@ -29,6 +32,51 @@ export default function StockDashboardPage() {
   const [isPdfModalOpen, setIsPdfModalOpen] = useState(false)
   const [selectedPdfCustomerUuid, setSelectedPdfCustomerUuid] = useState('')
   const [isPrintingPdf, setIsPrintingPdf] = useState(false)
+  const [isItemListModalOpen, setIsItemListModalOpen] = useState(false)
+  const [itemListSearch, setItemListSearch] = useState('')
+
+  // Kategorisasi + customer terkait per jenis barang (diturunkan dari transaksi)
+  const itemMeta = useMemo(() => {
+    const map = new Map<number, { categories: Set<string>; customers: Set<string> }>()
+    const ensure = (id: number) => {
+      let meta = map.get(id)
+      if (!meta) { meta = { categories: new Set(), customers: new Set() }; map.set(id, meta) }
+      return meta
+    }
+    receipts.forEach(receipt => {
+      receipt.items.forEach(item => {
+        const meta = ensure(item.stock_item_id)
+        if (item.kategori_name) meta.categories.add(item.kategori_name)
+        if (receipt.customer?.name) meta.customers.add(receipt.customer.name)
+      })
+    })
+    disbursements.forEach(d => {
+      const meta = ensure(d.stock_item_id)
+      if (d.kategori_name) meta.categories.add(d.kategori_name)
+      if (d.customer?.name) meta.customers.add(d.customer.name)
+    })
+    return map
+  }, [receipts, disbursements])
+
+  const itemRowsWithMeta = useMemo(() => items.map(item => {
+    const meta = itemMeta.get(item.id)
+    return {
+      item,
+      categories: meta ? Array.from(meta.categories).sort() : [],
+      customers: meta ? Array.from(meta.customers).sort() : [],
+    }
+  }), [items, itemMeta])
+
+  const filteredItemRows = useMemo(() => {
+    const q = itemListSearch.trim().toLowerCase()
+    if (!q) return itemRowsWithMeta
+    return itemRowsWithMeta.filter(row =>
+      row.item.name.toLowerCase().includes(q) ||
+      row.item.code.toLowerCase().includes(q) ||
+      row.categories.some(c => c.toLowerCase().includes(q)) ||
+      row.customers.some(c => c.toLowerCase().includes(q))
+    )
+  }, [itemRowsWithMeta, itemListSearch])
 
   const customerGroups = useMemo(() => customerSummaries
     .map((customer, idx) => ({ ...customer, no: idx + 1 })),
@@ -108,6 +156,16 @@ export default function StockDashboardPage() {
 
   const selectedPdfCustomer = customerSummaries.find(customer => customer.customerUuid === selectedPdfCustomerUuid)
 
+  const handleDeleteItem = async () => {
+    if (!modals.deleteConfirm.uuid) return
+    const res = await dispatch(deleteStockItem(modals.deleteConfirm.uuid))
+    if (deleteStockItem.fulfilled.match(res)) {
+      pushToast({ title: 'Barang Dihapus', description: 'Jenis barang berhasil dihapus.', variant: 'info' })
+    } else {
+      pushToast({ title: 'Gagal Menghapus', description: (res.payload as string) || 'Terjadi kesalahan saat menghapus barang.', variant: 'error' })
+    }
+  }
+
   const openPdfModal = () => {
     setSelectedPdfCustomerUuid(customerSummaries[0]?.customerUuid || '')
     setIsPdfModalOpen(true)
@@ -179,7 +237,18 @@ export default function StockDashboardPage() {
         <div className="bg-white rounded-xl border shadow-sm p-4" style={{ borderColor: 'var(--border-card)' }}>
           <div className="text-xs text-gray-500 mb-1">Total Jenis Barang</div>
           {isLoading ? <div className="h-8 bg-gray-100 rounded animate-pulse" /> : (
-            <div className="text-2xl font-bold text-gray-900">{totalItemTypes}</div>
+            <div className="flex items-end justify-between gap-3">
+              <div className="text-2xl font-bold text-gray-900">{totalItemTypes}</div>
+              <button
+                type="button"
+                onClick={() => setIsItemListModalOpen(true)}
+                className="inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                style={{ borderColor: 'var(--border-card)' }}
+              >
+                <List size={12} />
+                List
+              </button>
+            </div>
           )}
         </div>
         <div className="bg-white rounded-xl border shadow-sm p-4" style={{ borderColor: 'var(--border-card)' }}>
@@ -509,6 +578,143 @@ export default function StockDashboardPage() {
           </div>
         </div>
       )}
+      {isItemListModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="flex max-h-[85vh] w-full max-w-4xl flex-col rounded-xl bg-white shadow-xl border" style={{ borderColor: 'var(--border-card)' }}>
+            <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: 'var(--border-card)' }}>
+              <div>
+                <h2 className="text-base font-bold text-gray-900">Daftar Jenis Barang</h2>
+                <p className="mt-0.5 text-xs text-gray-500">Semua jenis barang beserta kategorisasi dan customer terkait</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setIsItemListModalOpen(false); setItemListSearch('') }}
+                className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="border-b px-5 py-3" style={{ borderColor: 'var(--border-card)' }}>
+              <div className="relative w-full max-w-sm">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                <input
+                  type="text"
+                  className="form-input w-full"
+                  placeholder="Cari barang, kategori, customer..."
+                  value={itemListSearch}
+                  onChange={e => setItemListSearch(e.target.value)}
+                  style={{ paddingLeft: '38px' }}
+                />
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-auto">
+              <table className="min-w-full text-sm">
+                <thead className="sticky top-0 bg-gray-50 text-xs text-gray-500 border-b" style={{ borderColor: 'var(--border-card)' }}>
+                  <tr>
+                    <th className="px-4 py-3 text-left font-semibold w-12">No</th>
+                    <th className="px-4 py-3 text-left font-semibold">Nama Barang</th>
+                    <th className="px-4 py-3 text-left font-semibold">Kategorisasi</th>
+                    <th className="px-4 py-3 text-left font-semibold">Customer Terkait</th>
+                    <th className="px-4 py-3 text-right font-semibold w-28">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredItemRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-16 text-center">
+                        <Package size={40} className="mx-auto text-gray-200 mb-3" />
+                        <div className="text-gray-500 font-medium">Tidak ada jenis barang ditemukan</div>
+                      </td>
+                    </tr>
+                  ) : filteredItemRows.map((row, idx) => (
+                    <tr key={row.item.uuid} className={`border-t ${row.item.is_active ? '' : 'opacity-60'}`} style={{ borderColor: 'var(--border-light)' }}>
+                      <td className="px-4 py-3 text-center text-[11px] font-semibold text-gray-400">{idx + 1}</td>
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-gray-900">{row.item.name}</div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-[11px] text-gray-400">{row.item.code}</span>
+                          {!row.item.is_active && (
+                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">Nonaktif</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        {row.categories.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {row.categories.map(category => (
+                              <span key={category} className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">{category}</span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-300">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        {row.customers.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {row.customers.map(customer => (
+                              <span key={customer} className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{customer}</span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-300">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() => { setIsItemListModalOpen(false); setItemListSearch(''); router.push('/stok/barang') }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium hover:bg-gray-50 transition-colors text-gray-600"
+                            style={{ borderColor: 'var(--border-card)' }}
+                            title="Kelola di Master Barang"
+                          >
+                            <Eye size={13} />
+                            Detail
+                          </button>
+                          {!isReadOnly && (
+                            <button
+                              type="button"
+                              onClick={() => dispatch(openDeleteConfirm({ type: 'item', uuid: row.item.uuid }))}
+                              className="p-1.5 rounded-lg hover:bg-red-50 transition-colors text-red-500"
+                              title="Hapus"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex items-center justify-between border-t px-5 py-3" style={{ borderColor: 'var(--border-card)' }}>
+              <span className="text-xs text-gray-500">{filteredItemRows.length} jenis barang</span>
+              <button
+                type="button"
+                onClick={() => { setIsItemListModalOpen(false); setItemListSearch('') }}
+                className="rounded-lg border px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                style={{ borderColor: 'var(--border-card)' }}
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <DeleteConfirmModal
+        open={modals.deleteConfirm.open && modals.deleteConfirm.type === 'item'}
+        title="Hapus Jenis Barang"
+        description="Apakah Anda yakin ingin menghapus jenis barang ini? Barang hanya dapat dihapus jika belum memiliki saldo (sisa stock) dan belum pernah ada transaksi."
+        isSubmitting={isSubmitting}
+        onClose={() => dispatch(closeDeleteConfirm())}
+        onConfirm={handleDeleteItem}
+      />
     </DashboardLayout>
   )
 }

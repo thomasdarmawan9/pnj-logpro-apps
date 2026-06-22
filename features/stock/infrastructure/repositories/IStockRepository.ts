@@ -11,6 +11,7 @@ export interface IStockRepository {
   getItems(): Promise<StockItem[]>
   createItem(dto: CreateStockItemDto): Promise<StockItem>
   updateItem(uuid: string, dto: Partial<CreateStockItemDto> & { is_active?: boolean }): Promise<StockItem>
+  deleteItem(uuid: string): Promise<void>
 
   // Receipts
   getReceipts(): Promise<StockReceipt[]>
