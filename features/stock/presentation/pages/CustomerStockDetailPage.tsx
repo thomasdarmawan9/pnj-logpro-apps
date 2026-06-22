@@ -229,10 +229,12 @@ export default function CustomerStockDetailPage({ uuid }: Props) {
                       <button
                         type="button"
                         onClick={() => router.push(txn.detailPath)}
-                        className="inline-flex items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-100 transition-colors"
+                        className="inline-flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 rounded-lg border text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                        style={{ borderColor: 'var(--border-card)' }}
                         title="Detail"
                       >
-                        <Eye size={14} className="text-gray-500" />
+                        Detail
+                        <Eye size={13} />
                       </button>
                     </td>
                   </tr>
