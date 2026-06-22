@@ -249,7 +249,7 @@ export default function CreateStockDisbursementPage() {
         </div>
       </div>
 
-      <div className="max-w-3xl space-y-5">
+      <div className="max-w-5xl space-y-5">
         {/* Item rows */}
         <div className="bg-white rounded-xl border shadow-sm p-5" style={{ borderColor: 'var(--border-card)' }}>
           <div className="flex items-center justify-between mb-4">
