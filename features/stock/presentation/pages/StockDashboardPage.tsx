@@ -87,8 +87,8 @@ export default function StockDashboardPage() {
     .map((customer, idx) => ({ ...customer, no: idx + 1 })),
   [customerSummaries])
 
-  // Recent transactions (last 10, mix of receipts + disbursements)
-  const recentTransactions = useMemo(() => {
+  // Semua transaksi manajemen stok (masuk + keluar), terbaru → terlama.
+  const allTransactions = useMemo(() => {
     const receiptTxns = receipts.flatMap(r =>
       r.items.map(item => ({
         id: `r-${r.uuid}-${item.uuid}`,
@@ -102,6 +102,7 @@ export default function StockDashboardPage() {
         unit: item.stock_item.unit,
         sjNumber: null as string | null,
         invoiceNumber: null as string | null,
+        detailPath: `/stok/masuk/${r.uuid}`,
       }))
     )
     const disbTxns = disbursements.map(d => ({
@@ -116,6 +117,7 @@ export default function StockDashboardPage() {
       unit: d.stock_item.unit,
       sjNumber: d.delivery_order?.sj_number || d.sj_number_manual || null,
       invoiceNumber: d.delivery_order?.invoice?.invoice_number || d.invoice_number_manual || null,
+      detailPath: `/stok/keluar/${d.uuid}`,
     }))
     return [...receiptTxns, ...disbTxns]
       .sort((a, b) => {
@@ -123,8 +125,24 @@ export default function StockDashboardPage() {
         if (byUpdated !== 0) return byUpdated
         return b.date.localeCompare(a.date)
       })
-      .slice(0, 10)
   }, [receipts, disbursements])
+
+  const TXN_PER_PAGE = 15
+  const [txnSearch, setTxnSearch] = useState('')
+  const [txnPage, setTxnPage] = useState(0)
+
+  const filteredTransactions = useMemo(() => {
+    const q = txnSearch.trim().toLowerCase()
+    if (!q) return allTransactions
+    return allTransactions.filter(t =>
+      t.itemName.toLowerCase().includes(q) ||
+      (t.kategori ?? '').toLowerCase().includes(q) ||
+      (t.spalNumber ?? '').toLowerCase().includes(q) ||
+      (t.sjNumber ?? '').toLowerCase().includes(q) ||
+      (t.invoiceNumber ?? '').toLowerCase().includes(q) ||
+      (t.type === 'masuk' ? 'masuk' : 'keluar').includes(q)
+    )
+  }, [allTransactions, txnSearch])
 
   // Overview stats
   const totalIn = receipts.flatMap(r => r.items).reduce((s, i) => s + i.qty, 0)
@@ -513,10 +531,24 @@ export default function StockDashboardPage() {
         })()}
       </div>
 
-      {/* Recent transactions */}
+      {/* Riwayat Transaksi */}
       <div className="bg-white rounded-xl border shadow-sm overflow-hidden" style={{ borderColor: 'var(--border-card)' }}>
-        <div className="px-5 py-4 border-b" style={{ borderColor: 'var(--border-card)' }}>
-          <h2 className="font-bold text-base">Transaksi Terbaru</h2>
+        <div className="px-5 py-4 border-b flex items-center gap-3" style={{ borderColor: 'var(--border-card)' }}>
+          <div className="flex-1">
+            <h2 className="font-bold text-base">Riwayat Transaksi</h2>
+            <p className="text-xs text-gray-500 mt-0.5">Semua transaksi stok masuk &amp; keluar, terbaru → terlama</p>
+          </div>
+          <div className="relative w-64 shrink-0">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <input
+              type="text"
+              className="form-input w-full"
+              placeholder="Cari barang, kategori, SPAL, SJ, invoice..."
+              value={txnSearch}
+              onChange={e => { setTxnSearch(e.target.value); setTxnPage(0) }}
+              style={{ paddingLeft: '38px' }}
+            />
+          </div>
         </div>
         {isLoading ? (
           <div className="p-5 space-y-3">
@@ -524,58 +556,108 @@ export default function StockDashboardPage() {
               <div key={i} className="h-10 bg-gray-100 rounded animate-pulse" />
             ))}
           </div>
-        ) : recentTransactions.length === 0 ? (
-          <div className="py-12 text-center text-gray-400 text-sm">Belum ada transaksi</div>
-        ) : (
-          <table className="min-w-full text-sm">
-            <thead className="bg-gray-50 text-xs text-gray-500">
-              <tr>
-                <th className="px-4 py-3 text-left">No.</th>
-                <th className="px-4 py-3 text-left">Tanggal</th>
-                <th className="px-4 py-3 text-left">Tipe</th>
-                <th className="px-4 py-3 text-left">Nomor SPAL</th>
-                <th className="px-4 py-3 text-left">Barang</th>
-                <th className="px-4 py-3 text-left">Kategori</th>
-                <th className="px-4 py-3 text-right">Qty</th>
-                <th className="px-4 py-3 text-left">SJ</th>
-                <th className="px-4 py-3 text-left">Invoice</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentTransactions.map((txn, idx) => (
-                <tr key={txn.id} className={`border-t ${idx % 2 === 0 ? '' : 'bg-gray-50/50'}`} style={{ borderColor: 'var(--border-card)' }}>
-                  <td className="px-4 py-3 text-gray-500 text-xs">{idx + 1}</td>
-                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
-                    {new Date(txn.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                      txn.type === 'masuk' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
-                    }`}>
-                      {txn.type === 'masuk' ? 'Masuk' : 'Keluar'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 font-mono text-xs text-gray-600" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                    {txn.spalNumber || '-'}
-                  </td>
-                  <td className="px-4 py-3 text-gray-800 font-medium">{txn.itemName}</td>
-                  <td className="px-4 py-3">
-                    {txn.kategori ? (
-                      <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">{txn.kategori}</span>
-                    ) : (
-                      <span className="text-xs text-gray-300">—</span>
-                    )}
-                  </td>
-                  <td className={`px-4 py-3 text-right font-bold ${txn.type === 'masuk' ? 'text-green-700' : 'text-red-600'}`}>
-                    {txn.type === 'masuk' ? '+' : '-'}{txn.qty} {txn.unit}
-                  </td>
-                  <td className="px-4 py-3 text-gray-600 text-xs font-mono" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{txn.sjNumber || '-'}</td>
-                  <td className="px-4 py-3 text-gray-600 text-xs font-mono" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{txn.invoiceNumber || '-'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        ) : filteredTransactions.length === 0 ? (
+          <div className="py-12 text-center text-gray-400 text-sm">
+            {txnSearch.trim() ? 'Tidak ada transaksi yang cocok' : 'Belum ada transaksi'}
+          </div>
+        ) : (() => {
+          const totalPages = Math.ceil(filteredTransactions.length / TXN_PER_PAGE)
+          const safePage = Math.min(txnPage, Math.max(0, totalPages - 1))
+          const pageItems = filteredTransactions.slice(safePage * TXN_PER_PAGE, (safePage + 1) * TXN_PER_PAGE)
+          return (
+            <>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-gray-50 text-xs text-gray-500">
+                    <tr>
+                      <th className="px-4 py-3 text-left">No.</th>
+                      <th className="px-4 py-3 text-left">Tanggal</th>
+                      <th className="px-4 py-3 text-left">Tipe</th>
+                      <th className="px-4 py-3 text-left">Nomor SPAL</th>
+                      <th className="px-4 py-3 text-left">Barang</th>
+                      <th className="px-4 py-3 text-left">Kategori</th>
+                      <th className="px-4 py-3 text-right">Qty</th>
+                      <th className="px-4 py-3 text-left">SJ</th>
+                      <th className="px-4 py-3 text-left">Invoice</th>
+                      <th className="px-4 py-3 text-right">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pageItems.map((txn, idx) => (
+                      <tr key={txn.id} className={`border-t ${idx % 2 === 0 ? '' : 'bg-gray-50/50'}`} style={{ borderColor: 'var(--border-card)' }}>
+                        <td className="px-4 py-3 text-gray-500 text-xs">{safePage * TXN_PER_PAGE + idx + 1}</td>
+                        <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                          {new Date(txn.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                            txn.type === 'masuk' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
+                          }`}>
+                            {txn.type === 'masuk' ? 'Masuk' : 'Keluar'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 font-mono text-xs text-gray-600" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                          {txn.spalNumber || '-'}
+                        </td>
+                        <td className="px-4 py-3 text-gray-800 font-medium">{txn.itemName}</td>
+                        <td className="px-4 py-3">
+                          {txn.kategori ? (
+                            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">{txn.kategori}</span>
+                          ) : (
+                            <span className="text-xs text-gray-300">—</span>
+                          )}
+                        </td>
+                        <td className={`px-4 py-3 text-right font-bold whitespace-nowrap ${txn.type === 'masuk' ? 'text-green-700' : 'text-red-600'}`}>
+                          {txn.type === 'masuk' ? '+' : '-'}{txn.qty} {txn.unit}
+                        </td>
+                        <td className="px-4 py-3 text-gray-600 text-xs font-mono" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{txn.sjNumber || '-'}</td>
+                        <td className="px-4 py-3 text-gray-600 text-xs font-mono" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{txn.invoiceNumber || '-'}</td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => router.push(txn.detailPath)}
+                            className="inline-flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 rounded-lg border text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                            style={{ borderColor: 'var(--border-card)' }}
+                            title="Detail transaksi"
+                          >
+                            Detail
+                            <Eye size={13} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="px-5 py-3 border-t flex items-center justify-between" style={{ borderColor: 'var(--border-card)' }}>
+                <span className="text-xs text-gray-500">
+                  {safePage * TXN_PER_PAGE + 1}–{Math.min((safePage + 1) * TXN_PER_PAGE, filteredTransactions.length)} dari {filteredTransactions.length} transaksi
+                </span>
+                {totalPages > 1 && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setTxnPage(Math.max(0, safePage - 1))}
+                      disabled={safePage === 0}
+                      className="px-3 py-1.5 text-xs rounded-lg border disabled:opacity-40 transition-opacity"
+                      style={{ borderColor: 'var(--border-card)' }}
+                    >
+                      ← Prev
+                    </button>
+                    <span className="text-xs text-gray-500">Hal {safePage + 1} / {totalPages}</span>
+                    <button
+                      onClick={() => setTxnPage(Math.min(totalPages - 1, safePage + 1))}
+                      disabled={safePage === totalPages - 1}
+                      className="px-3 py-1.5 text-xs rounded-lg border disabled:opacity-40 transition-opacity"
+                      style={{ borderColor: 'var(--border-card)' }}
+                    >
+                      Next →
+                    </button>
+                  </div>
+                )}
+              </div>
+            </>
+          )
+        })()}
       </div>
 
       {isPdfModalOpen && (
