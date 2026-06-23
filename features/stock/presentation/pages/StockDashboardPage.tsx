@@ -95,6 +95,7 @@ export default function StockDashboardPage() {
         date: r.receipt_date,
         updatedAt: r.updated_at || r.created_at || r.receipt_date,
         type: 'masuk' as const,
+        customer: r.customer?.name ?? null,
         spalNumber: r.document_number ?? '',
         itemName: item.stock_item.name,
         kategori: item.kategori_name ?? null,
@@ -110,6 +111,7 @@ export default function StockDashboardPage() {
       date: d.disbursement_date,
       updatedAt: d.updated_at || d.created_at || d.disbursement_date,
       type: 'keluar' as const,
+      customer: d.customer?.name ?? null,
       spalNumber: '',
       itemName: d.stock_item.name,
       kategori: d.kategori_name ?? null,
@@ -136,6 +138,7 @@ export default function StockDashboardPage() {
     if (!q) return allTransactions
     return allTransactions.filter(t =>
       t.itemName.toLowerCase().includes(q) ||
+      (t.customer ?? '').toLowerCase().includes(q) ||
       (t.kategori ?? '').toLowerCase().includes(q) ||
       (t.spalNumber ?? '').toLowerCase().includes(q) ||
       (t.sjNumber ?? '').toLowerCase().includes(q) ||
@@ -543,7 +546,7 @@ export default function StockDashboardPage() {
             <input
               type="text"
               className="form-input w-full"
-              placeholder="Cari barang, kategori, SPAL, SJ, invoice..."
+              placeholder="Cari customer, barang, kategori, SPAL, SJ, invoice..."
               value={txnSearch}
               onChange={e => { setTxnSearch(e.target.value); setTxnPage(0) }}
               style={{ paddingLeft: '38px' }}
@@ -567,61 +570,63 @@ export default function StockDashboardPage() {
           return (
             <>
               <div className="overflow-x-auto">
-                <table className="min-w-full text-sm">
-                  <thead className="bg-gray-50 text-xs text-gray-500">
+                <table className="min-w-full text-xs">
+                  <thead className="bg-gray-50 text-[11px] text-gray-500">
                     <tr>
-                      <th className="px-4 py-3 text-left">No.</th>
-                      <th className="px-4 py-3 text-left">Tanggal</th>
-                      <th className="px-4 py-3 text-left">Tipe</th>
-                      <th className="px-4 py-3 text-left">Nomor SPAL</th>
-                      <th className="px-4 py-3 text-left">Barang</th>
-                      <th className="px-4 py-3 text-left">Kategori</th>
-                      <th className="px-4 py-3 text-right">Qty</th>
-                      <th className="px-4 py-3 text-left">SJ</th>
-                      <th className="px-4 py-3 text-left">Invoice</th>
-                      <th className="px-4 py-3 text-right">Aksi</th>
+                      <th className="px-3 py-2.5 text-left">No.</th>
+                      <th className="px-3 py-2.5 text-left">Customer</th>
+                      <th className="px-3 py-2.5 text-left">Tanggal</th>
+                      <th className="px-3 py-2.5 text-left">Tipe</th>
+                      <th className="px-3 py-2.5 text-left">Nomor SPAL</th>
+                      <th className="px-3 py-2.5 text-left">Barang</th>
+                      <th className="px-3 py-2.5 text-left">Kategori</th>
+                      <th className="px-3 py-2.5 text-right">Qty</th>
+                      <th className="px-3 py-2.5 text-left">SJ</th>
+                      <th className="px-3 py-2.5 text-left">Invoice</th>
+                      <th className="px-3 py-2.5 text-right">Aksi</th>
                     </tr>
                   </thead>
                   <tbody>
                     {pageItems.map((txn, idx) => (
                       <tr key={txn.id} className={`border-t ${idx % 2 === 0 ? '' : 'bg-gray-50/50'}`} style={{ borderColor: 'var(--border-card)' }}>
-                        <td className="px-4 py-3 text-gray-500 text-xs">{safePage * TXN_PER_PAGE + idx + 1}</td>
-                        <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                        <td className="px-3 py-2.5 text-gray-500 text-[11px]">{safePage * TXN_PER_PAGE + idx + 1}</td>
+                        <td className="px-3 py-2.5 text-gray-700 font-medium">{txn.customer ?? '—'}</td>
+                        <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">
                           {new Date(txn.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
                         </td>
-                        <td className="px-4 py-3">
-                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                        <td className="px-3 py-2.5">
+                          <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
                             txn.type === 'masuk' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
                           }`}>
                             {txn.type === 'masuk' ? 'Masuk' : 'Keluar'}
                           </span>
                         </td>
-                        <td className="px-4 py-3 font-mono text-xs text-gray-600" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                        <td className="px-3 py-2.5 font-mono text-[11px] text-gray-600" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
                           {txn.spalNumber || '-'}
                         </td>
-                        <td className="px-4 py-3 text-gray-800 font-medium">{txn.itemName}</td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-2.5 text-gray-800 font-medium">{txn.itemName}</td>
+                        <td className="px-3 py-2.5">
                           {txn.kategori ? (
-                            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">{txn.kategori}</span>
+                            <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">{txn.kategori}</span>
                           ) : (
-                            <span className="text-xs text-gray-300">—</span>
+                            <span className="text-[11px] text-gray-300">—</span>
                           )}
                         </td>
-                        <td className={`px-4 py-3 text-right font-bold whitespace-nowrap ${txn.type === 'masuk' ? 'text-green-700' : 'text-red-600'}`}>
+                        <td className={`px-3 py-2.5 text-right font-bold whitespace-nowrap ${txn.type === 'masuk' ? 'text-green-700' : 'text-red-600'}`}>
                           {txn.type === 'masuk' ? '+' : '-'}{txn.qty} {txn.unit}
                         </td>
-                        <td className="px-4 py-3 text-gray-600 text-xs font-mono" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{txn.sjNumber || '-'}</td>
-                        <td className="px-4 py-3 text-gray-600 text-xs font-mono" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{txn.invoiceNumber || '-'}</td>
-                        <td className="px-4 py-3 text-right">
+                        <td className="px-3 py-2.5 text-gray-600 text-[11px] font-mono" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{txn.sjNumber || '-'}</td>
+                        <td className="px-3 py-2.5 text-gray-600 text-[11px] font-mono" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{txn.invoiceNumber || '-'}</td>
+                        <td className="px-3 py-2.5 text-right">
                           <button
                             type="button"
                             onClick={() => router.push(txn.detailPath)}
-                            className="inline-flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 rounded-lg border text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                            className="inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-1 rounded-lg border text-[11px] font-medium text-gray-600 hover:bg-gray-50 transition-colors"
                             style={{ borderColor: 'var(--border-card)' }}
                             title="Detail transaksi"
                           >
                             Detail
-                            <Eye size={13} />
+                            <Eye size={12} />
                           </button>
                         </td>
                       </tr>
