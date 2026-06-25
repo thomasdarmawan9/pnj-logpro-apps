@@ -289,11 +289,25 @@ function deliveryRouteText(invoice, items) {
   return routes.length > 0 ? `Rute Pengiriman :\n${routes.join(', ')}` : ''
 }
 
+// Nama supir untuk item — utamakan master supir (item.driver.name), fallback ke
+// nama manual (driver_name_manual). Dipakai untuk menempel nama supir di
+// belakang label armada, mis. "B 9219 SFA ( Pahrudin )".
+function driverNameForItem(item) {
+  return String(item.driver?.name || item.driver_name_manual || '').trim()
+}
+
+// Bangun entri armada unik dalam bentuk "fleet_label ( nama supir )". Jika item
+// tidak punya supir, hanya label armada yang ditampilkan. Dedup memperhitungkan
+// pasangan armada+supir sehingga satu armada dengan dua supir berbeda tetap
+// muncul dua baris.
 function meaningfulFleetLabels(items, invoice) {
   const ignoredLabels = new Set([...DEFAULT_DELIVERY_FLEET_LABELS, invoice.custom_service_name].filter(Boolean))
   return uniqueNonEmpty(items
-    .map(item => item.fleet_label)
-    .filter(label => label && !ignoredLabels.has(label)))
+    .filter(item => item.fleet_label && !ignoredLabels.has(item.fleet_label))
+    .map(item => {
+      const driver = driverNameForItem(item)
+      return driver ? `${item.fleet_label} ( ${driver} )` : item.fleet_label
+    }))
 }
 
 function buildDeliveryInfoRows(invoice, items) {
