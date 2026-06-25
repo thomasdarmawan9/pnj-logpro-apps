@@ -531,13 +531,6 @@ function drawRecipientBlock(doc, invoice, startY, ctx = null) {
   const customerNameY = y
   const leftBottomY = doc.y
 
-  // No Kontrak (kanan) — ditulis di baris pertama sejajar "Kepada :"
-  if (invoice.project?.contract_number || invoice.project?.code) {
-    const contractNo = invoice.project.contract_number || invoice.project.code
-    doc.font('Helvetica').fontSize(fsz).fillColor(C_DARK)
-       .text(`No Kontrak : ${contractNo}`, rightX, startY, { width: colW, align: 'right' })
-  }
-
   // Kanan, di-stack sejajar baris nama customer: Tanggal Pengiriman lalu No SJ.
   let rightBottomY = customerNameY
   if (sjText) {
