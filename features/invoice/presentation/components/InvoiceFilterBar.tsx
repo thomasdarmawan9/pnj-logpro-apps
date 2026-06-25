@@ -90,9 +90,13 @@ export default function InvoiceFilterBar({ filters, onChange, onReset, onExport,
         <div>
           <div className="text-xs text-gray-600">Proyek</div>
           <div className="relative mt-1">
-            <select className="form-input text-sm w-full pr-8" value={filters.proyek} onChange={e => onChange({ proyek: e.target.value })}>
-              {projectOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
+            <FilterSearchableSelect
+              options={projectOptions}
+              value={filters.proyek}
+              onChange={proyek => onChange({ proyek })}
+              placeholder="Semua Proyek"
+              emptyText="Proyek tidak ditemukan"
+            />
           </div>
         </div>
         <div>
