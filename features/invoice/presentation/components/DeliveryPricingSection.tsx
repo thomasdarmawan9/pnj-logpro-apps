@@ -12,7 +12,7 @@ export interface AdditionalDeliveryCharge {
   amount: number
 }
 
-const BILLING_UNIT_OPTIONS = ['unit', 'kg', 'volume', 'collie', 'karung', 'batang', 'pengiriman', 'pallet', 'buruh']
+const BILLING_UNIT_OPTIONS = ['unit', 'kg', 'volume', 'collie', 'karung', 'zak', 'keping', 'batang', 'pengiriman', 'pallet', 'buruh']
 const BILLING_UNIT_OTHER_VALUE = 'Lainnya'
 
 function parseRupiah(value: string): number {

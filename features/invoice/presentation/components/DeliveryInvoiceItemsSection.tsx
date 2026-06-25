@@ -6,7 +6,7 @@ import type { InvoiceItem } from '../../domain/entities/Invoice'
 
 type PartialItem = Omit<InvoiceItem, 'id' | 'invoice_id'>
 
-const CARGO_UNIT_OPTIONS = ['pcs', 'unit', 'set', 'kg', 'ton', 'collie', 'liter', 'dus', 'karton', 'karung', 'roll', 'meter', 'batang', 'pallet', 'buruh']
+const CARGO_UNIT_OPTIONS = ['pcs', 'unit', 'set', 'kg', 'ton', 'collie', 'liter', 'dus', 'karton', 'karung', 'zak', 'keping', 'roll', 'meter', 'batang', 'pallet', 'buruh']
 const CARGO_UNIT_OTHER_VALUE = 'lainnya'
 
 function isDecimalDraft(value: string): boolean {

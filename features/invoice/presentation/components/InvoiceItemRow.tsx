@@ -34,6 +34,8 @@ const UNIT_OPTIONS = [
   'Collie',
   'Karton',
   'Karung',
+  'Zak',
+  'Keping',
   'Lembar',
   'Liter',
   'Meter',
