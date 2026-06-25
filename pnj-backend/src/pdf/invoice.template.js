@@ -514,6 +514,11 @@ function drawRecipientBlock(doc, invoice, startY, ctx = null) {
   const rightX = L + colW
   const sjNumbers = getAttachedSjNumbers(invoice)
   const sjText = sjNumbers.length > 0 ? `No SJ : ${sjNumbers.join(', ')}` : ''
+  // Tanggal pengiriman diambil dari sj_date SJ terlampir (DD/MM/YYYY), tampil
+  // tepat di atas "No SJ" dengan font yang sama.
+  const sjDates = uniqueNonEmpty(getAttachedSJs(invoice).map(sj => formatDateNumeric(sj.sj_date)))
+    .filter(d => d !== '-')
+  const deliveryDateText = sjText && sjDates.length > 0 ? `Tanggal Pengiriman : ${sjDates.join(', ')}` : ''
 
   let y = startY
 
@@ -524,12 +529,7 @@ function drawRecipientBlock(doc, invoice, startY, ctx = null) {
   doc.font('Helvetica-Bold').fontSize(fsz).fillColor(C_DARK)
      .text(invoice.customer?.name || '-', L, y)
   const customerNameY = y
-  y = doc.y
-
-  if (sjText) {
-    doc.font('Helvetica').fontSize(fsz).fillColor(C_DARK)
-       .text(sjText, rightX, customerNameY, { width: colW, align: 'right' })
-  }
+  const leftBottomY = doc.y
 
   // No Kontrak (kanan) — ditulis di baris pertama sejajar "Kepada :"
   if (invoice.project?.contract_number || invoice.project?.code) {
@@ -538,7 +538,21 @@ function drawRecipientBlock(doc, invoice, startY, ctx = null) {
        .text(`No Kontrak : ${contractNo}`, rightX, startY, { width: colW, align: 'right' })
   }
 
-  return Math.max(doc.y, y) + (compact ? 6 : 8)
+  // Kanan, di-stack sejajar baris nama customer: Tanggal Pengiriman lalu No SJ.
+  let rightBottomY = customerNameY
+  if (sjText) {
+    let rightY = customerNameY
+    if (deliveryDateText) {
+      doc.font('Helvetica').fontSize(fsz).fillColor(C_DARK)
+         .text(deliveryDateText, rightX, rightY, { width: colW, align: 'right' })
+      rightY = doc.y
+    }
+    doc.font('Helvetica').fontSize(fsz).fillColor(C_DARK)
+       .text(sjText, rightX, rightY, { width: colW, align: 'right' })
+    rightBottomY = doc.y
+  }
+
+  return Math.max(leftBottomY, rightBottomY) + (compact ? 6 : 8)
 }
 
 // ── 4. Tabel Item ─────────────────────────────────────────────────────────
