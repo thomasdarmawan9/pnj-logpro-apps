@@ -3,6 +3,7 @@ import { apiRequestAllPages } from '@/lib/apiClient'
 
 interface InvoiceProjectOption {
   id: number
+  uuid: string
   code: string
   name: string
   contract_number: string

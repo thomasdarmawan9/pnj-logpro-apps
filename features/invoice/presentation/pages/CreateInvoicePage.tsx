@@ -181,12 +181,18 @@ export default function CreateInvoicePage() {
   useEffect(() => {
     const effective = resolveEffectiveInvoiceServiceType(serviceType, customServiceName)
     const isDelivery = effective !== 'rental'
-    const projectId = scopeMode === 'project' ? selectedProject?.id ?? null : null
+    const projectScope = scopeMode === 'project'
+    const projectId = projectScope ? selectedProject?.id ?? null : null
     const customerId = scopeMode === 'customer'
       ? selectedCustomer?.id ?? null
       : selectedProject?.customer.id ?? null
+    // UUID dipakai untuk memfilter SJ di server (project_uuid / customer_uuid)
+    // agar limit pagination berlaku pada SJ scope ini, bukan global.
+    const scopeUuid = projectScope
+      ? selectedProject?.uuid ?? null
+      : selectedCustomer?.uuid ?? null
 
-    if (!isDelivery || !customerId) {
+    if (!isDelivery || !customerId || !scopeUuid) {
       setAvailableSJs([])
       setSelectedSJs([])
       setSjSearch('')
@@ -196,7 +202,15 @@ export default function CreateInvoicePage() {
 
     let cancelled = false
     setIsLoadingSJs(true)
-    apiRequest<CreateSJOption[]>('/surat-jalan?status=all&invoice_status=all&period=all&page=1&limit=200', { method: 'GET' })
+    // Filter di server: scope (project/customer) + hanya SJ yang belum punya
+    // invoice (invoice_status=no_invoice). limit dibatasi 100 (maksimum yang
+    // divalidasi backend; sebelumnya 200 → request ditolak 422 → dropdown kosong).
+    // Status assigned & delivered tetap difilter di client karena param `status`
+    // hanya menerima satu nilai.
+    const scopeParam = projectScope
+      ? `project_uuid=${encodeURIComponent(scopeUuid)}`
+      : `customer_uuid=${encodeURIComponent(scopeUuid)}`
+    apiRequest<CreateSJOption[]>(`/surat-jalan?${scopeParam}&status=all&invoice_status=no_invoice&period=all&page=1&limit=100`, { method: 'GET' })
       .then(response => {
         if (cancelled) return
         const rows = response.data.filter(sj => {
