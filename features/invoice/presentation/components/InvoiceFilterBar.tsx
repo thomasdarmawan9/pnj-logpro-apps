@@ -2,6 +2,7 @@
 
 import { Search, RotateCcw, Download, Filter } from 'lucide-react'
 import { InvoiceFilterState } from '../../domain/entities/Invoice'
+import FilterSearchableSelect from './FilterSearchableSelect'
 
 interface Props {
   filters: InvoiceFilterState
@@ -77,9 +78,13 @@ export default function InvoiceFilterBar({ filters, onChange, onReset, onExport,
         <div>
           <div className="text-xs text-gray-600">Customer</div>
           <div className="relative mt-1">
-            <select className="form-input text-sm w-full pr-8" value={filters.customer} onChange={e => onChange({ customer: e.target.value })}>
-              {customerOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
+            <FilterSearchableSelect
+              options={customerOptions}
+              value={filters.customer}
+              onChange={customer => onChange({ customer })}
+              placeholder="Semua Customer"
+              emptyText="Customer tidak ditemukan"
+            />
           </div>
         </div>
         <div>
