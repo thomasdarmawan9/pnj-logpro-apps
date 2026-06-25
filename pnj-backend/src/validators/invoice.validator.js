@@ -43,7 +43,7 @@ const itemSchema = Joi.object({
   rental_duration_hours:  Joi.number().integer().min(0).default(0),
   qty:           Joi.number().precision(2).min(0.01).required(),
   unit:          Joi.string().trim().max(20).default('Unit'),
-  cargo_qty:     Joi.number().integer().min(0).allow(null),
+  cargo_qty:     Joi.number().precision(2).min(0).allow(null),
   cargo_unit:    Joi.string().trim().max(30).allow('', null),
   cargo_weight:  Joi.number().precision(2).min(0).allow(null),
   cargo_volume:  Joi.number().precision(2).min(0).allow(null),
