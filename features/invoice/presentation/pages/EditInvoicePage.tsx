@@ -693,7 +693,7 @@ export default function EditInvoicePage({ uuid }: Props) {
                 onChange={updateDeliveryItem}
                 onRemove={removeItem}
                 errors={errors}
-                readOnlyStructure={!fullEditable}
+                readOnlyStructure={!canEditItems}
               />
               <DeliveryPricingSection
                 items={items}
@@ -715,7 +715,7 @@ export default function EditInvoicePage({ uuid }: Props) {
             <div className="bg-white rounded-xl border p-6" style={{ borderColor: 'var(--border-card)' }}>
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-base font-semibold">Rincian Item</h2>
-                {fullEditable && (
+                {canEditItems && (
                   <button onClick={addItem} className="flex items-center gap-1.5 text-sm px-3 py-2 rounded-xl border font-medium" style={{ borderColor: 'var(--green-primary)', color: 'var(--green-primary)' }}>
                     <Plus size={14} />
                     Tambah Item
@@ -735,17 +735,17 @@ export default function EditInvoicePage({ uuid }: Props) {
                     onDragStart={i => setDragFrom(i)}
                     onDragOver={i => setDragOver(i)}
                     onDrop={() => {
-                      if (!fullEditable) return
+                      if (!canEditItems) return
                       if (dragFrom !== null && dragOver !== null && dragFrom !== dragOver) reorderItems(dragFrom, dragOver)
                       setDragFrom(null); setDragOver(null)
                     }}
                     serviceType={effectiveInvoiceServiceType}
-                    readOnlyStructure={!fullEditable}
+                    readOnlyStructure={!canEditItems}
                     sourceLabel={item.source_sj_id ? 'Sumber SJ' : 'Manual Invoice'}
                   />
                 ))}
               </div>
-              {fullEditable && (
+              {canEditItems && (
                 <button onClick={addItem} className="mt-4 w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed text-sm font-medium" style={{ borderColor: 'var(--green-primary)', color: 'var(--green-primary)' }}>
                   <Plus size={16} />Tambah Item
                 </button>
