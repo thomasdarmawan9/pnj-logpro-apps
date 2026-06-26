@@ -514,11 +514,10 @@ function drawRecipientBlock(doc, invoice, startY, ctx = null) {
   const rightX = L + colW
   const sjNumbers = getAttachedSjNumbers(invoice)
   const sjText = sjNumbers.length > 0 ? `No SJ : ${sjNumbers.join(', ')}` : ''
-  // Tanggal pengiriman diambil dari sj_date SJ terlampir (DD/MM/YYYY), tampil
-  // tepat di atas "No SJ" dengan font yang sama.
-  const sjDates = uniqueNonEmpty(getAttachedSJs(invoice).map(sj => formatDateNumeric(sj.sj_date)))
-    .filter(d => d !== '-')
-  const deliveryDateText = sjText && sjDates.length > 0 ? `Tanggal Pengiriman : ${sjDates.join(', ')}` : ''
+  // Tanggal pengiriman diambil dari field invoice (DD/MM/YYYY), tampil tepat di
+  // atas "No SJ" dengan font yang sama.
+  const deliveryDate = invoice.delivery_date ? formatDateNumeric(invoice.delivery_date) : ''
+  const deliveryDateText = deliveryDate && deliveryDate !== '-' ? `Tanggal Pengiriman : ${deliveryDate}` : ''
 
   let y = startY
 
@@ -532,14 +531,15 @@ function drawRecipientBlock(doc, invoice, startY, ctx = null) {
   const leftBottomY = doc.y
 
   // Kanan, di-stack sejajar baris nama customer: Tanggal Pengiriman lalu No SJ.
+  let rightY = customerNameY
   let rightBottomY = customerNameY
+  if (deliveryDateText) {
+    doc.font('Helvetica').fontSize(fsz).fillColor(C_DARK)
+       .text(deliveryDateText, rightX, rightY, { width: colW, align: 'right' })
+    rightY = doc.y
+    rightBottomY = doc.y
+  }
   if (sjText) {
-    let rightY = customerNameY
-    if (deliveryDateText) {
-      doc.font('Helvetica').fontSize(fsz).fillColor(C_DARK)
-         .text(deliveryDateText, rightX, rightY, { width: colW, align: 'right' })
-      rightY = doc.y
-    }
     doc.font('Helvetica').fontSize(fsz).fillColor(C_DARK)
        .text(sjText, rightX, rightY, { width: colW, align: 'right' })
     rightBottomY = doc.y

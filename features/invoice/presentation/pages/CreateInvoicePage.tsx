@@ -69,6 +69,7 @@ export default function CreateInvoicePage() {
   const [downPayment, setDownPayment] = useState<CreateDownPaymentDto | null>(null)
   const [serviceType, setServiceType] = useState<InvoiceServiceType>('delivery')
   const [customServiceName, setCustomServiceName] = useState('')
+  const [deliveryDate, setDeliveryDate] = useState('')
   const [deliveryPricingMode, setDeliveryPricingMode] = useState<DeliveryPricingMode>('shipment')
   const [deliveryShipmentQty, setDeliveryShipmentQty] = useState(1)
   const [deliveryShipmentUnit, setDeliveryShipmentUnit] = useState('pengiriman')
@@ -523,6 +524,7 @@ export default function CreateInvoicePage() {
       due_date: header.due_date,
       service_type: serviceType,
       custom_service_name: serviceType === 'other' ? customServiceName.trim() : null,
+      delivery_date: isDeliveryLikeService ? deliveryDate || null : null,
       delivery_pricing_mode: isDeliveryLikeService ? deliveryPricingMode : 'shipment',
       payment_method: paymentMethod,
       bank_account_id: paymentMethod === 'transfer' ? bankAccountId : null,
@@ -904,6 +906,19 @@ export default function CreateInvoicePage() {
                     maxLength={100}
                   />
                   {errors.custom_service_name && <p className="text-xs text-red-500 mt-1">{errors.custom_service_name}</p>}
+                </div>
+              )}
+
+              {isDeliveryLikeService && (
+                <div>
+                  <label className="text-xs font-medium text-gray-600 block mb-1">Tanggal Pengiriman</label>
+                  <input
+                    type="date"
+                    className="form-input w-full sm:w-60"
+                    value={deliveryDate}
+                    onChange={event => setDeliveryDate(event.target.value)}
+                  />
+                  <p className="text-xs text-gray-400 mt-1">Opsional. Tampil di PDF invoice di atas Nomor SJ.</p>
                 </div>
               )}
 

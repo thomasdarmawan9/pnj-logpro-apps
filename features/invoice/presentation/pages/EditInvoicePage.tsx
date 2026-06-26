@@ -67,6 +67,7 @@ export default function EditInvoicePage({ uuid }: Props) {
   const [routeOrigin, setRouteOrigin] = useState('')
   const [routeDestination, setRouteDestination] = useState('')
   const [cargoDescription, setCargoDescription] = useState('')
+  const [deliveryDate, setDeliveryDate] = useState('')
   const [manualSjNumbers, setManualSjNumbers] = useState('')
   const bankAccounts = useSelector((state: RootState) => state.settings.bankAccounts).filter(b => b.is_active)
   const fleets = useSelector((state: RootState) => state.master.fleets)
@@ -96,6 +97,7 @@ export default function EditInvoicePage({ uuid }: Props) {
       setRouteOrigin(invoice.origin ?? '')
       setRouteDestination(invoice.destination ?? '')
       setCargoDescription(invoice.cargo_description ?? '')
+      setDeliveryDate(invoice.delivery_date ?? '')
       setManualSjNumbers(invoice.manual_sj_numbers ?? '')
       setTaxPercent(invoice.tax_percent)
       setTaxEnabled(invoice.tax_percent > 0)
@@ -471,6 +473,7 @@ export default function EditInvoicePage({ uuid }: Props) {
         origin: isDeliveryLikeInvoice ? routeOrigin || null : null,
         destination: isDeliveryLikeInvoice ? routeDestination || null : null,
         cargo_description: isDeliveryLikeInvoice ? cargoDescription || null : null,
+        delivery_date: isDeliveryLikeInvoice ? deliveryDate || null : null,
         manual_sj_numbers: isDeliveryLikeInvoice ? manualSjNumbers.trim() || null : null,
         lampiran_paths: lampiranPaths.length > 0 ? lampiranPaths : null,
         items: itemPayload,
@@ -490,6 +493,7 @@ export default function EditInvoicePage({ uuid }: Props) {
             origin: isDeliveryLikeInvoice ? routeOrigin || null : null,
             destination: isDeliveryLikeInvoice ? routeDestination || null : null,
             cargo_description: isDeliveryLikeInvoice ? cargoDescription || null : null,
+            delivery_date: isDeliveryLikeInvoice ? deliveryDate || null : null,
             manual_sj_numbers: isDeliveryLikeInvoice ? manualSjNumbers.trim() || null : null,
             ...(canEditItems && isDeliveryLikeInvoice ? { delivery_pricing_mode: deliveryPricingMode } : {}),
             ...(canEditItems ? { items: itemPayload } : {}),
@@ -591,6 +595,19 @@ export default function EditInvoicePage({ uuid }: Props) {
                 </div>
                 <p className="text-xs text-amber-600 mt-1">Jenis jasa tidak dapat diedit. Jika salah pilih, void invoice lalu buat invoice baru.</p>
               </div>
+              {isDeliveryLikeInvoice && (
+                <div>
+                  <label className="text-xs font-medium text-gray-600 block mb-1">Tanggal Pengiriman</label>
+                  <input
+                    type="date"
+                    className="form-input w-full disabled:bg-gray-50 disabled:text-gray-500"
+                    value={deliveryDate}
+                    onChange={e => setDeliveryDate(e.target.value)}
+                    disabled={!canEditItems}
+                  />
+                  <p className="text-xs text-gray-400 mt-1">Opsional. Tampil di PDF invoice di atas Nomor SJ.</p>
+                </div>
+              )}
               <div>
                 <label className="text-xs font-medium text-gray-600 block mb-1">Tanggal Jatuh Tempo *</label>
                 <input type="date" className="form-input w-full disabled:bg-gray-50 disabled:text-gray-500" value={dueDate} onChange={e => setDueDate(e.target.value)} disabled={!fullEditable} />

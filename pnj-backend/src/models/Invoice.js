@@ -36,6 +36,11 @@ module.exports = (sequelize) => {
       type:      DataTypes.DATEONLY,
       allowNull: false,
     },
+    delivery_date: {
+      type:      DataTypes.DATEONLY,
+      allowNull: true,
+      comment:   'Tanggal pengiriman manual untuk invoice jasa pengiriman; tampil di PDF.',
+    },
     service_type: {
       type:         DataTypes.STRING(20),
       allowNull:    false,

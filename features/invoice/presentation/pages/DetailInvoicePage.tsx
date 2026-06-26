@@ -257,6 +257,9 @@ export default function DetailInvoicePage({ uuid }: Props) {
                   <div><span className="text-gray-500">Mode Harga</span><span className="ml-2">{invoice.delivery_pricing_mode === 'item' ? 'Per Barang' : 'Per Pengiriman'}</span></div>
                 )}
                 <div><span className="text-gray-500">Tgl Invoice</span><span className="ml-2">{formatDate(invoice.invoice_date)}</span></div>
+                {!isRentalInvoice && invoice.delivery_date && (
+                  <div><span className="text-gray-500">Tanggal Pengiriman</span><span className="ml-2">{formatDate(invoice.delivery_date)}</span></div>
+                )}
                 <div><span className="text-gray-500">Jatuh Tempo</span><span className="ml-2">{formatDate(invoice.due_date)}</span></div>
                 <div>
                   <span className="text-gray-500">Metode Pembayaran</span>

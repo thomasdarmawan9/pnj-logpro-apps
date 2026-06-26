@@ -835,6 +835,7 @@ async function create(payload, actor) {
       customer_id:      scope.customerId,
       invoice_date:     payload.invoice_date,
       due_date:         payload.due_date,
+      delivery_date:    effectiveType === 'rental' ? null : (payload.delivery_date || null),
       service_type:     serviceType,
       custom_service_name: customServiceName,
       delivery_pricing_mode: deliveryPricingMode,
@@ -941,7 +942,7 @@ async function update(uuid, payload, actor) {
     const isDpOnly = payloadKeys.every(k => k === 'down_payment')
     const isLampiranOnly = payloadKeys.every(k => k === 'lampiran_paths')
     const isSentBillingOnly = invoice.status === STATUS.SENT &&
-      payloadKeys.every(k => ['payment_method', 'bank_account_id', 'down_payment', 'items', 'delivery_pricing_mode', 'origin', 'destination', 'cargo_description', 'manual_sj_numbers', 'lampiran_paths', 'tax_percent', 'pph_percent', 'insurance_amount'].includes(k))
+      payloadKeys.every(k => ['payment_method', 'bank_account_id', 'down_payment', 'items', 'delivery_pricing_mode', 'origin', 'destination', 'cargo_description', 'manual_sj_numbers', 'delivery_date', 'lampiran_paths', 'tax_percent', 'pph_percent', 'insurance_amount'].includes(k))
 
     if (invoice.status === STATUS.VOID) {
       throw new ForbiddenError('Invoice void tidak dapat diedit.')
@@ -960,6 +961,12 @@ async function update(uuid, payload, actor) {
     if ('manual_sj_numbers' in payload) {
       const effType = effectiveServiceType(invoice.service_type, invoice.custom_service_name)
       updates.manual_sj_numbers = effType === 'rental' ? null : (payload.manual_sj_numbers || null)
+    }
+
+    // Tanggal pengiriman — hanya relevan untuk jasa non-rental.
+    if ('delivery_date' in payload) {
+      const effType = effectiveServiceType(invoice.service_type, invoice.custom_service_name)
+      updates.delivery_date = effType === 'rental' ? null : (payload.delivery_date || null)
     }
 
     // bank_account_id — hanya relevan jika payment_method transfer

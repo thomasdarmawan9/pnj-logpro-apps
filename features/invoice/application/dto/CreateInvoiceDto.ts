@@ -40,6 +40,7 @@ export interface CreateInvoiceDto {
   customer_id?: number | null
   invoice_date: string
   due_date: string
+  delivery_date?: string | null
   service_type: 'delivery' | 'rental' | 'other'
   custom_service_name?: string | null
   delivery_pricing_mode?: 'shipment' | 'item'

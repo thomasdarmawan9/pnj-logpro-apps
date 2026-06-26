@@ -3,6 +3,7 @@ import { CreateInvoiceItemDto, CreateDownPaymentDto } from './CreateInvoiceDto'
 export interface UpdateInvoiceDto {
   invoice_date?: string
   due_date?: string
+  delivery_date?: string | null
   delivery_pricing_mode?: 'shipment' | 'item'
   payment_method?: 'transfer' | 'cash' | 'check'
   bank_account_id?: number | null

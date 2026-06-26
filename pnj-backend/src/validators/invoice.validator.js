@@ -119,6 +119,7 @@ const createInvoiceSchema = Joi.object({
   }),
   service_type:     Joi.string().valid(...SERVICE_TYPES).required(),
   custom_service_name: Joi.string().trim().max(100).allow('', null),
+  delivery_date:    Joi.date().iso().allow(null),
   delivery_pricing_mode: Joi.string().valid(...DELIVERY_PRICING_MODES).default('shipment'),
   payment_method:   Joi.string().valid('transfer', 'cash', 'check').default('transfer'),
   bank_account_id:  Joi.number().integer().min(1).allow(null).optional(),
@@ -164,6 +165,7 @@ const createInvoiceSchema = Joi.object({
 const updateInvoiceSchema = Joi.object({
   invoice_date:    Joi.date().iso(),
   due_date:        Joi.date().iso(),
+  delivery_date:   Joi.date().iso().allow(null),
   delivery_pricing_mode: Joi.string().valid(...DELIVERY_PRICING_MODES),
   payment_method:  Joi.string().valid('transfer', 'cash', 'check'),
   bank_account_id: Joi.number().integer().min(1).allow(null).optional(),

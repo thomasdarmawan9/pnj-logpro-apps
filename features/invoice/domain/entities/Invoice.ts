@@ -121,6 +121,7 @@ export interface Invoice {
   }
   invoice_date: string
   due_date: string
+  delivery_date?: string | null
   service_type: InvoiceServiceType
   custom_service_name?: string | null
   delivery_pricing_mode: DeliveryPricingMode

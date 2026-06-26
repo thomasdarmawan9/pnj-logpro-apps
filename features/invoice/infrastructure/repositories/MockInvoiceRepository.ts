@@ -282,6 +282,7 @@ export class MockInvoiceRepository implements IInvoiceRepository {
         customer_id: dto.customer_id ?? null,
         invoice_date: dto.invoice_date,
         due_date: dto.due_date,
+        delivery_date: dto.delivery_date ?? null,
         service_type: dto.service_type,
         custom_service_name: dto.service_type === 'other' ? dto.custom_service_name ?? null : null,
         delivery_pricing_mode: dto.delivery_pricing_mode ?? 'shipment',
