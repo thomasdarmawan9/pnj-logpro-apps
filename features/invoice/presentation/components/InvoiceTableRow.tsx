@@ -22,6 +22,14 @@ function daysOverdue(due: string): number {
   return Math.floor((now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24))
 }
 
+function getSettlementDate(invoice: Invoice): string | null {
+  if (invoice.status !== InvoiceStatus.PAID) return null
+  const dates = invoice.payments.map(p => p.payment_date)
+  if (invoice.down_payment) dates.push(invoice.down_payment.payment_date)
+  if (dates.length === 0) return null
+  return dates.reduce((latest, d) => (d > latest ? d : latest))
+}
+
 interface Props {
   invoice: Invoice
   checked: boolean
@@ -37,6 +45,7 @@ export default function InvoiceTableRow({ invoice, checked, onToggle, onAction, 
   const buttonRef = useRef<HTMLButtonElement>(null)
   const overdue = invoice.status === InvoiceStatus.OUTSTANDING && new Date(invoice.due_date) < new Date()
   const overdayCount = overdue ? daysOverdue(invoice.due_date) : 0
+  const settlementDate = getSettlementDate(invoice)
   const effectiveServiceType = resolveEffectiveInvoiceServiceType(invoice.service_type, invoice.custom_service_name)
   const itemSummary = buildInvoiceItemSummary(invoice)
   const canAttachSJ = effectiveServiceType !== 'rental'
@@ -161,7 +170,7 @@ export default function InvoiceTableRow({ invoice, checked, onToggle, onAction, 
       <td className="px-3 py-2.5 text-xs text-right font-bold font-mono" style={{ fontFamily: 'var(--font-mono)' }}>{formatRupiah(invoice.total_amount)}</td>
       <td className="px-3 py-2.5"><InvoiceStatusBadge status={invoice.status} /></td>
       <td className="px-3 py-2.5">
-        <div className="text-xs text-gray-600">{formatDate(invoice.due_date)}</div>
+        <div className="text-xs text-gray-600">{settlementDate ? formatDate(settlementDate) : '-'}</div>
         {overdue && (
           <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-600 mt-0.5">
             <AlertTriangle size={11} />

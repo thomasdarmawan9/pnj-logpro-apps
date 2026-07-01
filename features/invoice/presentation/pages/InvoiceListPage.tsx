@@ -222,7 +222,7 @@ export default function InvoiceListPage() {
               <th className="px-3 py-2.5 text-left">Customer</th>
               <th className="px-3 py-2.5 text-right">Total</th>
               <th className="px-3 py-2.5 text-left">Status</th>
-              <th className="px-3 py-2.5 text-left">Jatuh Tempo</th>
+              <th className="px-3 py-2.5 text-left">Tanggal Pelunasan</th>
               <th className="px-3 py-2.5 text-right">Aksi</th>
             </tr>
           </thead>
