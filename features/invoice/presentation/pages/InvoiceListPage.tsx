@@ -254,7 +254,11 @@ export default function InvoiceListPage() {
         onClose={() => dispatch(closeVoidInvoiceModal())}
         onConfirm={reason => {
           if (!currentInvoice) return
-          dispatch(voidInvoice({ uuid: currentInvoice.uuid, reason })).then(() => pushToast({ title: 'Invoice Void', description: `Invoice #${currentInvoice.invoice_number} telah dibatalkan.`, variant: 'info' }))
+          dispatch(voidInvoice({ uuid: currentInvoice.uuid, reason })).then(action => {
+            if (voidInvoice.fulfilled.match(action)) {
+              pushToast({ title: 'Invoice Void', description: `Invoice #${currentInvoice.invoice_number} telah dibatalkan.`, variant: 'info' })
+            }
+          })
         }}
       />
       <RecordPaymentModal
