@@ -20,6 +20,9 @@ import {
   fetchSuratJalanDetail,
   attachSuratJalanToInvoice,
   updateSuratJalan,
+  assignSuratJalan,
+  deliverSuratJalan,
+  voidSuratJalan,
 } from '@/store/slices/suratJalanSlice'
 import useSuratJalanDetail from '../hooks/useSuratJalanDetail'
 import useSJStatusTransition from '../hooks/useSJStatusTransition'
@@ -555,21 +558,33 @@ export default function DetailSuratJalanPage({ uuid }: DetailSuratJalanPageProps
         open={isAssignModalOpen}
         sj={selectedSJ}
         onClose={() => dispatch(closeAssignModal())}
-        onConfirm={input => assign(selectedSJ.uuid, input)}
+        onConfirm={async input => {
+          const result = await assign(selectedSJ.uuid, input)
+          if (assignSuratJalan.fulfilled.match(result)) {
+            pushToast({ title: 'SJ Di-assign', description: 'Armada & supir berhasil ditugaskan.', variant: 'success' })
+            return
+          }
+          pushToast({ title: 'Gagal assign SJ', description: (result.payload as string) || 'Surat jalan tidak dapat di-assign.', variant: 'error' })
+        }}
       />
 
       <ConfirmasiTibaModal
         open={isUploadPODModalOpen}
         sj={selectedSJ}
         onClose={() => dispatch(closeUploadPODModal())}
-        onConfirm={input => {
+        onConfirm={async input => {
           if (selectedSJ.status === StatusOperasional.DELIVERED) {
             dispatch(closeUploadPODModal())
             dispatch(fetchSuratJalanDetail(selectedSJ.uuid))
             pushToast({ title: 'Foto disimpan', description: 'Foto bukti pengiriman berhasil diperbarui.', variant: 'success' })
             return
           }
-          deliver(selectedSJ.uuid, input)
+          const result = await deliver(selectedSJ.uuid, input)
+          if (deliverSuratJalan.fulfilled.match(result)) {
+            pushToast({ title: 'SJ Terkirim', description: 'Bukti pengiriman berhasil disimpan.', variant: 'success' })
+            return
+          }
+          pushToast({ title: 'Gagal konfirmasi tiba', description: (result.payload as string) || 'Surat jalan tidak dapat diperbarui.', variant: 'error' })
         }}
       />
 
@@ -577,9 +592,14 @@ export default function DetailSuratJalanPage({ uuid }: DetailSuratJalanPageProps
         open={isVoidModalOpen}
         sj={selectedSJ}
         onClose={() => dispatch(closeVoidModal())}
-        onConfirm={(reason, confirmation) => {
+        onConfirm={async (reason, confirmation) => {
           if (confirmation !== 'VOID') return
-          voidSJ(selectedSJ.uuid, reason)
+          const result = await voidSJ(selectedSJ.uuid, reason)
+          if (voidSuratJalan.fulfilled.match(result)) {
+            pushToast({ title: 'SJ Void', description: 'Surat jalan telah dibatalkan.', variant: 'info' })
+            return
+          }
+          pushToast({ title: 'Gagal void SJ', description: (result.payload as string) || 'Surat jalan tidak dapat dibatalkan.', variant: 'error' })
         }}
       />
 

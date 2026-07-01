@@ -220,9 +220,11 @@ const masterSlice = createSlice({
       .addCase(toggleFleetStatus.fulfilled, (state, a) => {
         replaceFleet(state, a.payload)
       })
+      .addCase(toggleFleetStatus.rejected, (state, a) => { state.error = (a.payload as string) || 'Terjadi kesalahan' })
       .addCase(completeFleetRental.fulfilled, (state, a) => {
         replaceFleet(state, a.payload)
       })
+      .addCase(completeFleetRental.rejected, (state, a) => { state.error = (a.payload as string) || 'Terjadi kesalahan' })
       .addCase(uploadFleetLampiran.fulfilled, (state, a) => {
         replaceFleet(state, a.payload)
       })
@@ -263,6 +265,7 @@ const masterSlice = createSlice({
         const idx = state.drivers.findIndex(d => d.uuid === a.payload.uuid)
         if (idx !== -1) state.drivers[idx] = a.payload
       })
+      .addCase(toggleDriverStatus.rejected, (state, a) => { state.error = (a.payload as string) || 'Terjadi kesalahan' })
       .addCase(uploadDriverLampiran.fulfilled, (state, a) => {
         const idx = state.drivers.findIndex(d => d.uuid === a.payload.uuid)
         if (idx !== -1) state.drivers[idx] = a.payload

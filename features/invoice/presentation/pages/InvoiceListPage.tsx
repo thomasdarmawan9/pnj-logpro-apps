@@ -303,9 +303,18 @@ export default function InvoiceListPage() {
         invoice={currentInvoice}
         sj={currentInvoice?.attached_sj.find(s => s.uuid === modals.detachSJ.sjUuid) ?? null}
         onClose={() => dispatch(closeDetachSJModal())}
-        onConfirm={() => {
+        onConfirm={async () => {
           if (!currentInvoice || !modals.detachSJ.sjUuid) return
-          dispatch(detachSJ({ invoiceUuid: currentInvoice.uuid, sjUuid: modals.detachSJ.sjUuid })).then(() => pushToast({ title: 'SJ Dilepas', description: 'SJ berhasil dilepas dari invoice.', variant: 'info' }))
+          const result = await dispatch(detachSJ({ invoiceUuid: currentInvoice.uuid, sjUuid: modals.detachSJ.sjUuid }))
+          if (detachSJ.fulfilled.match(result)) {
+            pushToast({ title: 'SJ Dilepas', description: 'SJ berhasil dilepas dari invoice.', variant: 'info' })
+            return
+          }
+          pushToast({
+            title: 'Gagal melepas SJ',
+            description: (result.payload as string) || 'Surat Jalan tidak dapat dilepas.',
+            variant: 'error',
+          })
         }}
       />
       <GeneratePDFModal

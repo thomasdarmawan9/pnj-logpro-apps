@@ -40,6 +40,7 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
   const [lampiranPaths, setLampiranPaths] = useState<string[]>([])
   const [availableStockItems, setAvailableStockItems] = useState<CustomerStockAvailableItem[]>([])
   const [isLoadingStockItems, setIsLoadingStockItems] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
     if (!fleets.length) dispatch(fetchFleets())
@@ -122,11 +123,12 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
     return () => { cancelled = true }
   }, [selectedSJ?.customer.uuid])
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const valid = validate()
-    if (!valid || !selectedSJ) return
+    if (!valid || !selectedSJ || isSubmitting) return
 
-    dispatch(updateSuratJalan({
+    setIsSubmitting(true)
+    const result = await dispatch(updateSuratJalan({
       uuid: selectedSJ.uuid,
       dto: {
         fleet_id: armadaMode === 'tbd' ? 0 : selectedArmada?.id,
@@ -141,8 +143,19 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
         lampiran_paths: lampiranPaths.length > 0 ? lampiranPaths : null,
       },
     }))
-    pushToast({ title: 'Perubahan disimpan', description: 'Surat jalan berhasil diperbarui', variant: 'success' })
-    router.push('/surat-jalan')
+    setIsSubmitting(false)
+
+    if (updateSuratJalan.fulfilled.match(result)) {
+      pushToast({ title: 'Perubahan disimpan', description: 'Surat jalan berhasil diperbarui', variant: 'success' })
+      router.push('/surat-jalan')
+      return
+    }
+
+    pushToast({
+      title: 'Gagal menyimpan perubahan',
+      description: (result.payload as string) || 'Surat jalan tidak dapat diperbarui.',
+      variant: 'error',
+    })
   }
 
   if (isDetailLoading || !selectedSJ) {
@@ -333,15 +346,16 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
           </div>
 
           <div className="flex items-center gap-3 mt-6">
-            <button onClick={() => router.back()} className="px-4 py-2 rounded-lg border" style={{ borderColor: 'var(--border-card)' }}>
+            <button onClick={() => router.back()} disabled={isSubmitting} className="px-4 py-2 rounded-lg border disabled:opacity-50" style={{ borderColor: 'var(--border-card)' }}>
               Batal
             </button>
             <button
               onClick={handleSubmit}
-              className="px-4 py-2 rounded-lg text-white"
+              disabled={isSubmitting}
+              className="px-4 py-2 rounded-lg text-white disabled:opacity-50"
               style={{ backgroundColor: 'var(--green-primary)' }}
             >
-              Simpan Perubahan
+              {isSubmitting ? 'Menyimpan...' : 'Simpan Perubahan'}
             </button>
           </div>
         </div>

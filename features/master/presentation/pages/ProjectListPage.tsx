@@ -84,7 +84,11 @@ export default function ProjectListPage() {
 
   const handleMarkDone = async (project: Project) => {
     if (!confirm(`Tandai "${project.name}" sebagai Selesai?`)) return
-    await update(project.uuid, { status: 'completed' })
+    const action = await update(project.uuid, { status: 'completed' })
+    if ((action as { meta?: { requestStatus?: string } }).meta?.requestStatus === 'rejected') {
+      pushToast({ title: 'Gagal menandai proyek selesai', variant: 'error' })
+      return
+    }
     pushToast({ title: 'Proyek ditandai selesai', variant: 'success' })
   }
 

@@ -21,6 +21,9 @@ import {
   closeAttachInvoiceModal,
   fetchSuratJalanDetail,
   deleteSuratJalan,
+  assignSuratJalan,
+  deliverSuratJalan,
+  voidSuratJalan,
   fetchAvailableInvoices,
   attachSuratJalanToInvoice,
 } from '@/store/slices/suratJalanSlice'
@@ -105,7 +108,7 @@ export default function SuratJalanListPage() {
     setSelectedRows(prev => prev.includes(uuid) ? prev.filter(id => id !== uuid) : [...prev, uuid])
   }
 
-  const handleAction = (action: string, uuid: string) => {
+  const handleAction = async (action: string, uuid: string) => {
     if (action === 'detail') return dispatch(openDetailDrawer(uuid))
     if (action === 'print') return dispatch(openGeneratePDFModal(uuid))
     if (isReadOnly) return
@@ -113,7 +116,19 @@ export default function SuratJalanListPage() {
     if (action === 'assign') return dispatch(openAssignModal(uuid))
     if (action === 'deliver') return dispatch(openUploadPODModal(uuid))
     if (action === 'void') return dispatch(openVoidModal(uuid))
-    if (action === 'delete') return dispatch(deleteSuratJalan(uuid))
+    if (action === 'delete') {
+      const result = await dispatch(deleteSuratJalan(uuid))
+      if (deleteSuratJalan.fulfilled.match(result)) {
+        pushToast({ title: 'Draft dihapus', description: 'Surat jalan berhasil dihapus.', variant: 'info' })
+        return
+      }
+      pushToast({
+        title: 'Gagal menghapus',
+        description: (result.payload as string) || 'Surat jalan tidak dapat dihapus.',
+        variant: 'error',
+      })
+      return
+    }
     if (action === 'attach') {
       const sj = list.find(s => s.uuid === uuid)
       if (!sj) return
@@ -301,9 +316,14 @@ export default function SuratJalanListPage() {
         open={isAssignModalOpen}
         sj={currentSJ}
         onClose={() => dispatch(closeAssignModal())}
-        onConfirm={input => {
+        onConfirm={async input => {
           if (!currentSJ) return
-          assign(currentSJ.uuid, input)
+          const result = await assign(currentSJ.uuid, input)
+          if (assignSuratJalan.fulfilled.match(result)) {
+            pushToast({ title: 'SJ Di-assign', description: 'Armada & supir berhasil ditugaskan.', variant: 'success' })
+            return
+          }
+          pushToast({ title: 'Gagal assign SJ', description: (result.payload as string) || 'Surat jalan tidak dapat di-assign.', variant: 'error' })
         }}
       />
 
@@ -311,9 +331,14 @@ export default function SuratJalanListPage() {
         open={isUploadPODModalOpen}
         sj={currentSJ}
         onClose={() => dispatch(closeUploadPODModal())}
-        onConfirm={input => {
+        onConfirm={async input => {
           if (!currentSJ) return
-          deliver(currentSJ.uuid, input)
+          const result = await deliver(currentSJ.uuid, input)
+          if (deliverSuratJalan.fulfilled.match(result)) {
+            pushToast({ title: 'SJ Terkirim', description: 'Bukti pengiriman berhasil disimpan.', variant: 'success' })
+            return
+          }
+          pushToast({ title: 'Gagal konfirmasi tiba', description: (result.payload as string) || 'Surat jalan tidak dapat diperbarui.', variant: 'error' })
         }}
       />
 
@@ -321,10 +346,15 @@ export default function SuratJalanListPage() {
         open={isVoidModalOpen}
         sj={currentSJ}
         onClose={() => dispatch(closeVoidModal())}
-        onConfirm={(reason, confirmation) => {
+        onConfirm={async (reason, confirmation) => {
           if (!currentSJ) return
           if (confirmation !== 'VOID') return
-          voidSJ(currentSJ.uuid, reason)
+          const result = await voidSJ(currentSJ.uuid, reason)
+          if (voidSuratJalan.fulfilled.match(result)) {
+            pushToast({ title: 'SJ Void', description: 'Surat jalan telah dibatalkan.', variant: 'info' })
+            return
+          }
+          pushToast({ title: 'Gagal void SJ', description: (result.payload as string) || 'Surat jalan tidak dapat dibatalkan.', variant: 'error' })
         }}
       />
 

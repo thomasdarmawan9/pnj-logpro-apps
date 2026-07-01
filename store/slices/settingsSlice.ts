@@ -130,11 +130,13 @@ const settingsSlice = createSlice({
         const idx = state.users.findIndex(u => u.uuid === a.payload.uuid)
         if (idx !== -1) state.users[idx] = a.payload
       })
+      .addCase(toggleUserStatus.rejected, (state, a) => { state.error = a.payload as string })
 
       .addCase(unlockUser.fulfilled, (state, a) => {
         const idx = state.users.findIndex(u => u.uuid === a.payload.uuid)
         if (idx !== -1) state.users[idx] = a.payload
       })
+      .addCase(unlockUser.rejected, (state, a) => { state.error = a.payload as string })
 
       .addCase(fetchNumberingSettings.fulfilled, (state, a) => { state.numbering = a.payload })
       .addCase(saveNumberingSettings.pending, state => { state.isSaving = true })
@@ -165,6 +167,7 @@ const settingsSlice = createSlice({
       .addCase(deleteBankAccount.fulfilled, (state, a) => {
         state.bankAccounts = state.bankAccounts.filter(b => b.uuid !== a.payload)
       })
+      .addCase(deleteBankAccount.rejected, (state, a) => { state.error = a.payload as string })
   },
 })
 
