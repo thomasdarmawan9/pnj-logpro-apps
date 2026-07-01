@@ -13,10 +13,10 @@ import {
   openSendInvoiceModal, closeSendInvoiceModal,
   openVoidInvoiceModal, closeVoidInvoiceModal,
   openGeneratePDFModal, closeGeneratePDFModal,
-  fetchInvoiceDetail, fetchAttachableSJ,
+  fetchInvoiceDetail, fetchAttachableSJ, fetchInvoiceList,
   sendInvoice, voidInvoice, attachSJ, detachSJ,
 } from '@/store/slices/invoiceSlice'
-import { InvoiceStatus } from '../../domain/entities/Invoice'
+import { Invoice, InvoiceStatus } from '../../domain/entities/Invoice'
 import useInvoiceList from '../hooks/useInvoiceList'
 import { useToast } from '@/components/toast/useToast'
 import InvoiceSummaryCards from '../components/InvoiceSummaryCards'
@@ -25,6 +25,7 @@ import InvoiceTableRow from '../components/InvoiceTableRow'
 import SendInvoiceModal from '../components/modals/SendInvoiceModal'
 import VoidInvoiceModal from '../components/modals/VoidInvoiceModal'
 import RecordPaymentModal from '../components/modals/RecordPaymentModal'
+import BulkRecordPaymentModal from '../components/modals/BulkRecordPaymentModal'
 import AttachSJModal from '../components/modals/AttachSJModal'
 import { resolveEffectiveInvoiceServiceType } from '../../domain/services/invoiceServiceType'
 import DetachSJConfirmModal from '../components/modals/DetachSJConfirmModal'
@@ -32,6 +33,10 @@ import GeneratePDFModal from '../components/modals/GeneratePDFModal'
 import { exportInvoices } from '../../infrastructure/repositories/MockInvoiceRepository'
 import { fetchCustomers, fetchProjects } from '@/store/slices/masterSlice'
 import TablePagination from '@/features/master/presentation/components/TablePagination'
+
+function isEligibleForBulkPayment(invoice: Invoice): boolean {
+  return invoice.status === InvoiceStatus.SENT || invoice.status === InvoiceStatus.OUTSTANDING
+}
 
 export default function InvoiceListPage() {
   const router = useRouter()
@@ -44,14 +49,22 @@ export default function InvoiceListPage() {
   const isReadOnly = false
   const [selectedRows, setSelectedRows] = useState<string[]>([])
   const [activeUuid, setActiveUuid] = useState<string | null>(null)
+  const [bulkPaymentOpen, setBulkPaymentOpen] = useState(false)
 
   const currentInvoice = selectedInvoice ?? list.find(i => i.uuid === activeUuid) ?? null
+  const selectedInvoices = useMemo(() => list.filter(inv => selectedRows.includes(inv.uuid)), [list, selectedRows])
+  const eligibleRowsOnPage = useMemo(() => list.filter(isEligibleForBulkPayment).map(inv => inv.uuid), [list])
+  const allEligibleSelected = eligibleRowsOnPage.length > 0 && eligibleRowsOnPage.every(uuid => selectedRows.includes(uuid))
 
   useEffect(() => {
     if (role !== null && role !== 'super_admin' && role !== 'admin_finance') {
       router.replace('/surat-jalan')
     }
   }, [role, router])
+
+  useEffect(() => {
+    setSelectedRows([])
+  }, [filters, pagination.page, pagination.perPage])
 
   useEffect(() => {
     if (error) pushToast({ title: 'Kesalahan', description: error, variant: 'error' })
@@ -171,11 +184,37 @@ export default function InvoiceListPage() {
         />
       </div>
 
-      <div className="mt-4 rounded-xl overflow-hidden shadow-sm border bg-white" style={{ borderColor: 'var(--border-card)' }}>
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <div className="text-sm text-gray-600">
+          {selectedRows.length > 0 ? `${selectedRows.length} invoice dipilih` : 'Belum ada invoice dipilih'}
+        </div>
+        <button
+          onClick={() => setBulkPaymentOpen(true)}
+          disabled={selectedRows.length === 0}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white disabled:opacity-40 disabled:cursor-not-allowed"
+          style={{ backgroundColor: 'var(--green-primary)' }}
+        >
+          Catat Lunas Massal
+        </button>
+      </div>
+
+      <div className="mt-3 rounded-xl overflow-hidden shadow-sm border bg-white" style={{ borderColor: 'var(--border-card)' }}>
         <table className="min-w-full">
           <thead className="bg-gray-50 text-xs text-gray-500 sticky top-0">
             <tr>
-              <th className="px-3 py-2.5 text-left w-8">□</th>
+              <th className="px-3 py-2.5 text-left w-8">
+                <input
+                  type="checkbox"
+                  className="rounded"
+                  checked={allEligibleSelected}
+                  disabled={eligibleRowsOnPage.length === 0}
+                  onChange={() => {
+                    setSelectedRows(prev => allEligibleSelected
+                      ? prev.filter(uuid => !eligibleRowsOnPage.includes(uuid))
+                      : [...new Set([...prev, ...eligibleRowsOnPage])])
+                  }}
+                />
+              </th>
               <th className="px-3 py-2.5 text-left">No. Invoice</th>
               <th className="px-3 py-2.5 text-left">Tgl Invoice</th>
               <th className="px-3 py-2.5 text-left">Tipe Jasa</th>
@@ -183,7 +222,7 @@ export default function InvoiceListPage() {
               <th className="px-3 py-2.5 text-left">Customer</th>
               <th className="px-3 py-2.5 text-right">Total</th>
               <th className="px-3 py-2.5 text-left">Status</th>
-              <th className="px-3 py-2.5 text-left">Jatuh Tempo</th>
+              <th className="px-3 py-2.5 text-left">Tanggal Pelunasan</th>
               <th className="px-3 py-2.5 text-right">Aksi</th>
             </tr>
           </thead>
@@ -243,22 +282,28 @@ export default function InvoiceListPage() {
         open={modals.sendInvoice}
         invoice={currentInvoice}
         onClose={() => dispatch(closeSendInvoiceModal())}
-        onConfirm={() => {
+        onConfirm={async () => {
           if (!currentInvoice) return
-          dispatch(sendInvoice(currentInvoice.uuid)).then(() => pushToast({ title: 'Invoice Dikirim', description: `Invoice #${currentInvoice.invoice_number} sudah dikirim.`, variant: 'success' }))
+          const result = await dispatch(sendInvoice(currentInvoice.uuid))
+          if (sendInvoice.fulfilled.match(result)) {
+            pushToast({ title: 'Invoice Dikirim', description: `Invoice #${currentInvoice.invoice_number} sudah dikirim.`, variant: 'success' })
+            return
+          }
+          pushToast({ title: 'Gagal mengirim invoice', description: (result.payload as string) || 'Invoice tidak dapat dikirim.', variant: 'error' })
         }}
       />
       <VoidInvoiceModal
         open={modals.voidInvoice}
         invoice={currentInvoice}
         onClose={() => dispatch(closeVoidInvoiceModal())}
-        onConfirm={reason => {
+        onConfirm={async reason => {
           if (!currentInvoice) return
-          dispatch(voidInvoice({ uuid: currentInvoice.uuid, reason })).then(action => {
-            if (voidInvoice.fulfilled.match(action)) {
-              pushToast({ title: 'Invoice Void', description: `Invoice #${currentInvoice.invoice_number} telah dibatalkan.`, variant: 'info' })
-            }
-          })
+          const result = await dispatch(voidInvoice({ uuid: currentInvoice.uuid, reason }))
+          if (voidInvoice.fulfilled.match(result)) {
+            pushToast({ title: 'Invoice Void', description: `Invoice #${currentInvoice.invoice_number} telah dibatalkan.`, variant: 'info' })
+            return
+          }
+          pushToast({ title: 'Gagal void invoice', description: (result.payload as string) || 'Invoice tidak dapat dibatalkan.', variant: 'error' })
         }}
       />
       <RecordPaymentModal
@@ -271,6 +316,25 @@ export default function InvoiceListPage() {
           } else {
             pushToast({ title: 'Pembayaran Dicatat', description: 'Pembayaran berhasil disimpan.', variant: 'success' })
           }
+        }}
+      />
+      <BulkRecordPaymentModal
+        open={bulkPaymentOpen}
+        invoices={selectedInvoices}
+        onClose={() => setBulkPaymentOpen(false)}
+        onSuccess={(successCount, failCount) => {
+          setBulkPaymentOpen(false)
+          setSelectedRows([])
+          dispatch(fetchInvoiceList())
+          if (failCount === 0) {
+            pushToast({ title: 'Pembayaran Dicatat', description: `${successCount} invoice berhasil dilunasi.`, variant: 'success' })
+            return
+          }
+          pushToast({
+            title: 'Sebagian Gagal',
+            description: `${successCount} invoice berhasil dilunasi, ${failCount} gagal. Silakan coba lagi untuk yang gagal.`,
+            variant: 'error',
+          })
         }}
       />
       <AttachSJModal
@@ -297,9 +361,18 @@ export default function InvoiceListPage() {
         invoice={currentInvoice}
         sj={currentInvoice?.attached_sj.find(s => s.uuid === modals.detachSJ.sjUuid) ?? null}
         onClose={() => dispatch(closeDetachSJModal())}
-        onConfirm={() => {
+        onConfirm={async () => {
           if (!currentInvoice || !modals.detachSJ.sjUuid) return
-          dispatch(detachSJ({ invoiceUuid: currentInvoice.uuid, sjUuid: modals.detachSJ.sjUuid })).then(() => pushToast({ title: 'SJ Dilepas', description: 'SJ berhasil dilepas dari invoice.', variant: 'info' }))
+          const result = await dispatch(detachSJ({ invoiceUuid: currentInvoice.uuid, sjUuid: modals.detachSJ.sjUuid }))
+          if (detachSJ.fulfilled.match(result)) {
+            pushToast({ title: 'SJ Dilepas', description: 'SJ berhasil dilepas dari invoice.', variant: 'info' })
+            return
+          }
+          pushToast({
+            title: 'Gagal melepas SJ',
+            description: (result.payload as string) || 'Surat Jalan tidak dapat dilepas.',
+            variant: 'error',
+          })
         }}
       />
       <GeneratePDFModal

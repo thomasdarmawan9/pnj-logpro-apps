@@ -89,7 +89,11 @@ export default function ProjectDetailPage({ uuid }: Props) {
 
   const handleMarkDone = async () => {
     if (!project || !confirm('Tandai proyek ini sebagai Selesai?')) return
-    await update(project.uuid, { status: 'completed' })
+    const action = await update(project.uuid, { status: 'completed' })
+    if ((action as { meta?: { requestStatus?: string } }).meta?.requestStatus === 'rejected') {
+      pushToast({ title: 'Gagal menandai proyek selesai', variant: 'error' })
+      return
+    }
     pushToast({ title: 'Proyek ditandai selesai', variant: 'success' })
   }
 

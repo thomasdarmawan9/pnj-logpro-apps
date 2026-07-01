@@ -284,9 +284,15 @@ const suratJalanSlice = createSlice({
         state.list = [action.payload, ...state.list]
         state.pagination.total += 1
       })
+      .addCase(createSuratJalan.rejected, (state, action) => {
+        state.error = action.payload as string
+      })
       .addCase(updateSuratJalan.fulfilled, (state, action) => {
         state.list = updateSJInList(state.list, action.payload)
         if (state.selectedSJ?.uuid === action.payload.uuid) state.selectedSJ = action.payload
+      })
+      .addCase(updateSuratJalan.rejected, (state, action) => {
+        state.error = action.payload as string
       })
       .addCase(deliverSuratJalan.fulfilled, (state, action) => {
         state.list = updateSJInList(state.list, action.payload)

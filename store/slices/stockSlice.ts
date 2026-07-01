@@ -231,6 +231,7 @@ const stockSlice = createSlice({
         state.receipts = state.receipts.filter(r => r.uuid !== action.payload)
         state.modals.deleteConfirm = { open: false, type: null, uuid: null }
       })
+      .addCase(deleteStockReceipt.rejected, (state, action) => { state.error = action.payload as string })
       .addCase(fetchStockDisbursements.pending, state => { state.isLoading = true })
       .addCase(fetchStockDisbursements.fulfilled, (state, action) => { state.isLoading = false; state.disbursements = action.payload })
       .addCase(fetchStockDisbursements.rejected, (state, action) => { state.isLoading = false; state.error = action.payload as string })
@@ -263,6 +264,7 @@ const stockSlice = createSlice({
         state.disbursements = state.disbursements.filter(d => d.uuid !== action.payload)
         state.modals.deleteConfirm = { open: false, type: null, uuid: null }
       })
+      .addCase(deleteStockDisbursement.rejected, (state, action) => { state.error = action.payload as string })
       .addCase(fetchCustomerStockSummaries.pending, state => { state.isLoading = true })
       .addCase(fetchCustomerStockSummaries.fulfilled, (state, action) => {
         state.isLoading = false

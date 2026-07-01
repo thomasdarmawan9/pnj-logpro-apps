@@ -41,13 +41,21 @@ export default function UserManagementPage() {
 
   const handleToggleStatus = async (user: SystemUser) => {
     if (isSelf(user)) return
-    await dispatch(toggleUserStatus(user.uuid))
-    pushToast({ title: `User ${user.is_active ? 'dinonaktifkan' : 'diaktifkan'}`, variant: 'success' })
+    const result = await dispatch(toggleUserStatus(user.uuid))
+    if (toggleUserStatus.fulfilled.match(result)) {
+      pushToast({ title: `User ${user.is_active ? 'dinonaktifkan' : 'diaktifkan'}`, variant: 'success' })
+      return
+    }
+    pushToast({ title: 'Gagal mengubah status user', description: (result.payload as string) || 'Status user tidak dapat diubah.', variant: 'error' })
   }
 
   const handleUnlock = async (user: SystemUser) => {
-    await dispatch(unlockUser(user.uuid))
-    pushToast({ title: 'Akun dibuka kuncinya', variant: 'success' })
+    const result = await dispatch(unlockUser(user.uuid))
+    if (unlockUser.fulfilled.match(result)) {
+      pushToast({ title: 'Akun dibuka kuncinya', variant: 'success' })
+      return
+    }
+    pushToast({ title: 'Gagal membuka kunci akun', description: (result.payload as string) || 'Akun tidak dapat dibuka kuncinya.', variant: 'error' })
   }
 
   const initials = (name: string) => name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()

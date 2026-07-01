@@ -60,7 +60,11 @@ export default function DriverListPage() {
         ? await update(modal.data.uuid, data as Partial<Driver>)
         : await create(data)
       if ((action as { meta?: { requestStatus?: string } }).meta?.requestStatus === 'rejected') {
-        pushToast({ title: 'Gagal menyimpan data supir', variant: 'error' })
+        pushToast({
+          title: 'Gagal menyimpan data supir',
+          description: (action as { payload?: string }).payload || 'Data supir tidak dapat disimpan.',
+          variant: 'error',
+        })
         return
       }
 
@@ -85,7 +89,15 @@ export default function DriverListPage() {
   }
 
   const handleToggle = async (driver: Driver) => {
-    await toggle(driver.uuid)
+    const action = await toggle(driver.uuid)
+    if ((action as { meta?: { requestStatus?: string } }).meta?.requestStatus === 'rejected') {
+      pushToast({
+        title: 'Gagal mengubah status supir',
+        description: (action as { payload?: string }).payload || 'Status supir tidak dapat diubah.',
+        variant: 'error',
+      })
+      return
+    }
     pushToast({ title: `Supir ${driver.status === 'active' ? 'dinonaktifkan' : 'diaktifkan'}`, variant: 'success' })
   }
 

@@ -75,7 +75,11 @@ export default function FleetListPage() {
         ? await update(modal.data.uuid, data as Partial<Fleet>)
         : await create(data)
       if ((action as { meta?: { requestStatus?: string } }).meta?.requestStatus === 'rejected') {
-        pushToast({ title: 'Gagal menyimpan armada', variant: 'error' })
+        pushToast({
+          title: 'Gagal menyimpan armada',
+          description: (action as { payload?: string }).payload || 'Armada tidak dapat disimpan.',
+          variant: 'error',
+        })
         return
       }
 
@@ -100,7 +104,15 @@ export default function FleetListPage() {
   }
 
   const handleToggle = async (fleet: Fleet) => {
-    await toggle(fleet.uuid)
+    const action = await toggle(fleet.uuid)
+    if ((action as { meta?: { requestStatus?: string } }).meta?.requestStatus === 'rejected') {
+      pushToast({
+        title: 'Gagal mengubah status armada',
+        description: (action as { payload?: string }).payload || 'Status armada tidak dapat diubah.',
+        variant: 'error',
+      })
+      return
+    }
     pushToast({ title: `Armada ${fleet.status === 'active' ? 'dinonaktifkan' : 'diaktifkan'}`, variant: 'success' })
   }
 
