@@ -40,6 +40,7 @@ export default function InvoiceTableRow({ invoice, checked, onToggle, onAction, 
   const effectiveServiceType = resolveEffectiveInvoiceServiceType(invoice.service_type, invoice.custom_service_name)
   const itemSummary = buildInvoiceItemSummary(invoice)
   const canAttachSJ = effectiveServiceType !== 'rental'
+  const isEligibleForBulkPayment = invoice.status === InvoiceStatus.SENT || invoice.status === InvoiceStatus.OUTSTANDING
   const isReadOnly = role === 'admin_finance'
   const canRecordPayment = role === 'super_admin' || role === 'admin_finance'
   const serviceTypeLabel = effectiveServiceType === 'rental' && invoice.service_type !== 'other'
@@ -100,7 +101,14 @@ export default function InvoiceTableRow({ invoice, checked, onToggle, onAction, 
   return (
     <tr className="border-t hover:bg-gray-50/50 transition-colors" style={{ borderColor: 'var(--border-card)', ...rowStyle }}>
       <td className="px-3 py-2.5">
-        <input type="checkbox" checked={checked} onChange={() => onToggle(invoice.uuid)} className="rounded" />
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={() => onToggle(invoice.uuid)}
+          disabled={!isEligibleForBulkPayment}
+          className="rounded disabled:opacity-30 disabled:cursor-not-allowed"
+          title={isEligibleForBulkPayment ? undefined : 'Hanya invoice Terbit/Outstanding yang bisa dipilih'}
+        />
       </td>
       <td className="px-3 py-2.5">
         <button
