@@ -280,9 +280,6 @@ const suratJalanSlice = createSlice({
         if (state.selectedSJ?.uuid === action.payload.uuid) state.selectedSJ = action.payload
         state.isAssignModalOpen = false
       })
-      .addCase(assignSuratJalan.rejected, (state, action) => {
-        state.error = action.payload as string
-      })
       .addCase(createSuratJalan.fulfilled, (state, action) => {
         state.list = [action.payload, ...state.list]
         state.pagination.total += 1
@@ -302,23 +299,14 @@ const suratJalanSlice = createSlice({
         if (state.selectedSJ?.uuid === action.payload.uuid) state.selectedSJ = action.payload
         state.isUploadPODModalOpen = false
       })
-      .addCase(deliverSuratJalan.rejected, (state, action) => {
-        state.error = action.payload as string
-      })
       .addCase(voidSuratJalan.fulfilled, (state, action) => {
         state.list = updateSJInList(state.list, action.payload)
         if (state.selectedSJ?.uuid === action.payload.uuid) state.selectedSJ = action.payload
         state.isVoidModalOpen = false
       })
-      .addCase(voidSuratJalan.rejected, (state, action) => {
-        state.error = action.payload as string
-      })
       .addCase(deleteSuratJalan.fulfilled, (state, action) => {
         state.list = state.list.filter(sj => sj.uuid !== action.payload)
         state.pagination.total = Math.max(0, state.pagination.total - 1)
-      })
-      .addCase(deleteSuratJalan.rejected, (state, action) => {
-        state.error = action.payload as string
       })
       .addCase(fetchAvailableInvoices.pending, state => { state.isLoadingInvoices = true })
       .addCase(fetchAvailableInvoices.fulfilled, (state, action) => {
