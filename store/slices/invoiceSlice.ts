@@ -270,10 +270,16 @@ const invoiceSlice = createSlice({
         state.isSubmitting = false
         state.error = action.payload as string
       })
+      .addCase(sendInvoice.pending, state => { state.isSubmitting = true })
       .addCase(sendInvoice.fulfilled, (state, action) => {
+        state.isSubmitting = false
         state.list = updateInvoiceInList(state.list, action.payload)
         if (state.selectedInvoice?.uuid === action.payload.uuid) state.selectedInvoice = action.payload
         state.modals.sendInvoice = false
+      })
+      .addCase(sendInvoice.rejected, (state, action) => {
+        state.isSubmitting = false
+        state.error = action.payload as string
       })
       .addCase(recordPayment.pending, state => { state.isSubmitting = true })
       .addCase(recordPayment.fulfilled, (state, action) => {
@@ -286,10 +292,16 @@ const invoiceSlice = createSlice({
         state.isSubmitting = false
         state.error = action.payload as string
       })
+      .addCase(voidInvoice.pending, state => { state.isSubmitting = true })
       .addCase(voidInvoice.fulfilled, (state, action) => {
+        state.isSubmitting = false
         state.list = updateInvoiceInList(state.list, action.payload)
         if (state.selectedInvoice?.uuid === action.payload.uuid) state.selectedInvoice = action.payload
         state.modals.voidInvoice = false
+      })
+      .addCase(voidInvoice.rejected, (state, action) => {
+        state.isSubmitting = false
+        state.error = action.payload as string
       })
       .addCase(attachSJ.fulfilled, (state, action) => {
         state.list = updateInvoiceInList(state.list, action.payload)

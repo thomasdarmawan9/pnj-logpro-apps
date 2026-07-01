@@ -243,18 +243,28 @@ export default function InvoiceListPage() {
         open={modals.sendInvoice}
         invoice={currentInvoice}
         onClose={() => dispatch(closeSendInvoiceModal())}
-        onConfirm={() => {
+        onConfirm={async () => {
           if (!currentInvoice) return
-          dispatch(sendInvoice(currentInvoice.uuid)).then(() => pushToast({ title: 'Invoice Dikirim', description: `Invoice #${currentInvoice.invoice_number} sudah dikirim.`, variant: 'success' }))
+          const result = await dispatch(sendInvoice(currentInvoice.uuid))
+          if (sendInvoice.fulfilled.match(result)) {
+            pushToast({ title: 'Invoice Dikirim', description: `Invoice #${currentInvoice.invoice_number} sudah dikirim.`, variant: 'success' })
+            return
+          }
+          pushToast({ title: 'Gagal mengirim invoice', description: (result.payload as string) || 'Invoice tidak dapat dikirim.', variant: 'error' })
         }}
       />
       <VoidInvoiceModal
         open={modals.voidInvoice}
         invoice={currentInvoice}
         onClose={() => dispatch(closeVoidInvoiceModal())}
-        onConfirm={reason => {
+        onConfirm={async reason => {
           if (!currentInvoice) return
-          dispatch(voidInvoice({ uuid: currentInvoice.uuid, reason })).then(() => pushToast({ title: 'Invoice Void', description: `Invoice #${currentInvoice.invoice_number} telah dibatalkan.`, variant: 'info' }))
+          const result = await dispatch(voidInvoice({ uuid: currentInvoice.uuid, reason }))
+          if (voidInvoice.fulfilled.match(result)) {
+            pushToast({ title: 'Invoice Void', description: `Invoice #${currentInvoice.invoice_number} telah dibatalkan.`, variant: 'info' })
+            return
+          }
+          pushToast({ title: 'Gagal void invoice', description: (result.payload as string) || 'Invoice tidak dapat dibatalkan.', variant: 'error' })
         }}
       />
       <RecordPaymentModal
