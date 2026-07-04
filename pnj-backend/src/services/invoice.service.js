@@ -942,7 +942,7 @@ async function update(uuid, payload, actor) {
     const isDpOnly = payloadKeys.every(k => k === 'down_payment')
     const isLampiranOnly = payloadKeys.every(k => k === 'lampiran_paths')
     const isSentBillingOnly = invoice.status === STATUS.SENT &&
-      payloadKeys.every(k => ['payment_method', 'bank_account_id', 'down_payment', 'items', 'delivery_pricing_mode', 'origin', 'destination', 'cargo_description', 'manual_sj_numbers', 'delivery_date', 'lampiran_paths', 'tax_percent', 'pph_percent', 'insurance_amount'].includes(k))
+      payloadKeys.every(k => ['due_date', 'payment_method', 'bank_account_id', 'down_payment', 'items', 'delivery_pricing_mode', 'origin', 'destination', 'cargo_description', 'manual_sj_numbers', 'delivery_date', 'lampiran_paths', 'tax_percent', 'pph_percent', 'insurance_amount'].includes(k))
 
     if (invoice.status === STATUS.VOID) {
       throw new ForbiddenError('Invoice void tidak dapat diedit.')
@@ -955,6 +955,15 @@ async function update(uuid, payload, actor) {
     const passthrough = ['invoice_date', 'due_date', 'notes', 'payment_method', 'origin', 'destination', 'cargo_description']
     for (const k of passthrough) {
       if (k in payload) updates[k] = payload[k]
+    }
+
+    // Joi hanya cek due_date >= invoice_date kalau keduanya dikirim bersamaan;
+    // saat edit hanya due_date, bandingkan dengan invoice_date tersimpan.
+    if (updates.due_date) {
+      const baseInvoiceDate = updates.invoice_date ?? invoice.invoice_date
+      if (baseInvoiceDate && new Date(updates.due_date) < new Date(baseInvoiceDate)) {
+        throw new BadRequestError('Tanggal jatuh tempo tidak boleh lebih kecil dari tanggal invoice.')
+      }
     }
 
     // Nomor SJ manual — hanya relevan untuk jasa non-rental (sama seperti saat create).

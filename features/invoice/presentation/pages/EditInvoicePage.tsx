@@ -335,6 +335,15 @@ export default function EditInvoicePage({ uuid }: Props) {
   }
 
   const handleSave = async () => {
+    // Jatuh tempo tidak boleh sebelum tanggal invoice (format YYYY-MM-DD,
+    // aman dibandingkan sebagai string).
+    if (canEditPaymentSetup && invoice?.invoice_date && dueDate && dueDate < invoice.invoice_date) {
+      const message = 'Tanggal jatuh tempo tidak boleh sebelum tanggal invoice'
+      setErrors({ due_date: message })
+      pushToast({ title: 'Tanggal tidak valid', description: message, variant: 'error' })
+      return
+    }
+
     // DP payload — selalu disertakan (kalau berubah dari current).
     // null = clear DP, object = upsert.
     const dpPayload = downPayment === null ? null : { ...downPayment }
@@ -488,6 +497,7 @@ export default function EditInvoicePage({ uuid }: Props) {
     } else {
       dto = canEditPaymentSetup
         ? {
+            due_date: dueDate,
             payment_method: paymentMethod,
             bank_account_id: paymentMethod === 'transfer' ? bankAccountId : null,
             origin: isDeliveryLikeInvoice ? routeOrigin || null : null,
@@ -560,7 +570,7 @@ export default function EditInvoicePage({ uuid }: Props) {
             {fullEditable
               ? 'Anda sedang mengedit invoice draft. Perubahan belum disimpan.'
               : canEditPaymentSetup
-                ? 'Invoice terbit bisa mengubah metode pembayaran, DP, rincian item, serta PPN/PPh/Asuransi.'
+                ? 'Invoice terbit bisa mengubah tanggal jatuh tempo, metode pembayaran, DP, rincian item, serta PPN/PPh/Asuransi.'
                 : 'Invoice sudah berjalan. Hanya DP/Uang Muka yang bisa diedit. Item & pajak terkunci.'
             }
           </div>
@@ -610,7 +620,8 @@ export default function EditInvoicePage({ uuid }: Props) {
               )}
               <div>
                 <label className="text-xs font-medium text-gray-600 block mb-1">Tanggal Jatuh Tempo *</label>
-                <input type="date" className="form-input w-full disabled:bg-gray-50 disabled:text-gray-500" value={dueDate} onChange={e => setDueDate(e.target.value)} disabled={!fullEditable} />
+                <input type="date" className="form-input w-full disabled:bg-gray-50 disabled:text-gray-500" value={dueDate} min={invoice?.invoice_date} onChange={e => setDueDate(e.target.value)} disabled={!canEditPaymentSetup} />
+                {errors.due_date && <p className="text-xs text-red-500 mt-1">{errors.due_date}</p>}
                 {isDueDatePast && <p className="text-xs text-amber-600 mt-1">⚠ Tanggal jatuh tempo sudah terlewat</p>}
               </div>
               {isDeliveryLikeInvoice && (
