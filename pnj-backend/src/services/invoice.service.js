@@ -936,16 +936,20 @@ async function update(uuid, payload, actor) {
     })
     if (!invoice) throw new NotFoundError('Invoice tidak ditemukan.')
 
+    // Status awal (sebelum mutasi) — dipakai untuk gating settlement_date.
+    const wasPaid = invoice.status === STATUS.PAID
+
     // Edit policy:
     //   - draft: edit penuh
     //   - sent/terbit: metode pembayaran/rekening + DP + rincian item
     //   - outstanding/paid: hanya DP dan lampiran
     //   - void: hanya tanggal invoice (invoice_date)
-    // invoice_date (tanggal pembuatan) boleh diubah di SEMUA status, termasuk void.
-    // Karena itu dikeluarkan dari pengecekan policy per-status; nonDateKeys yang
-    // menentukan apakah sisa payload diizinkan untuk status invoice ini.
+    // invoice_date (tanggal pembuatan, semua status) & settlement_date (tanggal
+    // pelunasan, hanya invoice lunas) ditangani terpisah — keluarkan dari
+    // pengecekan policy per-status; nonDateKeys yang menentukan apakah sisa
+    // payload diizinkan untuk status invoice ini.
     const payloadKeys = Object.keys(payload)
-    const nonDateKeys = payloadKeys.filter(k => k !== 'invoice_date')
+    const nonDateKeys = payloadKeys.filter(k => k !== 'invoice_date' && k !== 'settlement_date')
     const isDpOnly = nonDateKeys.every(k => k === 'down_payment')
     const isLampiranOnly = nonDateKeys.every(k => k === 'lampiran_paths')
     const isSentBillingOnly = invoice.status === STATUS.SENT &&
@@ -1093,6 +1097,34 @@ async function update(uuid, payload, actor) {
       // Refetch invoice untuk dapat total_amount yang baru.
       await invoice.reload({ transaction: t })
       await upsertDownPayment(invoice, payload.down_payment, actor, t)
+    }
+
+    // Tanggal pelunasan — hanya untuk invoice yang (sejak awal) lunas. Ubah
+    // payment_date pembayaran pelunas, yaitu payment dengan tanggal TERBARU
+    // (reguler + DP) — konsisten dengan getSettlementDate() di frontend.
+    // Dijalankan paling akhir supaya tidak ditimpa upsert DP.
+    if ('settlement_date' in payload) {
+      if (!wasPaid) {
+        throw new BadRequestError('Tanggal pelunasan hanya bisa diubah untuk invoice yang sudah lunas.')
+      }
+      const newDate = payload.settlement_date
+      const toYmd = (d) => (d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10))
+      if (toYmd(newDate) < toYmd(invoice.invoice_date)) {
+        throw new BadRequestError('Tanggal pelunasan tidak boleh sebelum tanggal invoice.')
+      }
+      const payments = await Payment.findAll({ where: { invoice_id: invoice.id }, transaction: t })
+      if (payments.length === 0) {
+        throw new BadRequestError('Tidak ada pembayaran yang bisa diubah tanggal pelunasannya.')
+      }
+      // Pembayaran pelunas = payment_date terbaru (tie → id terbesar/paling akhir).
+      const settling = payments.reduce((latest, p) => {
+        const a = toYmd(p.payment_date)
+        const b = toYmd(latest.payment_date)
+        if (a > b) return p
+        if (a === b && p.id > latest.id) return p
+        return latest
+      }, payments[0])
+      await settling.update({ payment_date: newDate }, { transaction: t })
     }
 
     const fresh = await repo.findByUuid(invoice.uuid, { transaction: t })

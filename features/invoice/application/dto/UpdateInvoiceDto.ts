@@ -3,6 +3,8 @@ import { CreateInvoiceItemDto, CreateDownPaymentDto } from './CreateInvoiceDto'
 export interface UpdateInvoiceDto {
   invoice_date?: string
   due_date?: string
+  /** Tanggal pelunasan (hanya invoice lunas) — mengubah payment_date pembayaran pelunas. */
+  settlement_date?: string
   delivery_date?: string | null
   delivery_pricing_mode?: 'shipment' | 'item'
   payment_method?: 'transfer' | 'cash' | 'check'

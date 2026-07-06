@@ -6,6 +6,7 @@ import { Eye, Pencil, Send, Printer, AlertTriangle, DollarSign, Paperclip, MoreH
 import { Invoice, InvoiceStatus } from '../../domain/entities/Invoice'
 import { resolveEffectiveInvoiceServiceType } from '../../domain/services/invoiceServiceType'
 import { buildInvoiceItemSummary } from '../utils/itemSummary'
+import { getSettlementDate } from '../utils/settlementDate'
 import InvoiceStatusBadge from './InvoiceStatusBadge'
 
 function formatRupiah(amount: number): string {
@@ -22,13 +23,6 @@ function daysOverdue(due: string): number {
   return Math.floor((now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24))
 }
 
-function getSettlementDate(invoice: Invoice): string | null {
-  if (invoice.status !== InvoiceStatus.PAID) return null
-  const dates = invoice.payments.map(p => p.payment_date)
-  if (invoice.down_payment) dates.push(invoice.down_payment.payment_date)
-  if (dates.length === 0) return null
-  return dates.reduce((latest, d) => (d > latest ? d : latest))
-}
 
 interface Props {
   invoice: Invoice

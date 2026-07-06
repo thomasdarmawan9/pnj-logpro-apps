@@ -13,6 +13,7 @@ import { useToast } from '@/components/toast/useToast'
 import { DeliveryPricingMode, InvoiceStatus } from '../../domain/entities/Invoice'
 import { validateUpdateInvoice } from '../../application/validators/InvoiceValidator'
 import { resolveEffectiveInvoiceServiceType } from '../../domain/services/invoiceServiceType'
+import { getSettlementDate } from '../utils/settlementDate'
 import useInvoiceDetail from '../hooks/useInvoiceDetail'
 import { useInvoiceItems } from '../hooks/useInvoiceItems'
 import InvoiceItemRow from '../components/InvoiceItemRow'
@@ -43,6 +44,7 @@ export default function EditInvoicePage({ uuid }: Props) {
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [invoiceDate, setInvoiceDate] = useState('')
   const [dueDate, setDueDate] = useState('')
+  const [settlementDate, setSettlementDate] = useState('')
   const [notes, setNotes] = useState('')
   const [taxPercent, setTaxPercent] = useState(0)
   const [taxEnabled, setTaxEnabled] = useState(false)
@@ -78,6 +80,7 @@ export default function EditInvoicePage({ uuid }: Props) {
   // Invoice VOID: hanya tanggal invoice yang bisa diubah (field lain terkunci).
   const isDraft = invoice?.status === InvoiceStatus.DRAFT
   const isVoid = invoice?.status === InvoiceStatus.VOID
+  const isPaid = invoice?.status === InvoiceStatus.PAID
   const fullEditable = isDraft
   const canEditPaymentSetup = isDraft || invoice?.status === InvoiceStatus.SENT
   const canEditItems = isDraft || invoice?.status === InvoiceStatus.SENT
@@ -88,6 +91,7 @@ export default function EditInvoicePage({ uuid }: Props) {
     if (invoice) {
       setInvoiceDate(invoice.invoice_date)
       setDueDate(invoice.due_date)
+      setSettlementDate(getSettlementDate(invoice) ?? '')
       setNotes(invoice.notes ?? '')
       setPaymentMethod(invoice.payment_method ?? 'transfer')
       setBankAccountId(invoice.bank_account_id ?? null)
@@ -354,6 +358,23 @@ export default function EditInvoicePage({ uuid }: Props) {
       return
     }
 
+    // Tanggal pelunasan (hanya untuk invoice lunas): wajib terisi & tidak boleh
+    // sebelum tanggal invoice.
+    if (isPaid) {
+      if (!settlementDate) {
+        const message = 'Tanggal pelunasan wajib diisi'
+        setErrors({ settlement_date: message })
+        pushToast({ title: 'Tanggal tidak valid', description: message, variant: 'error' })
+        return
+      }
+      if (settlementDate < invoiceDate) {
+        const message = 'Tanggal pelunasan tidak boleh sebelum tanggal invoice'
+        setErrors({ settlement_date: message })
+        pushToast({ title: 'Tanggal tidak valid', description: message, variant: 'error' })
+        return
+      }
+    }
+
     // Invoice VOID: satu-satunya perubahan yang diizinkan adalah tanggal invoice.
     // Kirim payload minimal supaya backend tidak menolak (dan tidak menyentuh DP/item).
     if (isVoid) {
@@ -538,7 +559,7 @@ export default function EditInvoicePage({ uuid }: Props) {
             insurance_amount: insuranceEnabled ? insuranceAmount : 0,
             down_payment: dpPayload,
           }
-        : { invoice_date: invoiceDate, down_payment: dpPayload }
+        : { invoice_date: invoiceDate, down_payment: dpPayload, ...(isPaid ? { settlement_date: settlementDate } : {}) }
 
       const result = validateUpdateInvoice(dto as Parameters<typeof validateUpdateInvoice>[0], invoice?.service_type, invoice?.custom_service_name)
       setErrors(result.errors)
@@ -667,6 +688,23 @@ export default function EditInvoicePage({ uuid }: Props) {
                 <input type="date" className="form-input w-full disabled:bg-gray-50 disabled:text-gray-500" value={dueDate} min={invoiceDate || invoice?.invoice_date} onChange={e => setDueDate(e.target.value)} disabled={!canEditPaymentSetup} />
                 {errors.due_date && <p className="text-xs text-red-500 mt-1">{errors.due_date}</p>}
                 {isDueDatePast && <p className="text-xs text-amber-600 mt-1">⚠ Tanggal jatuh tempo sudah terlewat</p>}
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600 block mb-1">Tanggal Pelunasan{isPaid ? ' *' : ''}</label>
+                <input
+                  type="date"
+                  className="form-input w-full disabled:bg-gray-50 disabled:text-gray-500"
+                  value={settlementDate}
+                  min={invoiceDate || invoice?.invoice_date}
+                  onChange={e => setSettlementDate(e.target.value)}
+                  disabled={!isPaid}
+                />
+                {errors.settlement_date && <p className="text-xs text-red-500 mt-1">{errors.settlement_date}</p>}
+                <p className="text-xs text-gray-400 mt-1">
+                  {isPaid
+                    ? 'Tanggal invoice dinyatakan lunas (tanggal pembayaran pelunas). Mengubahnya akan memperbarui tanggal pembayaran terakhir.'
+                    : 'Terisi otomatis saat invoice lunas.'}
+                </p>
               </div>
               {isDeliveryLikeInvoice && (
                 <div>
