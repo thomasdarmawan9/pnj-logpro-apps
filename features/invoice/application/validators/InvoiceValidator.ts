@@ -113,6 +113,9 @@ export function validateCreateInvoice(dto: CreateInvoiceDto): ValidationResult {
 export function validateUpdateInvoice(dto: UpdateInvoiceDto, serviceType?: 'delivery' | 'rental' | 'other', customServiceName?: string | null): ValidationResult {
   const errors: Record<string, string> = {}
 
+  if (dto.invoice_date !== undefined && !dto.invoice_date) {
+    errors.invoice_date = 'Tanggal invoice wajib diisi'
+  }
   if (dto.due_date !== undefined && !dto.due_date) {
     errors.due_date = 'Tanggal jatuh tempo wajib diisi'
   }
