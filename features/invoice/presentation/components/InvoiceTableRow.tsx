@@ -209,8 +209,8 @@ export default function InvoiceTableRow({ invoice, checked, onToggle, onAction, 
               )}
               {!isReadOnly && (invoice.status === InvoiceStatus.OUTSTANDING || invoice.status === InvoiceStatus.PAID) && role === 'super_admin' && (
                 <ActionMenuItem
-                  icon={<Wallet size={14}/>}
-                  label="Edit DP / Uang Muka"
+                  icon={invoice.status === InvoiceStatus.PAID ? <Pencil size={14}/> : <Wallet size={14}/>}
+                  label={invoice.status === InvoiceStatus.PAID ? 'Edit Invoice' : 'Edit DP / Uang Muka'}
                   onClick={() => { setMenuOpen(false); onAction('edit', invoice.uuid) }}
                 />
               )}

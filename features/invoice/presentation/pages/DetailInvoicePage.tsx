@@ -398,7 +398,8 @@ export default function DetailInvoicePage({ uuid }: Props) {
               )}
               {canEditDownPayment && (invoice.status === InvoiceStatus.OUTSTANDING || invoice.status === InvoiceStatus.PAID) && (
                 <button onClick={() => router.push(`/invoice/${uuid}/edit`)} className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm border" style={{ borderColor: 'var(--border-card)' }}>
-                  <Wallet size={14} />Edit DP / Uang Muka
+                  {invoice.status === InvoiceStatus.PAID ? <Pencil size={14} /> : <Wallet size={14} />}
+                  {invoice.status === InvoiceStatus.PAID ? 'Edit Invoice' : 'Edit DP / Uang Muka'}
                 </button>
               )}
               {(invoice.status === InvoiceStatus.SENT || invoice.status === InvoiceStatus.OUTSTANDING) && (
