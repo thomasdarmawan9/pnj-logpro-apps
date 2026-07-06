@@ -937,17 +937,23 @@ async function update(uuid, payload, actor) {
     //   - draft: edit penuh
     //   - sent/terbit: metode pembayaran/rekening + DP + rincian item
     //   - outstanding/paid: hanya DP dan lampiran
-    //   - void: tidak bisa diedit
+    //   - void: hanya tanggal invoice (invoice_date)
+    // invoice_date (tanggal pembuatan) boleh diubah di SEMUA status, termasuk void.
+    // Karena itu dikeluarkan dari pengecekan policy per-status; nonDateKeys yang
+    // menentukan apakah sisa payload diizinkan untuk status invoice ini.
     const payloadKeys = Object.keys(payload)
-    const isDpOnly = payloadKeys.every(k => k === 'down_payment')
-    const isLampiranOnly = payloadKeys.every(k => k === 'lampiran_paths')
+    const nonDateKeys = payloadKeys.filter(k => k !== 'invoice_date')
+    const isDpOnly = nonDateKeys.every(k => k === 'down_payment')
+    const isLampiranOnly = nonDateKeys.every(k => k === 'lampiran_paths')
     const isSentBillingOnly = invoice.status === STATUS.SENT &&
-      payloadKeys.every(k => ['due_date', 'payment_method', 'bank_account_id', 'down_payment', 'items', 'delivery_pricing_mode', 'origin', 'destination', 'cargo_description', 'manual_sj_numbers', 'delivery_date', 'lampiran_paths', 'tax_percent', 'pph_percent', 'insurance_amount'].includes(k))
+      nonDateKeys.every(k => ['due_date', 'payment_method', 'bank_account_id', 'down_payment', 'items', 'delivery_pricing_mode', 'origin', 'destination', 'cargo_description', 'manual_sj_numbers', 'delivery_date', 'lampiran_paths', 'tax_percent', 'pph_percent', 'insurance_amount'].includes(k))
 
     if (invoice.status === STATUS.VOID) {
-      throw new ForbiddenError('Invoice void tidak dapat diedit.')
-    }
-    if (!isDpOnly && !isLampiranOnly && invoice.status !== STATUS.DRAFT && !isSentBillingOnly) {
+      // Void: satu-satunya perubahan yang diizinkan adalah tanggal invoice.
+      if (nonDateKeys.length > 0) {
+        throw new ForbiddenError('Invoice void hanya dapat mengubah tanggal invoice.')
+      }
+    } else if (!isDpOnly && !isLampiranOnly && invoice.status !== STATUS.DRAFT && !isSentBillingOnly) {
       throw new ForbiddenError(`Invoice status ${invoice.status} tidak dapat diedit untuk field yang dikirim.`)
     }
 
@@ -963,6 +969,15 @@ async function update(uuid, payload, actor) {
       const baseInvoiceDate = updates.invoice_date ?? invoice.invoice_date
       if (baseInvoiceDate && new Date(updates.due_date) < new Date(baseInvoiceDate)) {
         throw new BadRequestError('Tanggal jatuh tempo tidak boleh lebih kecil dari tanggal invoice.')
+      }
+    }
+
+    // Sebaliknya: saat hanya invoice_date yang diubah (mis. invoice paid/void),
+    // due_date tidak dikirim sehingga Joi tidak membandingkannya — cek di sini
+    // terhadap due_date tersimpan.
+    if (updates.invoice_date && !updates.due_date) {
+      if (invoice.due_date && new Date(updates.invoice_date) > new Date(invoice.due_date)) {
+        throw new BadRequestError('Tanggal invoice tidak boleh setelah tanggal jatuh tempo.')
       }
     }
 
