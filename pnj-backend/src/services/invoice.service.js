@@ -40,7 +40,10 @@ const ALLOWED_TRANSITIONS = {
   [STATUS.DRAFT]:       [STATUS.SENT, STATUS.OUTSTANDING, STATUS.VOID],
   [STATUS.SENT]:        [STATUS.OUTSTANDING, STATUS.VOID],
   [STATUS.OUTSTANDING]: [STATUS.PAID, STATUS.VOID],
-  [STATUS.PAID]:        [STATUS.SENT],
+  // paid → sent TIDAK ditaruh di sini secara sengaja: pembatalan status lunas
+  // hanya boleh lewat revertToUnpaid() (yang menghapus pembayaran reguler &
+  // recompute paid_amount), bukan lewat endpoint send() generik.
+  [STATUS.PAID]:        [],
   [STATUS.VOID]:        [],
 }
 
@@ -1181,9 +1184,6 @@ async function revertToUnpaid(uuid, payload, actor) {
     if (!invoice) throw new NotFoundError('Invoice tidak ditemukan.')
     if (invoice.status !== STATUS.PAID) {
       throw new ConflictError(`Hanya invoice lunas yang bisa dibatalkan status lunasnya (status sekarang: ${invoice.status}).`)
-    }
-    if (!canTransition(invoice.status, STATUS.SENT)) {
-      throw new ConflictError(`Tidak bisa mengembalikan status dari ${invoice.status}.`)
     }
 
     const allPayments = await Payment.findAll({
