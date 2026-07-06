@@ -433,9 +433,16 @@ export default function DetailInvoicePage({ uuid }: Props) {
                 </>
               )}
               {invoice.status === InvoiceStatus.VOID && (
-                <button onClick={() => dispatch(openGeneratePDFModal())} className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm border" style={{ borderColor: 'var(--border-card)' }}>
-                  <Printer size={14} />Cetak PDF
-                </button>
+                <>
+                  {role === 'super_admin' && (
+                    <button onClick={() => router.push(`/invoice/${uuid}/edit`)} className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm border" style={{ borderColor: 'var(--border-card)' }}>
+                      <Pencil size={14} />Edit Tanggal Invoice
+                    </button>
+                  )}
+                  <button onClick={() => dispatch(openGeneratePDFModal())} className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm border" style={{ borderColor: 'var(--border-card)' }}>
+                    <Printer size={14} />Cetak PDF
+                  </button>
+                </>
               )}
               {canManage && role === 'super_admin' && (
                 <button onClick={() => dispatch(openVoidInvoiceModal())} className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm border text-red-600" style={{ borderColor: '#FCA5A5' }}>

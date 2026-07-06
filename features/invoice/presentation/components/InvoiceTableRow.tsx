@@ -213,6 +213,13 @@ export default function InvoiceTableRow({ invoice, checked, onToggle, onAction, 
                   onClick={() => { setMenuOpen(false); onAction('edit', invoice.uuid) }}
                 />
               )}
+              {!isReadOnly && invoice.status === InvoiceStatus.VOID && role === 'super_admin' && (
+                <ActionMenuItem
+                  icon={<Pencil size={14}/>}
+                  label="Edit Tanggal Invoice"
+                  onClick={() => { setMenuOpen(false); onAction('edit', invoice.uuid) }}
+                />
+              )}
               <ActionMenuItem icon={<Printer size={14}/>} label="Cetak PDF" onClick={() => { setMenuOpen(false); onAction('print', invoice.uuid) }} />
               {(invoice.status !== InvoiceStatus.PAID && invoice.status !== InvoiceStatus.VOID) && role === 'super_admin' && (
                 <ActionMenuItem icon={<AlertTriangle size={14}/>} label="Void Invoice" danger onClick={() => { setMenuOpen(false); onAction('void', invoice.uuid) }} />

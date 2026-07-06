@@ -601,7 +601,7 @@ export default function EditInvoicePage({ uuid }: Props) {
                 ? 'Anda sedang mengedit invoice draft. Perubahan belum disimpan.'
                 : canEditPaymentSetup
                   ? 'Invoice terbit bisa mengubah tanggal jatuh tempo, metode pembayaran, DP, rincian item, serta PPN/PPh/Asuransi.'
-                  : 'Invoice sudah berjalan. Hanya DP/Uang Muka yang bisa diedit. Item & pajak terkunci.'
+                  : 'Invoice sudah berjalan. Hanya tanggal invoice dan DP/Uang Muka yang bisa diedit. Item & pajak terkunci.'
             }
           </div>
         </div>
