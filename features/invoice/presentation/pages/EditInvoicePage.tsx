@@ -75,8 +75,9 @@ export default function EditInvoicePage({ uuid }: Props) {
   const drivers = useSelector((state: RootState) => state.master.drivers)
   // Draft bisa edit penuh. Invoice Terbit bisa edit metode pembayaran + DP.
   // Outstanding/paid hanya boleh edit DP. Void tidak bisa di-edit.
-  // Invoice VOID tidak bisa di-edit sama sekali.
+  // Invoice VOID: hanya tanggal invoice yang bisa diubah (field lain terkunci).
   const isDraft = invoice?.status === InvoiceStatus.DRAFT
+  const isVoid = invoice?.status === InvoiceStatus.VOID
   const fullEditable = isDraft
   const canEditPaymentSetup = isDraft || invoice?.status === InvoiceStatus.SENT
   const canEditItems = isDraft || invoice?.status === InvoiceStatus.SENT
@@ -85,11 +86,6 @@ export default function EditInvoicePage({ uuid }: Props) {
 
   useEffect(() => {
     if (invoice) {
-      if (invoice.status === InvoiceStatus.VOID) {
-        pushToast({ title: 'Tidak dapat diedit', description: 'Invoice void tidak dapat di-edit.', variant: 'error' })
-        router.replace(`/invoice/${uuid}`)
-        return
-      }
       setInvoiceDate(invoice.invoice_date)
       setDueDate(invoice.due_date)
       setNotes(invoice.notes ?? '')
@@ -337,20 +333,38 @@ export default function EditInvoicePage({ uuid }: Props) {
   }
 
   const handleSave = async () => {
-    // Tanggal invoice (tanggal pembuatan) wajib diisi saat edit penuh (draft).
-    if (fullEditable && !invoiceDate) {
+    // Tanggal invoice (tanggal pembuatan) wajib diisi di semua status.
+    if (!invoiceDate) {
       const message = 'Tanggal invoice wajib diisi'
       setErrors({ invoice_date: message })
       pushToast({ title: 'Tanggal tidak valid', description: message, variant: 'error' })
       return
     }
 
-    // Jatuh tempo tidak boleh sebelum tanggal invoice (format YYYY-MM-DD,
-    // aman dibandingkan sebagai string).
-    if (canEditPaymentSetup && invoiceDate && dueDate && dueDate < invoiceDate) {
-      const message = 'Tanggal jatuh tempo tidak boleh sebelum tanggal invoice'
-      setErrors({ due_date: message })
+    // Konsistensi tanggal: invoice tidak boleh lebih baru dari jatuh tempo
+    // (format YYYY-MM-DD, aman dibandingkan sebagai string). Saat jatuh tempo
+    // masih bisa diedit (draft/terbit) arahkan error ke field jatuh tempo,
+    // selain itu arahkan ke field tanggal invoice yang sedang diubah.
+    if (invoiceDate && dueDate && dueDate < invoiceDate) {
+      const message = canEditPaymentSetup
+        ? 'Tanggal jatuh tempo tidak boleh sebelum tanggal invoice'
+        : 'Tanggal invoice tidak boleh setelah tanggal jatuh tempo'
+      setErrors(canEditPaymentSetup ? { due_date: message } : { invoice_date: message })
       pushToast({ title: 'Tanggal tidak valid', description: message, variant: 'error' })
+      return
+    }
+
+    // Invoice VOID: satu-satunya perubahan yang diizinkan adalah tanggal invoice.
+    // Kirim payload minimal supaya backend tidak menolak (dan tidak menyentuh DP/item).
+    if (isVoid) {
+      const voidDto = { invoice_date: invoiceDate }
+      const action = await dispatch(updateInvoice({ uuid, dto: voidDto as Parameters<typeof validateUpdateInvoice>[0] }))
+      if (updateInvoice.fulfilled.match(action)) {
+        pushToast({ title: 'Invoice Disimpan', description: `Tanggal invoice #${invoice?.invoice_number} berhasil diperbarui.`, variant: 'success' })
+        router.push(`/invoice/${uuid}`)
+      } else if (updateInvoice.rejected.match(action)) {
+        pushToast({ title: 'Gagal Menyimpan', description: action.payload as string ?? 'Terjadi kesalahan. Coba lagi.', variant: 'error' })
+      }
       return
     }
 
@@ -508,6 +522,7 @@ export default function EditInvoicePage({ uuid }: Props) {
     } else {
       dto = canEditPaymentSetup
         ? {
+            invoice_date: invoiceDate,
             due_date: dueDate,
             payment_method: paymentMethod,
             bank_account_id: paymentMethod === 'transfer' ? bankAccountId : null,
@@ -523,7 +538,7 @@ export default function EditInvoicePage({ uuid }: Props) {
             insurance_amount: insuranceEnabled ? insuranceAmount : 0,
             down_payment: dpPayload,
           }
-        : { down_payment: dpPayload }
+        : { invoice_date: invoiceDate, down_payment: dpPayload }
 
       const result = validateUpdateInvoice(dto as Parameters<typeof validateUpdateInvoice>[0], invoice?.service_type, invoice?.custom_service_name)
       setErrors(result.errors)
@@ -570,19 +585,23 @@ export default function EditInvoicePage({ uuid }: Props) {
         <Pencil size={16} style={{ color: fullEditable ? '#D97706' : '#0369A1' }} />
         <div>
           <div className="text-sm font-semibold" style={{ color: fullEditable ? '#92400E' : '#0C4A6E' }}>
-            {fullEditable
-              ? `Mode Edit Penuh — Invoice #${invoice?.invoice_number}`
-              : canEditPaymentSetup
-                ? `Mode Edit Invoice Terbit — Invoice #${invoice?.invoice_number}`
-                : `Mode Edit DP — Invoice #${invoice?.invoice_number}`
+            {isVoid
+              ? `Mode Ubah Tanggal Invoice (Void) — Invoice #${invoice?.invoice_number}`
+              : fullEditable
+                ? `Mode Edit Penuh — Invoice #${invoice?.invoice_number}`
+                : canEditPaymentSetup
+                  ? `Mode Edit Invoice Terbit — Invoice #${invoice?.invoice_number}`
+                  : `Mode Edit DP — Invoice #${invoice?.invoice_number}`
             }
           </div>
           <div className="text-xs" style={{ color: fullEditable ? '#B45309' : '#075985' }}>
-            {fullEditable
-              ? 'Anda sedang mengedit invoice draft. Perubahan belum disimpan.'
-              : canEditPaymentSetup
-                ? 'Invoice terbit bisa mengubah tanggal jatuh tempo, metode pembayaran, DP, rincian item, serta PPN/PPh/Asuransi.'
-                : 'Invoice sudah berjalan. Hanya DP/Uang Muka yang bisa diedit. Item & pajak terkunci.'
+            {isVoid
+              ? 'Invoice sudah void. Hanya tanggal invoice yang bisa diubah; field lain terkunci.'
+              : fullEditable
+                ? 'Anda sedang mengedit invoice draft. Perubahan belum disimpan.'
+                : canEditPaymentSetup
+                  ? 'Invoice terbit bisa mengubah tanggal jatuh tempo, metode pembayaran, DP, rincian item, serta PPN/PPh/Asuransi.'
+                  : 'Invoice sudah berjalan. Hanya DP/Uang Muka yang bisa diedit. Item & pajak terkunci.'
             }
           </div>
         </div>
@@ -617,20 +636,17 @@ export default function EditInvoicePage({ uuid }: Props) {
                 <p className="text-xs text-amber-600 mt-1">Jenis jasa tidak dapat diedit. Jika salah pilih, void invoice lalu buat invoice baru.</p>
               </div>
               <div>
-                <label className="text-xs font-medium text-gray-600 block mb-1">Tanggal Invoice{fullEditable ? ' *' : ''}</label>
+                <label className="text-xs font-medium text-gray-600 block mb-1">Tanggal Invoice *</label>
                 <input
                   type="date"
-                  className="form-input w-full disabled:bg-gray-50 disabled:text-gray-500"
+                  className="form-input w-full"
                   value={invoiceDate}
                   max={dueDate || undefined}
                   onChange={e => setInvoiceDate(e.target.value)}
-                  disabled={!fullEditable}
                 />
                 {errors.invoice_date && <p className="text-xs text-red-500 mt-1">{errors.invoice_date}</p>}
                 <p className="text-xs text-gray-400 mt-1">
-                  {fullEditable
-                    ? 'Tanggal pembuatan invoice. Otomatis terisi saat invoice dibuat, bisa diubah di sini.'
-                    : 'Tanggal pembuatan invoice tidak dapat diubah setelah invoice terbit.'}
+                  Tanggal pembuatan invoice. Otomatis terisi saat invoice dibuat, dan bisa diubah kapan saja di semua status{isVoid ? ' (termasuk void)' : ''}.
                 </p>
               </div>
               {isDeliveryLikeInvoice && (
@@ -917,15 +933,20 @@ export default function EditInvoicePage({ uuid }: Props) {
             )}
           </div>
 
-          {/* Down Payment (Uang Muka) — bisa diedit di semua status non-void */}
-          <DownPaymentForm
-            totalAmount={canEditPaymentSetup ? nettoAmount : (invoice?.total_amount ?? 0)}
-            initialValue={dpInitialValue}
-            onChange={setDownPayment}
-            defaultDate={invoice?.invoice_date}
-            paymentMethod={paymentMethod}
-          />
-          {errors.down_payment && <p className="text-xs text-red-500 -mt-2">{errors.down_payment}</p>}
+          {/* Down Payment (Uang Muka) — bisa diedit di semua status non-void.
+              Untuk invoice void, DP dikunci (hanya tanggal invoice yang bisa diubah). */}
+          {!isVoid && (
+            <>
+              <DownPaymentForm
+                totalAmount={canEditPaymentSetup ? nettoAmount : (invoice?.total_amount ?? 0)}
+                initialValue={dpInitialValue}
+                onChange={setDownPayment}
+                defaultDate={invoice?.invoice_date}
+                paymentMethod={paymentMethod}
+              />
+              {errors.down_payment && <p className="text-xs text-red-500 -mt-2">{errors.down_payment}</p>}
+            </>
+          )}
 
           {/* Lampiran */}
           {fullEditable && <div className="bg-white rounded-xl border p-6" style={{ borderColor: 'var(--border-card)' }}>
