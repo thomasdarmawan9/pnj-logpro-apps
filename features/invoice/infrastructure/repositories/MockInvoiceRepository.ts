@@ -338,6 +338,14 @@ export class MockInvoiceRepository implements IInvoiceRepository {
     return normalizeInvoice(response.data)
   }
 
+  async revertPayment(uuid: string, reason: string): Promise<Invoice> {
+    const response = await apiRequest<ApiInvoice>(`/invoices/${uuid}/revert-payment`, {
+      method: 'PATCH',
+      body: { reason },
+    })
+    return normalizeInvoice(response.data)
+  }
+
   async attachSJ(invoiceUuid: string, sjUuids: string[]): Promise<Invoice> {
     const response = await apiRequest<ApiInvoice>(`/invoices/${invoiceUuid}/attach-sj`, {
       method: 'POST',

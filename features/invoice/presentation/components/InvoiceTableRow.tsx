@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { Eye, Pencil, Send, Printer, AlertTriangle, DollarSign, Paperclip, MoreHorizontal, Wallet } from 'lucide-react'
+import { Eye, Pencil, Send, Printer, AlertTriangle, DollarSign, Paperclip, MoreHorizontal, Wallet, RotateCcw } from 'lucide-react'
 import { Invoice, InvoiceStatus } from '../../domain/entities/Invoice'
 import { resolveEffectiveInvoiceServiceType } from '../../domain/services/invoiceServiceType'
 import { buildInvoiceItemSummary } from '../utils/itemSummary'
@@ -206,11 +206,25 @@ export default function InvoiceTableRow({ invoice, checked, onToggle, onAction, 
                   {!isReadOnly && canAttachSJ && <ActionMenuItem icon={<Paperclip size={14}/>} label="Kelola SJ Terlampir" onClick={() => { setMenuOpen(false); onAction('attach-sj', invoice.uuid) }} />}
                 </>
               )}
-              {!isReadOnly && invoice.status !== InvoiceStatus.DRAFT && invoice.status !== InvoiceStatus.VOID && role === 'super_admin' && (
+              {!isReadOnly && invoice.status === InvoiceStatus.SENT && (role === 'super_admin' || role === 'admin_finance') && (
                 <ActionMenuItem
-                  icon={invoice.status === InvoiceStatus.SENT ? <Pencil size={14}/> : <Wallet size={14}/>}
-                  label={invoice.status === InvoiceStatus.SENT ? 'Edit Invoice' : 'Edit DP / Uang Muka'}
+                  icon={<Pencil size={14}/>}
+                  label="Edit Invoice"
                   onClick={() => { setMenuOpen(false); onAction('edit', invoice.uuid) }}
+                />
+              )}
+              {!isReadOnly && (invoice.status === InvoiceStatus.OUTSTANDING || invoice.status === InvoiceStatus.PAID) && role === 'super_admin' && (
+                <ActionMenuItem
+                  icon={<Wallet size={14}/>}
+                  label="Edit DP / Uang Muka"
+                  onClick={() => { setMenuOpen(false); onAction('edit', invoice.uuid) }}
+                />
+              )}
+              {!isReadOnly && invoice.status === InvoiceStatus.PAID && (role === 'super_admin' || role === 'admin_finance') && (
+                <ActionMenuItem
+                  icon={<RotateCcw size={14}/>}
+                  label="Batalkan Status Lunas"
+                  onClick={() => { setMenuOpen(false); onAction('revert-payment', invoice.uuid) }}
                 />
               )}
               {!isReadOnly && invoice.status === InvoiceStatus.VOID && role === 'super_admin' && (

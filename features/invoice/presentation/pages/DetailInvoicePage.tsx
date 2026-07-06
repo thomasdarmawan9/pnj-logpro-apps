@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useDispatch, useSelector } from 'react-redux'
-import { ArrowLeft, Printer, DollarSign, Paperclip, Pencil, Send, AlertTriangle, FileText, Wallet, Truck, UserRound } from 'lucide-react'
+import { ArrowLeft, Printer, DollarSign, Paperclip, Pencil, Send, AlertTriangle, FileText, Wallet, Truck, UserRound, RotateCcw } from 'lucide-react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { AppDispatch, RootState } from '@/store'
 import {
@@ -12,8 +12,9 @@ import {
   openRecordPaymentModal, closeRecordPaymentModal,
   openSendInvoiceModal, closeSendInvoiceModal,
   openVoidInvoiceModal, closeVoidInvoiceModal,
+  openRevertPaymentModal, closeRevertPaymentModal,
   openGeneratePDFModal, closeGeneratePDFModal,
-  fetchAttachableSJ, sendInvoice, voidInvoice, attachSJ, detachSJ, updateInvoice,
+  fetchAttachableSJ, sendInvoice, voidInvoice, revertInvoicePayment, attachSJ, detachSJ, updateInvoice,
 } from '@/store/slices/invoiceSlice'
 import { InvoiceStatus } from '../../domain/entities/Invoice'
 import { resolveEffectiveInvoiceServiceType } from '../../domain/services/invoiceServiceType'
@@ -26,6 +27,7 @@ import AttachedSJList from '../components/AttachedSJList'
 import PaymentHistoryList from '../components/PaymentHistoryList'
 import SendInvoiceModal from '../components/modals/SendInvoiceModal'
 import VoidInvoiceModal from '../components/modals/VoidInvoiceModal'
+import RevertPaymentModal from '../components/modals/RevertPaymentModal'
 import RecordPaymentModal from '../components/modals/RecordPaymentModal'
 import AttachSJModal from '../components/modals/AttachSJModal'
 import DetachSJConfirmModal from '../components/modals/DetachSJConfirmModal'
@@ -389,10 +391,14 @@ export default function DetailInvoicePage({ uuid }: Props) {
                   </button>
                 </>
               )}
-              {canEditDownPayment && invoice.status !== InvoiceStatus.DRAFT && (
+              {invoice.status === InvoiceStatus.SENT && (role === 'super_admin' || role === 'admin_finance') && (
                 <button onClick={() => router.push(`/invoice/${uuid}/edit`)} className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm border" style={{ borderColor: 'var(--border-card)' }}>
-                  {invoice.status === InvoiceStatus.SENT ? <Pencil size={14} /> : <Wallet size={14} />}
-                  {invoice.status === InvoiceStatus.SENT ? 'Edit Invoice' : 'Edit DP / Uang Muka'}
+                  <Pencil size={14} />Edit Invoice
+                </button>
+              )}
+              {canEditDownPayment && (invoice.status === InvoiceStatus.OUTSTANDING || invoice.status === InvoiceStatus.PAID) && (
+                <button onClick={() => router.push(`/invoice/${uuid}/edit`)} className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm border" style={{ borderColor: 'var(--border-card)' }}>
+                  <Wallet size={14} />Edit DP / Uang Muka
                 </button>
               )}
               {(invoice.status === InvoiceStatus.SENT || invoice.status === InvoiceStatus.OUTSTANDING) && (
@@ -424,6 +430,11 @@ export default function DetailInvoicePage({ uuid }: Props) {
               )}
               {invoice.status === InvoiceStatus.PAID && (
                 <>
+                  {(role === 'super_admin' || role === 'admin_finance') && (
+                    <button onClick={() => dispatch(openRevertPaymentModal())} className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm border text-amber-700" style={{ borderColor: '#FDE68A' }}>
+                      <RotateCcw size={14} />Batalkan Status Lunas
+                    </button>
+                  )}
                   <button onClick={() => dispatch(openGeneratePDFModal())} className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: 'var(--green-primary)' }}>
                     <Printer size={14} />Cetak PDF
                   </button>
@@ -502,6 +513,19 @@ export default function DetailInvoicePage({ uuid }: Props) {
             return
           }
           pushToast({ title: 'Gagal void invoice', description: (result.payload as string) || 'Invoice tidak dapat dibatalkan.', variant: 'error' })
+        }}
+      />
+      <RevertPaymentModal
+        open={modals.revertPayment}
+        invoice={invoice}
+        onClose={() => dispatch(closeRevertPaymentModal())}
+        onConfirm={async reason => {
+          const result = await dispatch(revertInvoicePayment({ uuid, reason }))
+          if (revertInvoicePayment.fulfilled.match(result)) {
+            pushToast({ title: 'Status Lunas Dibatalkan', description: 'Invoice kembali ke status terbit dan bisa diedit.', variant: 'success' })
+            return
+          }
+          pushToast({ title: 'Gagal membatalkan status lunas', description: (result.payload as string) || 'Invoice tidak dapat diubah.', variant: 'error' })
         }}
       />
       <RecordPaymentModal

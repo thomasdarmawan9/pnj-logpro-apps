@@ -22,6 +22,7 @@ interface InvoiceState {
     recordPayment: boolean
     sendInvoice: boolean
     voidInvoice: boolean
+    revertPayment: boolean
     generatePDF: boolean
   }
   pdfJob: {
@@ -62,6 +63,7 @@ const initialState: InvoiceState = {
     recordPayment: false,
     sendInvoice: false,
     voidInvoice: false,
+    revertPayment: false,
     generatePDF: false,
   },
   pdfJob: { status: 'idle', fileUrl: null },
@@ -147,6 +149,17 @@ export const voidInvoice = createAsyncThunk(
   }
 )
 
+export const revertInvoicePayment = createAsyncThunk(
+  'invoice/revertPayment',
+  async ({ uuid, reason }: { uuid: string; reason: string }, { rejectWithValue }) => {
+    try {
+      return await invoiceRepository.revertPayment(uuid, reason)
+    } catch (e) {
+      return rejectWithValue(e instanceof Error ? e.message : 'Gagal membatalkan status lunas')
+    }
+  }
+)
+
 export const attachSJ = createAsyncThunk(
   'invoice/attachSJ',
   async ({ invoiceUuid, sjUuids }: { invoiceUuid: string; sjUuids: string[] }, { rejectWithValue }) => {
@@ -217,6 +230,8 @@ const invoiceSlice = createSlice({
     closeSendInvoiceModal(state) { state.modals.sendInvoice = false },
     openVoidInvoiceModal(state) { state.modals.voidInvoice = true },
     closeVoidInvoiceModal(state) { state.modals.voidInvoice = false },
+    openRevertPaymentModal(state) { state.modals.revertPayment = true },
+    closeRevertPaymentModal(state) { state.modals.revertPayment = false },
     openGeneratePDFModal(state) { state.modals.generatePDF = true },
     closeGeneratePDFModal(state) {
       state.modals.generatePDF = false
@@ -300,6 +315,16 @@ const invoiceSlice = createSlice({
       .addCase(voidInvoice.rejected, state => {
         state.isSubmitting = false
       })
+      .addCase(revertInvoicePayment.pending, state => { state.isSubmitting = true })
+      .addCase(revertInvoicePayment.fulfilled, (state, action) => {
+        state.isSubmitting = false
+        state.list = updateInvoiceInList(state.list, action.payload)
+        if (state.selectedInvoice?.uuid === action.payload.uuid) state.selectedInvoice = action.payload
+        state.modals.revertPayment = false
+      })
+      .addCase(revertInvoicePayment.rejected, state => {
+        state.isSubmitting = false
+      })
       .addCase(attachSJ.fulfilled, (state, action) => {
         state.list = updateInvoiceInList(state.list, action.payload)
         if (state.selectedInvoice?.uuid === action.payload.uuid) state.selectedInvoice = action.payload
@@ -327,6 +352,7 @@ export const {
   openRecordPaymentModal, closeRecordPaymentModal,
   openSendInvoiceModal, closeSendInvoiceModal,
   openVoidInvoiceModal, closeVoidInvoiceModal,
+  openRevertPaymentModal, closeRevertPaymentModal,
   openGeneratePDFModal, closeGeneratePDFModal,
   setPdfJob, clearSelectedInvoice, clearError,
 } = invoiceSlice.actions

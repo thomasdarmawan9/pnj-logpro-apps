@@ -40,7 +40,7 @@ const ALLOWED_TRANSITIONS = {
   [STATUS.DRAFT]:       [STATUS.SENT, STATUS.OUTSTANDING, STATUS.VOID],
   [STATUS.SENT]:        [STATUS.OUTSTANDING, STATUS.VOID],
   [STATUS.OUTSTANDING]: [STATUS.PAID, STATUS.VOID],
-  [STATUS.PAID]:        [],
+  [STATUS.PAID]:        [STATUS.SENT],
   [STATUS.VOID]:        [],
 }
 
@@ -1170,6 +1170,50 @@ async function voidInvoice(uuid, payload, actor) {
   })
 }
 
+/**
+ * Batalkan status lunas — kembalikan invoice PAID ke SENT (terbit) supaya bisa
+ * diedit lagi. Hapus semua pembayaran REGULER (non-DP); DP dipertahankan.
+ * paid_amount dihitung ulang = total DP tersisa (0 kalau tak ada DP).
+ */
+async function revertToUnpaid(uuid, payload, actor) {
+  return sequelize.transaction(async (t) => {
+    const invoice = await Invoice.findOne({ where: { uuid }, transaction: t, lock: t.LOCK.UPDATE })
+    if (!invoice) throw new NotFoundError('Invoice tidak ditemukan.')
+    if (invoice.status !== STATUS.PAID) {
+      throw new ConflictError(`Hanya invoice lunas yang bisa dibatalkan status lunasnya (status sekarang: ${invoice.status}).`)
+    }
+    if (!canTransition(invoice.status, STATUS.SENT)) {
+      throw new ConflictError(`Tidak bisa mengembalikan status dari ${invoice.status}.`)
+    }
+
+    const allPayments = await Payment.findAll({
+      where: { invoice_id: invoice.id },
+      transaction: t,
+    })
+    // DP = payment dengan is_down_payment === true (sama seperti decorate()).
+    const regularIds = allPayments.filter(p => p.is_down_payment !== true).map(p => p.id)
+    if (regularIds.length > 0) {
+      await Payment.destroy({ where: { id: regularIds }, transaction: t })
+    }
+    const dpTotal = round2(
+      allPayments
+        .filter(p => p.is_down_payment === true)
+        .reduce((s, p) => s + Number(p.amount || 0), 0),
+    )
+
+    await invoice.update({
+      status:      STATUS.SENT,
+      paid_amount: dpTotal,
+      // Invoice yang pernah lunas pasti sudah terbit; jaga-jaga jika sent_at
+      // belum terisi (mis. jalur draft→outstanding→paid).
+      sent_at:     invoice.sent_at || new Date(),
+    }, { transaction: t })
+
+    const fresh = await repo.findByUuid(invoice.uuid, { transaction: t })
+    return decorate(fresh)
+  })
+}
+
 // ── PAYMENT ───────────────────────────────────────────────────────────────
 async function recordPayment(invoiceUuid, payload, actor) {
   return sequelize.transaction(async (t) => {
@@ -1445,6 +1489,7 @@ module.exports = {
   send,
   markOutstanding,
   voidInvoice,
+  revertToUnpaid,
   recordPayment,
   attachSJ,
   detachSJ,

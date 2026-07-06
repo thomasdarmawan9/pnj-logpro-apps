@@ -23,6 +23,7 @@ export const ACTION_BADGE_CONFIG: Record<string, { label: string; color: string 
   send_invoice:   { label: 'Kirim Invoice',     color: 'purple' },
   mark_outstanding: { label: 'Tandai Outstanding', color: 'amber' },
   record_payment: { label: 'Catat Bayar',       color: 'green'  },
+  revert_invoice_payment: { label: 'Batalkan Lunas', color: 'red' },
   void_invoice:   { label: 'Void Invoice',      color: 'red'    },
   attach_sj:      { label: 'Lampirkan SJ',      color: 'teal'   },
   detach_sj:      { label: 'Lepas SJ',          color: 'amber'  },

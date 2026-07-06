@@ -19,6 +19,7 @@ export interface IInvoiceRepository {
   send(uuid: string): Promise<Invoice>
   recordPayment(uuid: string, dto: RecordPaymentDto): Promise<Invoice>
   void(uuid: string, reason: string): Promise<Invoice>
+  revertPayment(uuid: string, reason: string): Promise<Invoice>
   attachSJ(invoiceUuid: string, sjUuids: string[]): Promise<Invoice>
   detachSJ(invoiceUuid: string, sjUuid: string): Promise<Invoice>
   getAttachableSJ(projectCode: string): Promise<AttachedSJ[]>

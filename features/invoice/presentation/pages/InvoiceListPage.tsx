@@ -12,9 +12,10 @@ import {
   openRecordPaymentModal, closeRecordPaymentModal,
   openSendInvoiceModal, closeSendInvoiceModal,
   openVoidInvoiceModal, closeVoidInvoiceModal,
+  openRevertPaymentModal, closeRevertPaymentModal,
   openGeneratePDFModal, closeGeneratePDFModal,
   fetchInvoiceDetail, fetchAttachableSJ, fetchInvoiceList,
-  sendInvoice, voidInvoice, attachSJ, detachSJ,
+  sendInvoice, voidInvoice, revertInvoicePayment, attachSJ, detachSJ,
 } from '@/store/slices/invoiceSlice'
 import { Invoice, InvoiceStatus } from '../../domain/entities/Invoice'
 import useInvoiceList from '../hooks/useInvoiceList'
@@ -24,6 +25,7 @@ import InvoiceFilterBar from '../components/InvoiceFilterBar'
 import InvoiceTableRow from '../components/InvoiceTableRow'
 import SendInvoiceModal from '../components/modals/SendInvoiceModal'
 import VoidInvoiceModal from '../components/modals/VoidInvoiceModal'
+import RevertPaymentModal from '../components/modals/RevertPaymentModal'
 import RecordPaymentModal from '../components/modals/RecordPaymentModal'
 import BulkRecordPaymentModal from '../components/modals/BulkRecordPaymentModal'
 import AttachSJModal from '../components/modals/AttachSJModal'
@@ -112,6 +114,11 @@ export default function InvoiceListPage() {
       setActiveUuid(uuid)
       await dispatch(fetchInvoiceDetail(uuid))
       dispatch(openVoidInvoiceModal())
+    }
+    if (action === 'revert-payment') {
+      setActiveUuid(uuid)
+      await dispatch(fetchInvoiceDetail(uuid))
+      dispatch(openRevertPaymentModal())
     }
     if (action === 'attach-sj') {
       setActiveUuid(uuid)
@@ -304,6 +311,20 @@ export default function InvoiceListPage() {
             return
           }
           pushToast({ title: 'Gagal void invoice', description: (result.payload as string) || 'Invoice tidak dapat dibatalkan.', variant: 'error' })
+        }}
+      />
+      <RevertPaymentModal
+        open={modals.revertPayment}
+        invoice={currentInvoice}
+        onClose={() => dispatch(closeRevertPaymentModal())}
+        onConfirm={async reason => {
+          if (!currentInvoice) return
+          const result = await dispatch(revertInvoicePayment({ uuid: currentInvoice.uuid, reason }))
+          if (revertInvoicePayment.fulfilled.match(result)) {
+            pushToast({ title: 'Status Lunas Dibatalkan', description: `Invoice #${currentInvoice.invoice_number} kembali ke status terbit.`, variant: 'success' })
+            return
+          }
+          pushToast({ title: 'Gagal membatalkan status lunas', description: (result.payload as string) || 'Invoice tidak dapat diubah.', variant: 'error' })
         }}
       />
       <RecordPaymentModal

@@ -11,6 +11,7 @@ const {
   createInvoiceSchema,
   updateInvoiceSchema,
   recordPaymentSchema,
+  revertPaymentSchema,
   voidInvoiceSchema,
   attachSJSchema,
   detachSJParamSchema,
@@ -82,6 +83,14 @@ router.post('/:uuid/payments',
   validate(recordPaymentSchema),
   logActivity('record_payment', 'invoice'),
   controller.recordPayment,
+)
+
+router.patch('/:uuid/revert-payment',
+  isFinanceOrAbove,
+  validate(uuidParam, 'params'),
+  validate(revertPaymentSchema),
+  logActivity('revert_invoice_payment', 'invoice'),
+  controller.revertPayment,
 )
 
 router.patch('/:uuid/void',

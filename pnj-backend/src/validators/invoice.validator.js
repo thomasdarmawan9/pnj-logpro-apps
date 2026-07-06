@@ -214,6 +214,13 @@ const voidInvoiceSchema = Joi.object({
   }),
 })
 
+const revertPaymentSchema = Joi.object({
+  reason: Joi.string().trim().min(5).max(500).required().messages({
+    'string.min':   'Alasan pembatalan status lunas minimal 5 karakter.',
+    'any.required': 'Alasan pembatalan status lunas wajib diisi.',
+  }),
+})
+
 const attachSJSchema = Joi.object({
   sj_uuids: Joi.array()
     .items(Joi.string().uuid({ version: ['uuidv4'] }))
@@ -257,6 +264,7 @@ module.exports = {
   createInvoiceSchema,
   updateInvoiceSchema,
   recordPaymentSchema,
+  revertPaymentSchema,
   voidInvoiceSchema,
   attachSJSchema,
   detachSJParamSchema,

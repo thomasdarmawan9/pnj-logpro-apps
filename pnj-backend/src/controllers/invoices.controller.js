@@ -53,6 +53,12 @@ const voidInvoice = asyncHandler(async (req, res) => {
   res.json(success(data, 'Invoice berhasil di-void.'))
 })
 
+const revertPayment = asyncHandler(async (req, res) => {
+  const data = await service.revertToUnpaid(req.params.uuid, req.body, req.user)
+  // Sertakan reason di response supaya terekam sebagai new_data di activity log.
+  res.json(success({ ...data, revert_reason: req.body.reason }, 'Status lunas berhasil dibatalkan. Invoice kembali ke status terbit.'))
+})
+
 const attachSJ = asyncHandler(async (req, res) => {
   const data = await service.attachSJ(req.params.uuid, req.body.sj_uuids, req.user)
   res.json(success(data, 'SJ berhasil di-attach ke invoice.'))
@@ -125,6 +131,7 @@ module.exports = {
   markOutstanding,
   recordPayment,
   voidInvoice,
+  revertPayment,
   attachSJ,
   detachSJ,
   attachableSJ,

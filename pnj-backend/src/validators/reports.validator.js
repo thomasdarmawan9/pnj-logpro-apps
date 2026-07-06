@@ -58,7 +58,7 @@ const AUDIT_ACTIONS = [
   'create_sj', 'update_sj', 'assign_sj', 'deliver_sj', 'void_sj',
   // Invoice
   'create_invoice', 'update_invoice', 'send_invoice', 'mark_outstanding',
-  'record_payment', 'void_invoice', 'attach_sj', 'detach_sj',
+  'record_payment', 'revert_invoice_payment', 'void_invoice', 'attach_sj', 'detach_sj',
   // PDF (cross-cutting)
   'generate_pdf',
   // Stock
