@@ -98,7 +98,7 @@ export default function DetailInvoicePage({ uuid }: Props) {
 
   const canManage = invoice.status !== InvoiceStatus.PAID && invoice.status !== InvoiceStatus.VOID
   const canEditDownPayment = invoice.status !== InvoiceStatus.VOID &&
-    role === 'super_admin'
+    (role === 'super_admin' || role === 'admin_finance')
   const effectiveInvoiceServiceType = resolveEffectiveInvoiceServiceType(invoice.service_type, invoice.custom_service_name)
   const isRentalInvoice = effectiveInvoiceServiceType === 'rental'
   // Kaitkan/lepas SJ: hanya super_admin & admin_finance, invoice non-rental & belum final.
@@ -446,7 +446,7 @@ export default function DetailInvoicePage({ uuid }: Props) {
               )}
               {invoice.status === InvoiceStatus.VOID && (
                 <>
-                  {role === 'super_admin' && (
+                  {(role === 'super_admin' || role === 'admin_finance') && (
                     <button onClick={() => router.push(`/invoice/${uuid}/edit`)} className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm border" style={{ borderColor: 'var(--border-card)' }}>
                       <Pencil size={14} />Edit Tanggal Invoice
                     </button>
