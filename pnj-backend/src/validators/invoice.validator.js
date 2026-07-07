@@ -166,6 +166,8 @@ const updateInvoiceSchema = Joi.object({
   invoice_date:    Joi.date().iso(),
   due_date:        Joi.date().iso(),
   settlement_date: Joi.date().iso(),
+  // Ganti customer (hanya invoice tanpa proyek — divalidasi di service).
+  customer_id:     Joi.number().integer().min(1),
   delivery_date:   Joi.date().iso().allow(null),
   delivery_pricing_mode: Joi.string().valid(...DELIVERY_PRICING_MODES),
   payment_method:  Joi.string().valid('transfer', 'cash', 'check'),

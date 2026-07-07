@@ -3,6 +3,11 @@ import { CreateInvoiceItemDto, CreateDownPaymentDto } from './CreateInvoiceDto'
 export interface UpdateInvoiceDto {
   invoice_date?: string
   due_date?: string
+  /**
+   * Ganti customer — hanya untuk invoice tanpa proyek. Bila invoice punya SJ
+   * terlampir, customer SJ ikut diubah di backend. Diizinkan di semua status.
+   */
+  customer_id?: number
   /** Tanggal pelunasan (hanya invoice lunas) — mengubah payment_date pembayaran pelunas. */
   settlement_date?: string
   delivery_date?: string | null

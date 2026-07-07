@@ -948,8 +948,11 @@ async function update(uuid, payload, actor) {
     // pelunasan, hanya invoice lunas) ditangani terpisah — keluarkan dari
     // pengecekan policy per-status; nonDateKeys yang menentukan apakah sisa
     // payload diizinkan untuk status invoice ini.
+    // customer_id (ganti customer) diizinkan di semua status seperti invoice_date,
+    // sehingga tidak ikut membatasi editabilitas field lain per-status. Guard
+    // proyek & cascade SJ ditangani di bawah.
     const payloadKeys = Object.keys(payload)
-    const nonDateKeys = payloadKeys.filter(k => k !== 'invoice_date' && k !== 'settlement_date')
+    const nonDateKeys = payloadKeys.filter(k => k !== 'invoice_date' && k !== 'settlement_date' && k !== 'customer_id')
     const isDpOnly = nonDateKeys.every(k => k === 'down_payment')
     const isLampiranOnly = nonDateKeys.every(k => k === 'lampiran_paths')
     const isSentBillingOnly = invoice.status === STATUS.SENT &&
@@ -968,6 +971,25 @@ async function update(uuid, payload, actor) {
     const passthrough = ['invoice_date', 'due_date', 'notes', 'payment_method', 'origin', 'destination', 'cargo_description']
     for (const k of passthrough) {
       if (k in payload) updates[k] = payload[k]
+    }
+
+    // Ganti customer — hanya untuk invoice tanpa proyek (invoice berproyek
+    // customer-nya terikat ke proyek). Bila invoice punya SJ terlampir, customer
+    // SJ ikut diubah supaya konsisten. Diizinkan di semua status.
+    if ('customer_id' in payload && Number(payload.customer_id) !== Number(invoice.customer_id)) {
+      if (invoice.project_id) {
+        throw new ForbiddenError('Ganti customer tidak tersedia untuk invoice yang terkait proyek.')
+      }
+      const nextCustomer = await Customer.findOne({
+        where: { id: payload.customer_id }, transaction: t,
+      })
+      if (!nextCustomer) throw new NotFoundError('Customer tidak ditemukan.')
+      updates.customer_id = nextCustomer.id
+      // Cascade: samakan customer SJ terlampir dengan customer invoice yang baru.
+      await DeliveryOrder.update(
+        { customer_id: nextCustomer.id },
+        { where: { invoice_id: invoice.id }, transaction: t },
+      )
     }
 
     // Joi hanya cek due_date >= invoice_date kalau keduanya dikirim bersamaan;

@@ -1,13 +1,13 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useDispatch, useSelector } from 'react-redux'
-import { Plus, ArrowLeft, Pencil, Truck, KeyRound, Wrench, ArrowRightLeft } from 'lucide-react'
+import { Plus, ArrowLeft, Pencil, Truck, KeyRound, Wrench, ArrowRightLeft, Search, ChevronDown, Check } from 'lucide-react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { AppDispatch, RootState } from '@/store'
 import { updateInvoice } from '@/store/slices/invoiceSlice'
-import { fetchDrivers, fetchFleets } from '@/store/slices/masterSlice'
+import { fetchCustomers, fetchDrivers, fetchFleets } from '@/store/slices/masterSlice'
 import { fetchBankAccounts } from '@/store/slices/settingsSlice'
 import { useToast } from '@/components/toast/useToast'
 import { DeliveryPricingMode, InvoiceStatus } from '../../domain/entities/Invoice'
@@ -75,6 +75,13 @@ export default function EditInvoicePage({ uuid }: Props) {
   const bankAccounts = useSelector((state: RootState) => state.settings.bankAccounts).filter(b => b.is_active)
   const fleets = useSelector((state: RootState) => state.master.fleets)
   const drivers = useSelector((state: RootState) => state.master.drivers)
+  const customers = useSelector((state: RootState) => state.master.customers)
+  // Ganti customer — hanya untuk invoice tanpa proyek (customer invoice berproyek
+  // terikat ke proyek). customerId null = belum diubah (pakai customer invoice).
+  const [customerId, setCustomerId] = useState<number | null>(null)
+  const [customerSearch, setCustomerSearch] = useState('')
+  const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false)
+  const customerPickerRef = useRef<HTMLDivElement>(null)
   // Draft bisa edit penuh. Invoice Terbit bisa edit metode pembayaran + DP.
   // Outstanding/paid hanya boleh edit DP. Void tidak bisa di-edit.
   // Invoice VOID: hanya tanggal invoice yang bisa diubah (field lain terkunci).
@@ -101,6 +108,8 @@ export default function EditInvoicePage({ uuid }: Props) {
       setCargoDescription(invoice.cargo_description ?? '')
       setDeliveryDate(invoice.delivery_date ?? '')
       setManualSjNumbers(invoice.manual_sj_numbers ?? '')
+      setCustomerId(invoice.customer_id ?? invoice.customer.id ?? null)
+      setCustomerSearch(invoice.customer.name)
       setTaxPercent(invoice.tax_percent)
       setTaxEnabled(invoice.tax_percent > 0)
       setPphPercent(invoice.pph_percent > 0 ? invoice.pph_percent : 2)
@@ -216,7 +225,18 @@ export default function EditInvoicePage({ uuid }: Props) {
   useEffect(() => {
     if (!fleets.length) dispatch(fetchFleets())
     if (!drivers.length) dispatch(fetchDrivers())
-  }, [dispatch, fleets.length, drivers.length])
+    if (!customers.length) dispatch(fetchCustomers())
+  }, [dispatch, fleets.length, drivers.length, customers.length])
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!customerPickerRef.current?.contains(event.target as Node)) {
+        setCustomerDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   useEffect(() => {
     if (role !== null && role !== 'super_admin' && role !== 'admin_finance') {
@@ -226,6 +246,27 @@ export default function EditInvoicePage({ uuid }: Props) {
 
   const effectiveInvoiceServiceType = resolveEffectiveInvoiceServiceType(invoice?.service_type, invoice?.custom_service_name)
   const isDeliveryLikeInvoice = effectiveInvoiceServiceType !== 'rental'
+  // Customer bisa diganti hanya untuk invoice tanpa proyek (semua status).
+  const canEditCustomer = Boolean(invoice) && !invoice?.project
+  const selectedCustomer = useMemo(
+    () => customers.find(c => c.id === customerId) ?? null,
+    [customers, customerId],
+  )
+  const filteredCustomers = useMemo(() => {
+    const q = customerSearch.trim().toLowerCase()
+    if (!q || (selectedCustomer && customerSearch === selectedCustomer.name)) return customers
+    return customers.filter(customer =>
+      customer.name.toLowerCase().includes(q) ||
+      (customer.npwp || '').toLowerCase().includes(q) ||
+      (customer.address || '').toLowerCase().includes(q)
+    )
+  }, [customers, customerSearch, selectedCustomer])
+  const selectCustomer = (id: number) => {
+    const customer = customers.find(c => c.id === id) || null
+    setCustomerId(customer?.id ?? null)
+    setCustomerSearch(customer?.name ?? '')
+    setCustomerDropdownOpen(false)
+  }
   const serviceLabel = effectiveInvoiceServiceType === 'rental'
     ? 'Jasa Penyewaan'
     : invoice?.service_type === 'other'
@@ -375,10 +416,24 @@ export default function EditInvoicePage({ uuid }: Props) {
       }
     }
 
-    // Invoice VOID: satu-satunya perubahan yang diizinkan adalah tanggal invoice.
+    // Ganti customer (hanya invoice tanpa proyek, semua status). customerPatch
+    // hanya dikirim bila customer benar-benar berubah dari nilai awal invoice.
+    if (canEditCustomer && !customerId) {
+      const message = 'Pilih customer'
+      setErrors({ customer_id: message })
+      pushToast({ title: 'Customer belum dipilih', description: message, variant: 'error' })
+      return
+    }
+    const currentCustomerId = invoice?.customer_id ?? invoice?.customer.id ?? null
+    const customerPatch: { customer_id?: number } =
+      canEditCustomer && customerId && customerId !== currentCustomerId
+        ? { customer_id: customerId }
+        : {}
+
+    // Invoice VOID: hanya tanggal invoice (dan opsional ganti customer) yang diizinkan.
     // Kirim payload minimal supaya backend tidak menolak (dan tidak menyentuh DP/item).
     if (isVoid) {
-      const voidDto = { invoice_date: invoiceDate }
+      const voidDto = { invoice_date: invoiceDate, ...customerPatch }
       const action = await dispatch(updateInvoice({ uuid, dto: voidDto as Parameters<typeof validateUpdateInvoice>[0] }))
       if (updateInvoice.fulfilled.match(action)) {
         pushToast({ title: 'Invoice Disimpan', description: `Tanggal invoice #${invoice?.invoice_number} berhasil diperbarui.`, variant: 'success' })
@@ -533,6 +588,7 @@ export default function EditInvoicePage({ uuid }: Props) {
         lampiran_paths: lampiranPaths.length > 0 ? lampiranPaths : null,
         items: itemPayload,
         down_payment: dpPayload,
+        ...customerPatch,
       }
       const result = validateUpdateInvoice(dto as Parameters<typeof validateUpdateInvoice>[0], invoice?.service_type, invoice?.custom_service_name)
       setErrors(result.errors)
@@ -558,8 +614,9 @@ export default function EditInvoicePage({ uuid }: Props) {
             pph_percent: pphEnabled ? pphPercent : 0,
             insurance_amount: insuranceEnabled ? insuranceAmount : 0,
             down_payment: dpPayload,
+            ...customerPatch,
           }
-        : { invoice_date: invoiceDate, down_payment: dpPayload, ...(isPaid ? { settlement_date: settlementDate } : {}) }
+        : { invoice_date: invoiceDate, down_payment: dpPayload, ...(isPaid ? { settlement_date: settlementDate } : {}), ...customerPatch }
 
       const result = validateUpdateInvoice(dto as Parameters<typeof validateUpdateInvoice>[0], invoice?.service_type, invoice?.custom_service_name)
       setErrors(result.errors)
@@ -641,8 +698,72 @@ export default function EditInvoicePage({ uuid }: Props) {
                 <div className="form-input bg-gray-50 text-gray-500">{invoice?.project ? `${invoice.project.code} — ${invoice.project.name}` : 'Tanpa proyek'}</div>
               </div>
               <div>
-                <label className="text-xs font-medium text-gray-600 block mb-1">Customer</label>
-                <div className="form-input bg-gray-50 text-gray-500">{invoice?.customer.name}</div>
+                <label className="text-xs font-medium text-gray-600 block mb-1">Customer{canEditCustomer ? ' *' : ''}</label>
+                {canEditCustomer ? (
+                  <>
+                    <div ref={customerPickerRef} className="relative">
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+                          <Search size={15} />
+                        </span>
+                        <input
+                          className="form-input w-full"
+                          style={{ paddingLeft: 42, paddingRight: 40 }}
+                          value={customerSearch}
+                          placeholder="Ketik nama customer..."
+                          onFocus={() => setCustomerDropdownOpen(true)}
+                          onChange={event => {
+                            setCustomerSearch(event.target.value)
+                            setCustomerId(null)
+                            setCustomerDropdownOpen(true)
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setCustomerDropdownOpen(open => !open)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-gray-100"
+                          aria-label="Buka daftar customer"
+                        >
+                          <ChevronDown size={16} className="text-gray-400" />
+                        </button>
+                      </div>
+                      {customerDropdownOpen && (
+                        <div className="absolute z-30 mt-1 w-full rounded-lg border bg-white shadow-lg overflow-hidden" style={{ borderColor: 'var(--border-card)' }}>
+                          <div className="max-h-64 overflow-y-auto">
+                            {filteredCustomers.length > 0 ? filteredCustomers.map(customer => {
+                              const selected = customerId === customer.id
+                              return (
+                                <button
+                                  key={customer.uuid}
+                                  type="button"
+                                  onClick={() => selectCustomer(customer.id)}
+                                  className="w-full px-3 py-2.5 text-left text-sm hover:bg-green-50 flex items-start gap-2"
+                                >
+                                  <span className="mt-0.5 w-4 text-green-600">{selected && <Check size={14} />}</span>
+                                  <span className="min-w-0">
+                                    <span className="block font-medium text-gray-800 truncate">{customer.name}</span>
+                                    <span className="block text-xs text-gray-500 truncate">{customer.npwp ? `NPWP: ${customer.npwp}` : customer.address || 'Non-NPWP'}</span>
+                                  </span>
+                                </button>
+                              )
+                            }) : (
+                              <div className="px-3 py-3 text-sm text-gray-500">Customer tidak ditemukan</div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    {errors.customer_id && <p className="text-xs text-red-500 mt-1">{errors.customer_id}</p>}
+                    {invoice?.attached_sj && invoice.attached_sj.length > 0 && (
+                      <p className="text-xs text-amber-600 mt-1">Ada {invoice.attached_sj.length} SJ terlampir — customer pada SJ tersebut ikut berubah bila customer invoice diganti.</p>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div className="form-input bg-gray-50 text-gray-500">{invoice?.customer.name}</div>
+                    {invoice?.project && <p className="text-xs text-gray-400 mt-1">Customer mengikuti proyek dan tidak dapat diganti di sini.</p>}
+                  </>
+                )}
               </div>
               <div>
                 <label className="text-xs font-medium text-gray-600 block mb-1">No. Invoice</label>
