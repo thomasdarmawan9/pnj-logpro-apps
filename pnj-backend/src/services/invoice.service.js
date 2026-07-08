@@ -20,6 +20,7 @@ const {
 } = require('../utils/AppError')
 const { generateInvoiceNumber } = require('../utils/numberGenerator')
 const lampiranSvc = require('./lampiran.service')
+const { randomUUID } = require('crypto')
 
 const STATUS = {
   DRAFT:       'draft',
@@ -512,7 +513,6 @@ function buildSJItemRows(sj, invoiceId, startOrder) {
  * Baris additional charge ("Pembiayaan Lainnya") dikecualikan — bukan barang.
  */
 function buildSJItemsFromInvoiceItems(invItems) {
-  const { randomUUID } = require('crypto')
   return (invItems || [])
     .filter(it => !isDeliveryAdditionalChargeItem(it))
     .map(it => ({
@@ -1249,9 +1249,12 @@ async function update(uuid, payload, actor) {
       await settling.update({ payment_date: newDate }, { transaction: t })
     }
 
-    // Auto-create/overwrite SJ dari nomor manual (1 nomor) + tautkan.
-    await invoice.reload({ transaction: t })
-    await syncManualSj(invoice, payload, actor, t)
+    // Auto-create/overwrite SJ dari nomor manual — hanya saat edit menyentuh
+    // konten SJ (items atau nomor manual), bukan pada edit tanggal/pembayaran saja.
+    if ('items' in payload || 'manual_sj_numbers' in payload) {
+      await invoice.reload({ transaction: t })
+      await syncManualSj(invoice, payload, actor, t)
+    }
 
     const fresh = await repo.findByUuid(invoice.uuid, { transaction: t })
     return decorate(fresh)
