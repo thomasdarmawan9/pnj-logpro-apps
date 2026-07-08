@@ -137,6 +137,8 @@ const createInvoiceSchema = Joi.object({
   // DP opsional saat create. Kalau dikirim → otomatis dibuat sebagai
   // Payment(is_down_payment=true) di transaksi yang sama dgn invoice.
   down_payment:     downPaymentSchema.optional(),
+  auto_create_sj:         Joi.boolean().default(true),
+  overwrite_sj_confirmed: Joi.boolean().default(false),
   }).oxor('project_uuid', 'project_id')
   .oxor('customer_uuid', 'customer_id')
   .custom((val, helpers) => {
@@ -187,6 +189,8 @@ const updateInvoiceSchema = Joi.object({
   //   - null   → hapus DP existing
   //   - tidak dikirim → tidak diubah
   down_payment:    downPaymentSchema.allow(null),
+  auto_create_sj:         Joi.boolean().default(true),
+  overwrite_sj_confirmed: Joi.boolean().default(false),
 }).min(1).custom((val, helpers) => {
   if (val.invoice_date && val.due_date &&
       new Date(val.due_date) < new Date(val.invoice_date)) {

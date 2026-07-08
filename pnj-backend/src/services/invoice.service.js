@@ -508,6 +508,103 @@ function buildSJItemRows(sj, invoiceId, startOrder) {
 }
 
 /**
+ * Map InvoiceItem rows -> SJItem[] untuk auto-create SJ dari invoice.
+ * Baris additional charge ("Pembiayaan Lainnya") dikecualikan — bukan barang.
+ */
+function buildSJItemsFromInvoiceItems(invItems) {
+  const { randomUUID } = require('crypto')
+  return (invItems || [])
+    .filter(it => !isDeliveryAdditionalChargeItem(it))
+    .map(it => ({
+      id:          randomUUID(),
+      description: it.description || it.fleet_label || '',
+      qty:         it.cargo_qty === null || it.cargo_qty === undefined ? Number(it.qty || 0) : Number(it.cargo_qty),
+      unit:        it.cargo_unit || it.unit || 'unit',
+      weight:      it.cargo_weight === null || it.cargo_weight === undefined ? null : Number(it.cargo_weight),
+      volume:      it.cargo_volume === null || it.cargo_volume === undefined ? null : Number(it.cargo_volume),
+      notes:       it.cargo_notes || '',
+      source_type: 'manual',
+    }))
+}
+
+/** Header SJ diturunkan dari invoice + item pertama (fleet/driver pengiriman). */
+function deriveSJHeaderFromInvoice(invoice, invItems) {
+  const first = (invItems || [])[0] || {}
+  return {
+    project_id:         invoice.project_id || null,
+    customer_id:        invoice.customer_id,
+    fleet_id:           first.fleet_id || null,
+    driver_id:          first.driver_id || null,
+    driver_name_manual: first.driver_name_manual || null,
+    sj_date:            invoice.delivery_date || invoice.invoice_date,
+    origin:             invoice.origin || '-',
+    destination:        invoice.destination || '-',
+    cargo_description:  invoice.cargo_description || null,
+    operational_cost:   0,
+  }
+}
+
+/**
+ * Auto-create / overwrite SJ dari invoice ketika mode manual (1 nomor).
+ * Dipanggil di akhir transaksi create()/update(). Guard:
+ *   - SJ terkait invoice lain      -> ConflictError SJ_LINKED_OTHER_INVOICE
+ *   - SJ ada & belum dikonfirmasi  -> ConflictError SJ_EXISTS_NEEDS_CONFIRM
+ * Timpa = replace header+items, status SJ lama dipertahankan.
+ */
+async function syncManualSj(invoice, payload, actor, t) {
+  if (payload.auto_create_sj === false) return
+  const effType = effectiveServiceType(invoice.service_type, invoice.custom_service_name)
+  if (effType === 'rental') return
+
+  const raw = String(invoice.manual_sj_numbers || '').trim()
+  if (!raw || raw.includes(',')) return // kosong / multi-token -> skip (data lama)
+  const sjNumber = raw
+
+  const existing = await DeliveryOrder.findOne({
+    where:       { sj_number: sjNumber },
+    transaction: t,
+    lock:        t.LOCK.UPDATE,
+  })
+
+  const sameInvoice = existing && Number(existing.invoice_id || 0) === Number(invoice.id)
+  if (existing && existing.invoice_id && !sameInvoice) {
+    throw new ConflictError(`Nomor SJ ${sjNumber} sudah dipakai invoice lain.`, { code: 'SJ_LINKED_OTHER_INVOICE' })
+  }
+  if (existing && !sameInvoice && payload.overwrite_sj_confirmed !== true) {
+    throw new ConflictError(`Nomor SJ ${sjNumber} sudah ada. Konfirmasi untuk menimpa.`, { code: 'SJ_EXISTS_NEEDS_CONFIRM' })
+  }
+
+  const invItems = await InvoiceItem.findAll({
+    where:       { invoice_id: invoice.id },
+    order:       [['sort_order', 'ASC'], ['id', 'ASC']],
+    transaction: t,
+  })
+  const sjItems = buildSJItemsFromInvoiceItems(invItems)
+  const header  = deriveSJHeaderFromInvoice(invoice, invItems)
+
+  if (existing) {
+    await existing.update({
+      ...header,
+      items:                     sjItems,
+      invoice_id:                invoice.id,
+      invoice_attachment_status: 'attached',
+      updated_by:                actor?.id || null,
+    }, { transaction: t })
+  } else {
+    await DeliveryOrder.create({
+      sj_number:                 sjNumber,
+      ...header,
+      items:                     sjItems,
+      status:                    'draft',
+      invoice_id:                invoice.id,
+      invoice_attachment_status: 'attached',
+      created_by:                actor?.id || null,
+      updated_by:                actor?.id || null,
+    }, { transaction: t })
+  }
+}
+
+/**
  * Recalculate subtotal_amount, tax_amount, pph_amount, total_amount invoice
  * berdasarkan semua invoice_items yang ada saat ini.
  */
@@ -918,6 +1015,9 @@ async function create(payload, actor) {
       await upsertDownPayment(invoice, payload.down_payment, actor, t)
     }
 
+    // Auto-create/overwrite SJ dari nomor manual (1 nomor) + tautkan.
+    await syncManualSj(invoice, payload, actor, t)
+
     const fresh = await repo.findByUuid(invoice.uuid, { transaction: t })
     return decorate(fresh)
   })
@@ -1148,6 +1248,10 @@ async function update(uuid, payload, actor) {
       }, payments[0])
       await settling.update({ payment_date: newDate }, { transaction: t })
     }
+
+    // Auto-create/overwrite SJ dari nomor manual (1 nomor) + tautkan.
+    await invoice.reload({ transaction: t })
+    await syncManualSj(invoice, payload, actor, t)
 
     const fresh = await repo.findByUuid(invoice.uuid, { transaction: t })
     return decorate(fresh)
