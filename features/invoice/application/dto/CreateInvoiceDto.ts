@@ -57,6 +57,9 @@ export interface CreateInvoiceDto {
   linked_sj_uuids?: string[]
   items: CreateInvoiceItemDto[]
   send_immediately?: boolean
+  // Auto-create SJ dari manual_sj_numbers (1 nomor). Default aktif di backend.
+  auto_create_sj?: boolean
+  overwrite_sj_confirmed?: boolean
   // Optional DP saat create. Boleh null/undefined kalau tidak ada DP.
   down_payment?: CreateDownPaymentDto | null
 }
