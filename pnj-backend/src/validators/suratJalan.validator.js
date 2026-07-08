@@ -119,6 +119,13 @@ const listSJQuery = Joi.object({
   to:             Joi.date().iso(),
 })
 
+const lookupSJQuery = Joi.object({
+  sj_number: Joi.string().trim().min(1).max(50).required().messages({
+    'any.required': 'sj_number wajib diisi.',
+    'string.empty': 'sj_number wajib diisi.',
+  }),
+})
+
 module.exports = {
   STATUSES, INV_STATES, PERIODS,
   createSJSchema,
@@ -127,4 +134,5 @@ module.exports = {
   deliverSJSchema,
   voidSJSchema,
   listSJQuery,
+  lookupSJQuery,
 }

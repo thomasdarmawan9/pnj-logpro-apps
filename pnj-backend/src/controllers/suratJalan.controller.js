@@ -19,6 +19,11 @@ const getOne = asyncHandler(async (req, res) => {
   res.json(success(data))
 })
 
+const lookup = asyncHandler(async (req, res) => {
+  const data = await service.lookupByNumber(req.query.sj_number)
+  res.json(success(data))
+})
+
 const create = asyncHandler(async (req, res) => {
   const data = await service.create(req.body, req.user)
   res.status(201).json(success(data, 'Surat Jalan berhasil dibuat.'))
@@ -128,7 +133,7 @@ const downloadPod = asyncHandler(async (req, res) => {
 })
 
 module.exports = {
-  list, getOne, create, update, assign,
+  list, getOne, lookup, create, update, assign,
   uploadPod, deliver, voidSJ, remove, exportXlsx, generatePdf,
   uploadLampiran, deleteLampiran, downloadLampiran, downloadPod,
 }

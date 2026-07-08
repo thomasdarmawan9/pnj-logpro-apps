@@ -357,6 +357,33 @@ async function getByUuid(uuid) {
   return sj
 }
 
+/**
+ * Lookup ringan SJ berdasarkan nomor persis (untuk konfirmasi auto-create dari
+ * invoice). Hanya kembalikan field yang dibutuhkan FE untuk memutuskan cabang.
+ */
+async function lookupByNumber(sjNumber) {
+  const number = String(sjNumber || '').trim()
+  if (!number) return { exists: false, sj: null }
+
+  const sj = await DeliveryOrder.findOne({
+    where:      { sj_number: number },
+    attributes: ['uuid', 'sj_number', 'status', 'invoice_id'],
+    include:    [{ model: Invoice, as: 'invoice', attributes: ['invoice_number'] }],
+  })
+  if (!sj) return { exists: false, sj: null }
+
+  return {
+    exists: true,
+    sj: {
+      uuid:           sj.uuid,
+      sj_number:      sj.sj_number,
+      status:         sj.status,
+      invoice_id:     sj.invoice_id ? Number(sj.invoice_id) : null,
+      invoice_number: sj.invoice ? sj.invoice.invoice_number : null,
+    },
+  }
+}
+
 // ── CREATE ────────────────────────────────────────────────────────────────
 async function create(payload, actor) {
   return sequelize.transaction(async (t) => {
@@ -740,6 +767,7 @@ module.exports = {
   canTransition,
   list,
   getByUuid,
+  lookupByNumber,
   create,
   update,
   assign,
