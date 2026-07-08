@@ -1,6 +1,6 @@
 import { apiDownload, apiRequest, apiRequestAllPages } from '@/lib/apiClient'
 import { SuratJalan, StatusLampiran, SJFilterState, PaginationState } from '../../domain/entities/SuratJalan'
-import { ISuratJalanRepository, PaginatedResult } from './ISuratJalanRepository'
+import { ISuratJalanRepository, PaginatedResult, SjLookupResult } from './ISuratJalanRepository'
 import { CreateSJDto } from '../../application/dto/CreateSJDto'
 import { UpdateSJDto } from '../../application/dto/UpdateSJDto'
 import { AssignSJInput } from '../../application/use-cases/AssignSuratJalan'
@@ -150,6 +150,15 @@ export class MockSuratJalanRepository implements ISuratJalanRepository {
   async getByUuid(uuid: string): Promise<SuratJalan | null> {
     const response = await apiRequest<ApiSJ>(`/surat-jalan/${uuid}`, { method: 'GET' })
     return normalizeSJ(response.data)
+  }
+
+  async getBySjNumber(sjNumber: string): Promise<SjLookupResult | null> {
+    const q = encodeURIComponent(sjNumber.trim())
+    const response = await apiRequest<{ exists: boolean; sj: SjLookupResult | null }>(
+      `/surat-jalan/lookup?sj_number=${q}`,
+      { method: 'GET' },
+    )
+    return response.data.sj ?? null
   }
 
   async create(dto: CreateSJDto): Promise<SuratJalan> {
