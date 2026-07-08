@@ -87,69 +87,90 @@ Hanya baris **cargo/barang** yang dipetakan. Baris biaya tambahan
 Kalau tidak ada baris cargo sama sekali → SJ dibuat dengan `items: []` (tetap valid;
 `SJItem[] | null` diperbolehkan entity).
 
-## Arsitektur (Clean Architecture, tetap Mock repository)
+## Arsitektur (Backend-centric)
 
-Aplikasi masih memakai `MockInvoiceRepository` & `MockSuratJalanRepository`.
+**Penting:** repository frontend (`MockInvoiceRepository` / `MockSuratJalanRepository`) sebenarnya
+memanggil **backend Node/Sequelize** di `pnj-backend/` (nama `Mock*` legacy). Kolom
+`manual_sj_numbers` sudah ada di DB. Karena SJ auto-create harus **tertaut** ke invoice (agar masuk
+`attached_sj` & PDF) dan endpoint attach yang ada hanya menerima SJ berstatus assigned/delivered,
+orkestrasi dijalankan **di dalam transaksi backend** `invoice.service.create()` & `update()` —
+atomik dan bebas dari aturan attach eksternal.
 
-### Perubahan
+### Backend (`pnj-backend`)
 
-1. **Repo — cari SJ by nomor**
-   - `ISuratJalanRepository.getBySjNumber(sjNumber: string): Promise<SuratJalan | null>`
-   - Implementasi di `MockSuratJalanRepository` (case-insensitive, trim).
+1. **Endpoint lookup**: `GET /surat-jalan/lookup?sj_number=<n>`
+   - `suratJalan.controller.lookup` → `suratJalan.service.lookupByNumber(sjNumber)`.
+   - Return `{ exists: boolean, sj: { uuid, sj_number, status, invoice_id, invoice_number } | null }`.
+   - Match persis (trim), kecualikan soft-deleted (model `paranoid`).
 
-2. **Use-case baru**
-   - `features/invoice/application/use-cases/SyncManualSJForInvoice.ts`
-   - Input: invoice tersimpan (`id`, `uuid`, `invoice_number`, header, items) + `sjNumber` + `existing`.
-   - Bangun `CreateSJDto` / `UpdateSJDto` dari mapping di atas.
-   - Panggil `suratJalanRepository.create` **atau** `update`, lalu `attachToInvoice(sjUuid, invoiceId, invoiceUuid, invoiceNumber)`.
+2. **Helper mapping** `buildSJItemsFromInvoiceItems(items)` di `invoice.service.js`:
+   item cargo → `{ description, qty: cargo_qty ?? qty, unit: cargo_unit ?? unit, weight: cargo_weight, volume: cargo_volume, notes: cargo_notes, source_type: 'manual' }`.
+   Baris `fleet_label === 'Pembiayaan Lainnya'` (additional charge) dikecualikan.
 
-3. **Thunk**
-   - `suratJalanSlice`: `syncManualSjForInvoice({ invoice, sjNumber, existing })`.
+3. **Orkestrasi** `syncManualSj(invoice, payload, actor, t)` dipanggil di akhir transaksi
+   `create()` & `update()` bila: non-rental, `manual_sj_numbers` berisi **tepat 1 token**, dan
+   `auto_create_sj !== false`.
+   - `existing = DeliveryOrder.findOne({ where: { sj_number }, lock })`
+   - `existing.invoice_id` terisi & ≠ `invoice.id` → `ConflictError` kode `SJ_LINKED_OTHER_INVOICE`
+   - existing ada & `overwrite_sj_confirmed !== true` → `ConflictError` kode `SJ_EXISTS_NEEDS_CONFIRM`
+     (guard belt-and-suspenders; FE normalnya sudah konfirmasi duluan lewat lookup)
+   - existing ada & confirmed → `existing.update({ ...header, items, invoice_id, invoice_attachment_status:'attached' })` — **status dipertahankan**
+   - tidak ada → `DeliveryOrder.create({ sj_number, ...header, items, status:'draft', invoice_id, invoice_attachment_status:'attached' })`
+   - `manual_sj_numbers` multi-token (data lama "SJ-001, SJ-002") → **no-op** (invoice tetap tersimpan).
 
-4. **Modal baru** (folder `features/invoice/presentation/components/modals/`)
-   - `ConfirmOverwriteSJModal` — konfirmasi timpa SJ yang sudah ada.
-   - `ClearManualSJPrompt` — popup kedua saat user batal timpa.
+4. **Validator** (`invoice.validator.js`): tambah ke `createInvoiceSchema` & `updateInvoiceSchema`:
+   `auto_create_sj: Joi.boolean().default(true)`, `overwrite_sj_confirmed: Joi.boolean().default(false)`.
 
-5. **Orkestrasi halaman**
-   - `CreateInvoicePage` & `EditInvoicePage`: pada submit mode manual →
-     cek `getBySjNumber` → cabang guard/konfirmasi → simpan invoice → `syncManualSjForInvoice`.
+### Frontend
 
-6. **Input form**
-   - Ubah textarea manual SJ → **single-line input 1 nomor**; validasi menolak koma / >1 nomor
-     (di form Buat; form Edit toleran terhadap data lama multi-nomor, lihat di atas).
+1. **Repo SJ**: `ISuratJalanRepository.getBySjNumber(sjNumber)` → `GET /surat-jalan/lookup`; impl di `MockSuratJalanRepository`.
+2. **DTO + payload**: `CreateInvoiceDto`/`UpdateInvoiceDto` tambah `auto_create_sj?`, `overwrite_sj_confirmed?`; kirim di `MockInvoiceRepository.create/update`.
+3. **Input form**: textarea manual SJ → single-line 1 nomor; validasi tolak koma/>1 nomor (form Buat; Edit toleran data lama).
+4. **Modal**: `ConfirmOverwriteSJModal` + `ClearManualSJPrompt`.
+5. **Orkestrasi** `CreateInvoicePage` & `EditInvoicePage`: sebelum submit (mode manual, 1 nomor) →
+   `getBySjNumber` → cabang guard/konfirmasi → set flag → submit.
 
-### Urutan operasi (Buat)
+### Urutan (Buat)
 
-1. Validasi invoice.
-2. `getBySjNumber(nomor)` → tentukan cabang (guard / konfirmasi / lanjut).
-3. `dispatch(createInvoice(dto))` → dapatkan `{ id, uuid, invoice_number }`.
-4. `dispatch(syncManualSjForInvoice({ invoice, sjNumber, existing }))` → create/overwrite + attach.
-5. Redirect + toast sukses.
+1. Validasi FE.
+2. `getBySjNumber(nomor)`:
+   - terkait invoice lain → toast tolak, batal submit.
+   - ada (bebas/sama) → `ConfirmOverwriteSJModal` → "Ya" set `overwrite_sj_confirmed=true`; "Batal" → `ClearManualSJPrompt`.
+   - tidak ada → lanjut.
+3. `dispatch(createInvoice(dto + flags))` → backend buat invoice **+ SJ** dalam satu transaksi.
+4. Redirect + toast sukses.
 
 (Untuk Edit: langkah 3 memakai `updateInvoice`; guard "invoice lain" mengabaikan SJ yang
 `invoice_id`-nya = invoice yang sedang diedit.)
 
 ## Keterkaitan & PDF
 
-- SJ hasil auto-create ditautkan via `attachToInvoice` → muncul di `invoice.attached_sj`.
+- SJ hasil auto-create diset `invoice_id` + `invoice_attachment_status='attached'` di transaksi →
+  muncul di `invoice.attached_sj`.
 - Modal Cetak PDF (`GeneratePDFModal`) sudah membaca `attached_sj`: opsi
   *"Lampirkan daftar SJ terlampir"* otomatis tersedia + tercentang saat `attached_sj` terisi
-  dan service bukan rental. Tidak perlu perubahan pada logika PDF.
+  dan service bukan rental. **Tidak perlu perubahan pada logika PDF.**
 - `manual_sj_numbers` tetap disimpan sebagai nilai yang diketik.
 
 ## Risiko yang Diketahui
 
-- **Non-atomik**: invoice disimpan lebih dulu, lalu SJ. Kalau langkah SJ gagal, invoice sudah
-  tersimpan. Wajar di tahap mock; idealnya kelak jadi transaksi tunggal di backend.
+- **Atomik**: SJ dibuat/ditimpa di dalam transaksi invoice — kalau gagal, seluruh operasi
+  (invoice + SJ) rollback. Guard error dikembalikan dengan kode spesifik agar FE bisa tampilkan pesan.
 - **Timpa SJ delivered/void**: diizinkan (hanya konfirmasi). Item/header lama tergantikan
-  sementara status dipertahankan — pastikan copy konfirmasi menegaskan konsekuensi ini.
+  sementara status dipertahankan — copy konfirmasi harus menegaskan konsekuensi ini.
+- **Nomor SJ unik di DB** (`delivery_orders.sj_number` UNIQUE): create dengan nomor duplikat yang
+  lolos race → constraint error; ditangani sebagai `ConflictError`.
 
-## Testing
+## Testing / Verifikasi
 
-- Mapping item: item cargo → SJItem (semua field), baris "Pembiayaan Lainnya" dikecualikan,
-  fallback description, invoice tanpa cargo → `items: []`.
-- Cabang alur: nomor tidak ada → create; nomor ada (bebas) → konfirmasi → timpa; nomor ada &
-  terkait invoice lain → blokir; batal timpa → clear prompt (hapus/kembali).
-- Guard Edit: SJ yang `invoice_id`-nya = invoice yang diedit tidak dianggap "invoice lain".
-- Linkage: setelah sync, SJ ada di `attached_sj`; opsi PDF SJ tersedia.
-- Validasi input: koma / >1 nomor ditolak di form Buat.
+Tidak ada framework unit test di kedua codebase → verifikasi **manual/integrasi**:
+
+- **Backend hidup + curl**: jalankan backend, uji `create`/`update` invoice dengan `manual_sj_numbers`
+  1 nomor untuk tiap cabang (baru → SJ tercreate & attached; nomor ada + confirmed → tertimpa,
+  status lama tetap; nomor ada tanpa confirm → 409 `SJ_EXISTS_NEEDS_CONFIRM`; terkait invoice lain →
+  409 `SJ_LINKED_OTHER_INVOICE`). Cek `GET /surat-jalan/lookup`.
+- **Mapping**: verifikasi item cargo → SJItem lengkap; baris "Pembiayaan Lainnya" tidak ikut; invoice
+  tanpa cargo → SJ `items: []`.
+- **Frontend**: `npm run build` (typecheck) lolos; uji UI Buat & Edit mode manual: input 1 nomor,
+  modal konfirmasi/timpa, popup batal (hapus nomor / kembali), SJ muncul di detail invoice & opsi PDF.
+- **Guard Edit**: SJ yang `invoice_id`-nya = invoice yang diedit tidak dianggap "invoice lain".
