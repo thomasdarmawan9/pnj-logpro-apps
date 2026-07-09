@@ -78,6 +78,7 @@ export default function EditInvoicePage({ uuid }: Props) {
   const [manualSjNumbers, setManualSjNumbers] = useState('')
   const [sjGate, setSjGate] = useState<{ mode: 'confirm' | 'clear'; sjNumber: string; sjStatus?: string; dto: Record<string, unknown> } | null>(null)
   const [isCheckingSj, setIsCheckingSj] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
   const bankAccounts = useSelector((state: RootState) => state.settings.bankAccounts).filter(b => b.is_active)
   const fleets = useSelector((state: RootState) => state.master.fleets)
   const drivers = useSelector((state: RootState) => state.master.drivers)
@@ -384,12 +385,18 @@ export default function EditInvoicePage({ uuid }: Props) {
   }
 
   const commitUpdate = async (finalDto: Record<string, unknown>) => {
-    const action = await dispatch(updateInvoice({ uuid, dto: finalDto as Parameters<typeof validateUpdateInvoice>[0] }))
-    if (updateInvoice.fulfilled.match(action)) {
-      pushToast({ title: 'Invoice Disimpan', description: `Invoice #${invoice?.invoice_number} berhasil diperbarui.`, variant: 'success' })
-      router.push(`/invoice/${uuid}`)
-    } else if (updateInvoice.rejected.match(action)) {
-      pushToast({ title: 'Gagal Menyimpan', description: action.payload as string ?? 'Terjadi kesalahan. Coba lagi.', variant: 'error' })
+    if (isSaving) return
+    setIsSaving(true)
+    try {
+      const action = await dispatch(updateInvoice({ uuid, dto: finalDto as Parameters<typeof validateUpdateInvoice>[0] }))
+      if (updateInvoice.fulfilled.match(action)) {
+        pushToast({ title: 'Invoice Disimpan', description: `Invoice #${invoice?.invoice_number} berhasil diperbarui.`, variant: 'success' })
+        router.push(`/invoice/${uuid}`)
+      } else if (updateInvoice.rejected.match(action)) {
+        pushToast({ title: 'Gagal Menyimpan', description: action.payload as string ?? 'Terjadi kesalahan. Coba lagi.', variant: 'error' })
+      }
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -876,10 +883,11 @@ export default function EditInvoicePage({ uuid }: Props) {
                   <label className="text-xs font-medium text-gray-600 block mb-1">Nomor SJ</label>
                   <input
                     type="text"
-                    className="form-input w-full"
+                    className="form-input w-full disabled:bg-gray-50 disabled:text-gray-500"
                     value={manualSjNumbers}
                     onChange={event => setManualSjNumbers(event.target.value)}
                     placeholder="Contoh: SJ-2026-07-001"
+                    disabled={!canEditItems}
                   />
                   <p className="text-xs text-gray-400 mt-1.5">
                     Satu nomor SJ → otomatis dibuat/diperbarui &amp; terlampir saat disimpan. Nilai lama berisi beberapa nomor tidak diproses otomatis.
@@ -1193,7 +1201,7 @@ export default function EditInvoicePage({ uuid }: Props) {
 
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg z-30 px-6 py-4 flex justify-end gap-3" style={{ borderColor: 'var(--border-card)' }}>
         <button onClick={() => router.back()} className="px-4 py-2 rounded-xl border text-sm" style={{ borderColor: 'var(--border-card)' }}>Batal</button>
-        <button onClick={handleSave} disabled={isCheckingSj} className="px-4 py-2 rounded-xl text-sm font-medium text-white disabled:opacity-50 disabled:cursor-not-allowed" style={{ backgroundColor: 'var(--green-primary)' }}>
+        <button onClick={handleSave} disabled={isCheckingSj || isSaving} className="px-4 py-2 rounded-xl text-sm font-medium text-white disabled:opacity-50 disabled:cursor-not-allowed" style={{ backgroundColor: 'var(--green-primary)' }}>
           Simpan Perubahan
         </button>
       </div>
