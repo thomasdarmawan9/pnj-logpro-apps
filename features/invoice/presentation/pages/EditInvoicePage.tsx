@@ -404,8 +404,8 @@ export default function EditInvoicePage({ uuid }: Props) {
     if (isCheckingSj) return
     setIsCheckingSj(true)
     try {
-      const raw = manualSjNumbers.trim()
-      const manualMode = isDeliveryLikeInvoice && raw.length > 0
+      const raw = typeof dto.manual_sj_numbers === 'string' ? dto.manual_sj_numbers.trim() : ''
+      const manualMode = 'manual_sj_numbers' in dto && raw.length > 0
       // Toleransi data lama multi-nomor: lewati gate; backend skip auto-create.
       if (!manualMode || raw.includes(',')) { await commitUpdate(dto); return }
 
@@ -428,7 +428,7 @@ export default function EditInvoicePage({ uuid }: Props) {
         return
       }
       // Tidak ada, atau SJ ini sudah milik invoice yang diedit → lanjut.
-      await commitUpdate({ ...dto, overwrite_sj_confirmed: true })
+      await commitUpdate({ ...dto, overwrite_sj_confirmed: false })
     } finally {
       setIsCheckingSj(false)
     }
@@ -491,13 +491,7 @@ export default function EditInvoicePage({ uuid }: Props) {
     // Kirim payload minimal supaya backend tidak menolak (dan tidak menyentuh DP/item).
     if (isVoid) {
       const voidDto = { invoice_date: invoiceDate, ...customerPatch }
-      const action = await dispatch(updateInvoice({ uuid, dto: voidDto as Parameters<typeof validateUpdateInvoice>[0] }))
-      if (updateInvoice.fulfilled.match(action)) {
-        pushToast({ title: 'Invoice Disimpan', description: `Tanggal invoice #${invoice?.invoice_number} berhasil diperbarui.`, variant: 'success' })
-        router.push(`/invoice/${uuid}`)
-      } else if (updateInvoice.rejected.match(action)) {
-        pushToast({ title: 'Gagal Menyimpan', description: action.payload as string ?? 'Terjadi kesalahan. Coba lagi.', variant: 'error' })
-      }
+      await commitUpdate(voidDto)
       return
     }
 
