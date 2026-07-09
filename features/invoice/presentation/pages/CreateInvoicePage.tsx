@@ -27,6 +27,7 @@ import { apiRequest } from '@/lib/apiClient'
 import ConfirmOverwriteSJModal from '../components/modals/ConfirmOverwriteSJModal'
 import ClearManualSJPrompt from '../components/modals/ClearManualSJPrompt'
 import { suratJalanRepository } from '../../../surat-jalan/infrastructure/repositories/MockSuratJalanRepository'
+import type { SjLookupResult } from '../../../surat-jalan/infrastructure/repositories/ISuratJalanRepository'
 
 function formatRupiah(amount: number): string {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(amount)
@@ -88,6 +89,7 @@ export default function CreateInvoicePage() {
   const [sjInputMode, setSjInputMode] = useState<'linked' | 'manual'>('linked')
   const [manualSjNumbers, setManualSjNumbers] = useState('')
   const [sjGate, setSjGate] = useState<{ mode: 'confirm' | 'clear'; sjNumber: string; sjStatus?: string; send: boolean } | null>(null)
+  const [isCheckingSj, setIsCheckingSj] = useState(false)
   const [availableSJs, setAvailableSJs] = useState<CreateSJOption[]>([])
   const [selectedSJs, setSelectedSJs] = useState<CreateSJOption[]>([])
   const [sjSearch, setSjSearch] = useState('')
@@ -607,31 +609,37 @@ export default function CreateInvoicePage() {
 
   // Gate: cek nomor SJ manual sebelum submit.
   const submitWithSjGate = async (send: boolean) => {
-    if (!validate()) return
-    if (!isManualSjMode()) { await doSubmit(send); return }
-
-    const sjNumber = manualSjNumbers.trim()
-    let lookup
+    if (isSubmitting || isCheckingSj) return
+    setIsCheckingSj(true)
     try {
-      lookup = await suratJalanRepository.getBySjNumber(sjNumber)
-    } catch {
-      pushToast({ title: 'Gagal cek nomor SJ', description: 'Tidak bisa memverifikasi nomor SJ. Coba lagi.', variant: 'error' })
-      return
-    }
+      if (!validate()) return
+      if (!isManualSjMode()) { await doSubmit(send); return }
 
-    if (lookup && lookup.invoice_id) {
-      pushToast({
-        title: 'Nomor SJ dipakai invoice lain',
-        description: `SJ ${sjNumber} sudah tertaut ke invoice ${lookup.invoice_number || 'lain'}. Ganti nomor SJ.`,
-        variant: 'error',
-      })
-      return
+      const sjNumber = manualSjNumbers.trim()
+      let lookup: SjLookupResult | null
+      try {
+        lookup = await suratJalanRepository.getBySjNumber(sjNumber)
+      } catch {
+        pushToast({ title: 'Gagal cek nomor SJ', description: 'Tidak bisa memverifikasi nomor SJ. Coba lagi.', variant: 'error' })
+        return
+      }
+
+      if (lookup && lookup.invoice_id) {
+        pushToast({
+          title: 'Nomor SJ dipakai invoice lain',
+          description: `SJ ${sjNumber} sudah tertaut ke invoice ${lookup.invoice_number || 'lain'}. Ganti nomor SJ.`,
+          variant: 'error',
+        })
+        return
+      }
+      if (lookup) {
+        setSjGate({ mode: 'confirm', sjNumber, sjStatus: lookup.status, send })
+        return
+      }
+      await doSubmit(send)
+    } finally {
+      setIsCheckingSj(false)
     }
-    if (lookup) {
-      setSjGate({ mode: 'confirm', sjNumber, sjStatus: lookup.status, send })
-      return
-    }
-    await doSubmit(send)
   }
 
   const handleSaveDraft = () => submitWithSjGate(false)
@@ -1410,7 +1418,7 @@ export default function CreateInvoicePage() {
         <button onClick={() => router.back()} className="px-4 py-2 rounded-xl border text-sm" style={{ borderColor: 'var(--border-card)' }}>Batal</button>
         <button
           onClick={handleSaveDraft}
-          disabled={isSubmitting}
+          disabled={isSubmitting || isCheckingSj}
           className="px-4 py-2 rounded-xl border text-sm font-medium disabled:opacity-40"
           style={{ borderColor: 'var(--green-primary)', color: 'var(--green-primary)' }}
         >
@@ -1418,7 +1426,7 @@ export default function CreateInvoicePage() {
         </button>
         <button
           onClick={handleSaveAndSend}
-          disabled={isSubmitting}
+          disabled={isSubmitting || isCheckingSj}
           className="px-4 py-2 rounded-xl text-sm font-medium text-white disabled:opacity-40"
           style={{ backgroundColor: 'var(--green-primary)' }}
         >
