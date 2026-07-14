@@ -130,7 +130,9 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
     const result = await dispatch(updateSuratJalan({
       uuid: selectedSJ.uuid,
       dto: {
-        fleet_id: armadaMode === 'tbd' ? 0 : selectedArmada?.id,
+        // Armada "Belum Ditentukan" disimpan sebagai null dan tidak bergantung
+        // pada tersedianya record master fleet berplat TBD.
+        fleet_id: armadaMode === 'tbd' ? null : selectedArmada?.id,
         // Pertahankan driver existing bila daftar master gagal/masih belum termuat.
         driver_id: driverMode === 'master' ? (selectedDriver?.id ?? selectedSJ.driver_id) : null,
         driver_name_manual: driverMode === 'tbd'
@@ -239,11 +241,11 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
             options={armadaOptions}
             onModeChange={mode => {
               setArmadaMode(mode)
-              if (mode === 'tbd') { setSelectedArmada(null); updateField('fleet_id', 0) }
+              if (mode === 'tbd') { setSelectedArmada(null); updateField('fleet_id', null) }
             }}
             onChange={armada => {
               setSelectedArmada(armada)
-              updateField('fleet_id', armada?.id ?? 0)
+              updateField('fleet_id', armada?.id ?? null)
             }}
             errors={errors}
           />
