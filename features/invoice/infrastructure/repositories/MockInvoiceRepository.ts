@@ -300,6 +300,8 @@ export class MockInvoiceRepository implements IInvoiceRepository {
         items: dto.items.map(toItemPayload),
         send_immediately: dto.send_immediately,
         down_payment: dto.down_payment ?? undefined,
+        auto_create_sj: dto.auto_create_sj ?? true,
+        overwrite_sj_confirmed: dto.overwrite_sj_confirmed ?? false,
       },
     })
     return normalizeInvoice(response.data)

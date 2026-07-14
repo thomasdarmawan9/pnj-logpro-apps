@@ -236,7 +236,9 @@ async function clearAutoStockDisbursementsForSJ(sj, t) {
 async function syncAutoStockDisbursementsForSJ(sj, actor, t, context = {}) {
   await clearAutoStockDisbursementsForSJ(sj, t)
 
-  if (sj.status !== STATUS.ASSIGNED) return
+  // Stok otomatis tetap aktif setelah SJ diterbitkan maupun setelah terkirim.
+  // Status void dibersihkan oleh voidSJ dan draft belum mengalokasikan stok.
+  if (![STATUS.ASSIGNED, STATUS.DELIVERED].includes(sj.status)) return
   const lines = await resolveStockLineItems(getSJStockLines(sj.items), t)
   if (lines.length === 0) return
 
@@ -357,6 +359,33 @@ async function getByUuid(uuid) {
   return sj
 }
 
+/**
+ * Lookup ringan SJ berdasarkan nomor persis (untuk konfirmasi auto-create dari
+ * invoice). Hanya kembalikan field yang dibutuhkan FE untuk memutuskan cabang.
+ */
+async function lookupByNumber(sjNumber) {
+  const number = String(sjNumber || '').trim()
+  if (!number) return { exists: false, sj: null }
+
+  const sj = await DeliveryOrder.findOne({
+    where:      { sj_number: number },
+    attributes: ['uuid', 'sj_number', 'status', 'invoice_id'],
+    include:    [{ model: Invoice, as: 'invoice', attributes: ['invoice_number'] }],
+  })
+  if (!sj) return { exists: false, sj: null }
+
+  return {
+    exists: true,
+    sj: {
+      uuid:           sj.uuid,
+      sj_number:      sj.sj_number,
+      status:         sj.status,
+      invoice_id:     sj.invoice_id ? Number(sj.invoice_id) : null,
+      invoice_number: sj.invoice ? sj.invoice.invoice_number : null,
+    },
+  }
+}
+
 // ── CREATE ────────────────────────────────────────────────────────────────
 async function create(payload, actor) {
   return sequelize.transaction(async (t) => {
@@ -421,9 +450,13 @@ async function update(uuid, payload, actor) {
 
     const updates = {}
 
-    if (payload.fleet_uuid || payload.fleet_id) {
+    if (payload.fleet_uuid || ('fleet_id' in payload && payload.fleet_id !== null)) {
       const f = await Fleet.findOne({
-        where: payload.fleet_uuid ? { uuid: payload.fleet_uuid } : { id: payload.fleet_id },
+        where: payload.fleet_uuid
+          ? { uuid: payload.fleet_uuid }
+          : payload.fleet_id === 0
+            ? { plate_number: 'TBD' }
+            : { id: payload.fleet_id },
         transaction: t,
       })
       if (!f) throw new NotFoundError('Fleet tidak ditemukan.')
@@ -443,6 +476,10 @@ async function update(uuid, payload, actor) {
           transaction: t,
         })
         if (!d) throw new NotFoundError('Driver tidak ditemukan.')
+        const driverUnchanged = Number(d.id) === Number(sj.driver_id)
+        if (!driverUnchanged && d.status !== 'active') {
+          throw new BadRequestError('Driver berstatus inactive.')
+        }
         updates.driver_id = d.id
       }
     }
@@ -486,7 +523,7 @@ async function update(uuid, payload, actor) {
       'items', 'sj_date', 'destination', 'fleet_id', 'fleet_uuid',
       'driver_id', 'driver_uuid', 'driver_name_manual',
     ]
-    if (sj.status === STATUS.ASSIGNED && stockRelevantFields.some(k => k in payload)) {
+    if ([STATUS.ASSIGNED, STATUS.DELIVERED].includes(sj.status) && stockRelevantFields.some(k => k in payload)) {
       const [fleet, driver] = await Promise.all([
         Fleet.findByPk(sj.fleet_id, { transaction: t }),
         sj.driver_id ? Driver.findByPk(sj.driver_id, { transaction: t }) : null,
@@ -740,6 +777,7 @@ module.exports = {
   canTransition,
   list,
   getByUuid,
+  lookupByNumber,
   create,
   update,
   assign,

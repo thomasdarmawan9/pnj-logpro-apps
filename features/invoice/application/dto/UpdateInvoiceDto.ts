@@ -22,6 +22,8 @@ export interface UpdateInvoiceDto {
   destination?: string | null
   cargo_description?: string | null
   manual_sj_numbers?: string | null
+  auto_create_sj?: boolean
+  overwrite_sj_confirmed?: boolean
   items?: CreateInvoiceItemDto[]
   lampiran_paths?: string[] | null
   /**

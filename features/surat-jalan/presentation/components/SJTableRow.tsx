@@ -47,6 +47,7 @@ export default function SJTableRow({ sj, checked, onToggle, onAction, role }: SJ
     if (sj.status === StatusOperasional.DELIVERED) {
       return [
         ...common,
+        { id: 'edit', label: 'Edit SJ', icon: Pencil },
         ...(sj.invoice_attachment_status === StatusLampiran.NO_INVOICE ? [{ id: 'attach', label: 'Lampirkan ke Invoice', icon: Paperclip }] : []),
         ...(role === 'super_admin' ? [{ id: 'void', label: 'Void SJ', icon: AlertTriangle, danger: true }] : []),
       ]

@@ -24,6 +24,10 @@ import type { DeliveryPricingMode, InvoiceServiceType } from '../../domain/entit
 import { resolveEffectiveInvoiceServiceType } from '../../domain/services/invoiceServiceType'
 import type { Customer } from '@/features/master/domain/entities/Customer'
 import { apiRequest } from '@/lib/apiClient'
+import ConfirmOverwriteSJModal from '../components/modals/ConfirmOverwriteSJModal'
+import ClearManualSJPrompt from '../components/modals/ClearManualSJPrompt'
+import { suratJalanRepository } from '../../../surat-jalan/infrastructure/repositories/MockSuratJalanRepository'
+import type { SjLookupResult } from '../../../surat-jalan/infrastructure/repositories/ISuratJalanRepository'
 
 function formatRupiah(amount: number): string {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(amount)
@@ -84,6 +88,8 @@ export default function CreateInvoicePage() {
   const [cargoDescription, setCargoDescription] = useState('')
   const [sjInputMode, setSjInputMode] = useState<'linked' | 'manual'>('linked')
   const [manualSjNumbers, setManualSjNumbers] = useState('')
+  const [sjGate, setSjGate] = useState<{ mode: 'confirm' | 'clear'; sjNumber: string; sjStatus?: string; send: boolean } | null>(null)
+  const [isCheckingSj, setIsCheckingSj] = useState(false)
   const [availableSJs, setAvailableSJs] = useState<CreateSJOption[]>([])
   const [selectedSJs, setSelectedSJs] = useState<CreateSJOption[]>([])
   const [sjSearch, setSjSearch] = useState('')
@@ -419,7 +425,7 @@ export default function CreateInvoicePage() {
     resetItems(items.filter(item => Number(item.source_sj_id || 0) !== Number(sj.id)).map((item, idx) => ({ ...item, sort_order: idx })))
   }
 
-  const getDto = (sendImmediately = false) => {
+  const getDto = (sendImmediately = false, overwriteSjConfirmed = false) => {
     const baseItems = items.map((item, idx) => {
       const isDelivery = isDeliveryLikeService
       const isSourceSjItem = isDelivery && Boolean(item.source_sj_id)
@@ -539,6 +545,7 @@ export default function CreateInvoicePage() {
       linked_sj_uuids: isDeliveryLikeService && sjInputMode === 'linked' ? selectedSJs.map(sj => sj.uuid) : [],
       items: [...baseItems, ...billingItems, ...chargeItems],
       send_immediately: sendImmediately,
+      overwrite_sj_confirmed: overwriteSjConfirmed,
       // Saat create, kirim DP kalau ada (toggle ON dengan amount > 0).
       // Kalau `null` kita skip key — BE tidak butuh field ini saat create kosong.
       ...(downPayment ? { down_payment: downPayment } : {}),
@@ -563,6 +570,10 @@ export default function CreateInvoicePage() {
       if (downPayment.amount <= 0) result.errors.down_payment = 'Nominal DP harus lebih dari 0'
       result.valid = Object.keys(result.errors).length === 0
     }
+    if (isDeliveryLikeService && sjInputMode === 'manual' && manualSjNumbers.trim().includes(',')) {
+      result.errors.manual_sj_numbers = 'Masukkan tepat satu nomor SJ (tanpa koma) agar bisa dibuat otomatis.'
+      result.valid = false
+    }
     setErrors(result.errors)
     if (!result.valid) {
       pushToast({
@@ -574,31 +585,65 @@ export default function CreateInvoicePage() {
     return result.valid
   }
 
-  const handleSaveDraft = async () => {
-    if (isSubmitting || !validate()) return
+  const isManualSjMode = () =>
+    isDeliveryLikeService && sjInputMode === 'manual' && manualSjNumbers.trim().length > 0
+
+  // Kirim invoice ke backend (dipakai setelah gate SJ lolos).
+  const doSubmit = async (send: boolean, overwriteConfirmed = false, disableAutoSj = false) => {
+    if (isSubmitting) return
     setIsSubmitting(true)
-    const result = await dispatch(createInvoice(getDto(false)))
+    const dto = { ...getDto(send, overwriteConfirmed), ...(disableAutoSj ? { auto_create_sj: false, manual_sj_numbers: null } : {}) }
+    const result = await dispatch(createInvoice(dto))
     setIsSubmitting(false)
     if (createInvoice.fulfilled.match(result)) {
-      pushToast({ title: 'Invoice Disimpan', description: `Invoice #${result.payload.invoice_number} berhasil dibuat sebagai draft.`, variant: 'success' })
+      pushToast({
+        title: send ? 'Invoice Dikirim' : 'Invoice Disimpan',
+        description: `Invoice #${result.payload.invoice_number} berhasil dibuat${send ? ' dan dikirim' : ' sebagai draft'}.`,
+        variant: 'success',
+      })
       router.push('/invoice')
       return
     }
     pushToast({ title: 'Gagal membuat invoice', description: (result.payload as string) || 'Invoice tidak tersimpan.', variant: 'error' })
   }
 
-  const handleSaveAndSend = async () => {
-    if (isSubmitting || !validate()) return
-    setIsSubmitting(true)
-    const result = await dispatch(createInvoice(getDto(true)))
-    setIsSubmitting(false)
-    if (createInvoice.fulfilled.match(result)) {
-      pushToast({ title: 'Invoice Dikirim', description: `Invoice #${result.payload.invoice_number} berhasil dibuat dan dikirim.`, variant: 'success' })
-      router.push('/invoice')
-      return
+  // Gate: cek nomor SJ manual sebelum submit.
+  const submitWithSjGate = async (send: boolean) => {
+    if (isSubmitting || isCheckingSj) return
+    setIsCheckingSj(true)
+    try {
+      if (!validate()) return
+      if (!isManualSjMode()) { await doSubmit(send); return }
+
+      const sjNumber = manualSjNumbers.trim()
+      let lookup: SjLookupResult | null
+      try {
+        lookup = await suratJalanRepository.getBySjNumber(sjNumber)
+      } catch {
+        pushToast({ title: 'Gagal cek nomor SJ', description: 'Tidak bisa memverifikasi nomor SJ. Coba lagi.', variant: 'error' })
+        return
+      }
+
+      if (lookup && lookup.invoice_id) {
+        pushToast({
+          title: 'Nomor SJ dipakai invoice lain',
+          description: `SJ ${sjNumber} sudah tertaut ke invoice ${lookup.invoice_number || 'lain'}. Ganti nomor SJ.`,
+          variant: 'error',
+        })
+        return
+      }
+      if (lookup) {
+        setSjGate({ mode: 'confirm', sjNumber, sjStatus: lookup.status, send })
+        return
+      }
+      await doSubmit(send)
+    } finally {
+      setIsCheckingSj(false)
     }
-    pushToast({ title: 'Gagal membuat invoice', description: (result.payload as string) || 'Invoice tidak tersimpan.', variant: 'error' })
   }
+
+  const handleSaveDraft = () => submitWithSjGate(false)
+  const handleSaveAndSend = () => submitWithSjGate(true)
 
   const selectCustomer = (customerId: number) => {
     const customer = customers.find(c => c.id === customerId) || null
@@ -1023,13 +1068,19 @@ export default function CreateInvoicePage() {
                       )}
                     </div>
                   ) : (
-                    <textarea
-                      className="form-input w-full"
-                      rows={3}
-                      value={manualSjNumbers}
-                      onChange={event => setManualSjNumbers(event.target.value)}
-                      placeholder="Contoh: SJ-001, SJ-002 / Tanda Terima 123"
-                    />
+                    <div>
+                      <input
+                        type="text"
+                        className="form-input w-full"
+                        value={manualSjNumbers}
+                        onChange={event => setManualSjNumbers(event.target.value)}
+                        placeholder="Contoh: SJ-2026-07-001"
+                      />
+                      <p className="text-xs text-gray-400 mt-1.5">
+                        Masukkan <strong>satu</strong> nomor SJ. Saat invoice dibuat, SJ dengan nomor ini otomatis dibuat/diperbarui dan terlampir.
+                      </p>
+                      {errors.manual_sj_numbers && <p className="text-xs text-red-600 mt-1">{errors.manual_sj_numbers}</p>}
+                    </div>
                   )}
                 </div>
               )}
@@ -1367,7 +1418,7 @@ export default function CreateInvoicePage() {
         <button onClick={() => router.back()} className="px-4 py-2 rounded-xl border text-sm" style={{ borderColor: 'var(--border-card)' }}>Batal</button>
         <button
           onClick={handleSaveDraft}
-          disabled={isSubmitting}
+          disabled={isSubmitting || isCheckingSj}
           className="px-4 py-2 rounded-xl border text-sm font-medium disabled:opacity-40"
           style={{ borderColor: 'var(--green-primary)', color: 'var(--green-primary)' }}
         >
@@ -1375,7 +1426,7 @@ export default function CreateInvoicePage() {
         </button>
         <button
           onClick={handleSaveAndSend}
-          disabled={isSubmitting}
+          disabled={isSubmitting || isCheckingSj}
           className="px-4 py-2 rounded-xl text-sm font-medium text-white disabled:opacity-40"
           style={{ backgroundColor: 'var(--green-primary)' }}
         >
@@ -1383,6 +1434,19 @@ export default function CreateInvoicePage() {
         </button>
       </div>
       <div className="h-20" /> {/* Spacer for sticky bar */}
+
+      <ConfirmOverwriteSJModal
+        open={sjGate?.mode === 'confirm'}
+        sjNumber={sjGate?.sjNumber || ''}
+        sjStatus={sjGate?.sjStatus}
+        onConfirm={() => { const g = sjGate; setSjGate(null); if (g) doSubmit(g.send, true) }}
+        onCancel={() => setSjGate(g => (g ? { ...g, mode: 'clear' } : null))}
+      />
+      <ClearManualSJPrompt
+        open={sjGate?.mode === 'clear'}
+        onClearAndSubmit={() => { const g = sjGate; setManualSjNumbers(''); setSjGate(null); if (g) doSubmit(g.send, false, true) }}
+        onBack={() => setSjGate(null)}
+      />
     </DashboardLayout>
   )
 }

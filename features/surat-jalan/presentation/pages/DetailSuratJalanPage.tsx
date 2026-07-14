@@ -502,6 +502,9 @@ export default function DetailSuratJalanPage({ uuid }: DetailSuratJalanPageProps
                     Lampirkan ke Invoice
                   </button>
                 )}
+                <button className="w-full px-4 py-2 rounded-lg border" style={{ borderColor: 'var(--border-card)' }} onClick={() => router.push(`/surat-jalan/${selectedSJ.uuid}/edit`)}>
+                  Edit SJ
+                </button>
                 {role === 'super_admin' && (
                   <button
                     className="w-full px-4 py-2 rounded-lg border text-red-600"

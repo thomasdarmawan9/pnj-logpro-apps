@@ -29,7 +29,6 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
   const dispatch = useDispatch<AppDispatch>()
   const { push: pushToast } = useToast()
   const { fleets, drivers } = useSelector((state: RootState) => state.master)
-  const role = useSelector((state: RootState) => state.auth.user?.role ?? null)
   const { selectedSJ, isDetailLoading } = useSuratJalanDetail(uuid)
   const { form, setForm, updateField, errors, validate } = useSuratJalanForm({ mode: 'edit' })
 
@@ -68,7 +67,7 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
 
   useEffect(() => {
     if (selectedSJ) {
-      if (selectedSJ.status === StatusOperasional.DELIVERED || selectedSJ.status === StatusOperasional.VOID) {
+      if (selectedSJ.status === StatusOperasional.VOID) {
         router.push(`/surat-jalan/${selectedSJ.uuid}`)
         return
       }
@@ -132,8 +131,11 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
       uuid: selectedSJ.uuid,
       dto: {
         fleet_id: armadaMode === 'tbd' ? 0 : selectedArmada?.id,
-        driver_id: driverMode === 'master' ? selectedDriver?.id || null : null,
-        driver_name_manual: driverMode === 'tbd' ? 'Belum Ditentukan' : null,
+        // Pertahankan driver existing bila daftar master gagal/masih belum termuat.
+        driver_id: driverMode === 'master' ? (selectedDriver?.id ?? selectedSJ.driver_id) : null,
+        driver_name_manual: driverMode === 'tbd'
+          ? (form.driver_name_manual?.trim() || 'Belum Ditentukan')
+          : null,
         origin: form.origin,
         destination: form.destination,
         cargo_description: form.cargo_description || null,
@@ -166,7 +168,8 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
     )
   }
 
-  const isAssigned = selectedSJ.status === StatusOperasional.ASSIGNED
+  const hasAllocatedStock = [StatusOperasional.ASSIGNED, StatusOperasional.DELIVERED]
+    .includes(selectedSJ.status)
 
   return (
     <DashboardLayout>
@@ -187,7 +190,12 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
       )}
       {selectedSJ.status === StatusOperasional.ASSIGNED && (
         <div className="rounded-xl border px-4 py-3 text-sm mb-4" style={{ borderColor: '#FDE68A', backgroundColor: '#FFFBEB', color: '#92400E' }}>
-          SJ sudah Assigned. Hanya beberapa field yang bisa diedit.
+          SJ sudah Terbit. Perubahan yang disimpan akan langsung memperbarui data surat jalan.
+        </div>
+      )}
+      {selectedSJ.status === StatusOperasional.DELIVERED && (
+        <div className="rounded-xl border px-4 py-3 text-sm mb-4" style={{ borderColor: '#BBF7D0', backgroundColor: '#F0FDF4', color: '#166534' }}>
+          SJ sudah Terkirim. Perubahan yang disimpan akan langsung memperbarui data surat jalan.
         </div>
       )}
 
@@ -318,7 +326,7 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
             availableStockItems={availableStockItems}
             selectedCustomerName={selectedSJ.customer.name}
             isLoadingStockItems={isLoadingStockItems}
-            restoreSelectedStockQty={isAssigned}
+            restoreSelectedStockQty={hasAllocatedStock}
             error={errors.items}
           />
 

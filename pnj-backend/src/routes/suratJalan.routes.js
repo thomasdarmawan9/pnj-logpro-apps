@@ -20,6 +20,7 @@ const {
   deliverSJSchema,
   voidSJSchema,
   listSJQuery,
+  lookupSJQuery,
 } = require('../validators/suratJalan.validator')
 const { generateSJPdfSchema } = require('../validators/pdfJob.validator')
 const { logActivity } = require('../middlewares/activityLog.middleware')
@@ -44,6 +45,12 @@ router.get('/export',
   isAnyRole,
   validate(listSJQuery, 'query'),
   controller.exportXlsx,
+)
+
+router.get('/lookup',
+  isAnyRole,
+  validate(lookupSJQuery, 'query'),
+  controller.lookup,
 )
 
 router.get('/:uuid',
