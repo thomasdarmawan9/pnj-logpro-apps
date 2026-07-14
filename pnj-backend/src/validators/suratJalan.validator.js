@@ -64,8 +64,8 @@ const createSJSchema = Joi.object({
 
 const updateSJSchema = Joi.object({
   fleet_uuid:          Joi.string().uuid({ version: ['uuidv4'] }),
-  // Nilai 0 adalah sentinel untuk memilih armada master "TBD", sama seperti create.
-  fleet_id:            Joi.number().integer().min(0),
+  // null = armada belum ditentukan; 0 tetap diterima untuk kompatibilitas FE lama.
+  fleet_id:            Joi.number().integer().min(0).allow(null),
   driver_uuid:         Joi.string().uuid({ version: ['uuidv4'] }).allow(null),
   driver_id:           Joi.number().integer().min(1).allow(null),
   driver_name_manual:  Joi.string().trim().max(100).allow('', null),

@@ -450,21 +450,33 @@ async function update(uuid, payload, actor) {
 
     const updates = {}
 
-    if (payload.fleet_uuid || ('fleet_id' in payload && payload.fleet_id !== null)) {
-      const f = await Fleet.findOne({
-        where: payload.fleet_uuid
-          ? { uuid: payload.fleet_uuid }
-          : payload.fleet_id === 0
-            ? { plate_number: 'TBD' }
-            : { id: payload.fleet_id },
-        transaction: t,
-      })
-      if (!f) throw new NotFoundError('Fleet tidak ditemukan.')
-      const fleetUnchanged = Number(f.id) === Number(sj.fleet_id)
-      if (!fleetUnchanged && !f.is_tbd && f.status !== 'active') {
-        throw new BadRequestError(`Fleet berstatus ${fleetStatusLabel(f.status)} dan tidak bisa digunakan.`)
+    if (payload.fleet_uuid || 'fleet_id' in payload) {
+      const isTbdSentinel = !payload.fleet_uuid && payload.fleet_id === 0
+      const shouldClearFleet = !payload.fleet_uuid && payload.fleet_id === null
+      if (shouldClearFleet) {
+        updates.fleet_id = null
+      } else {
+        const f = await Fleet.findOne({
+          where: payload.fleet_uuid
+            ? { uuid: payload.fleet_uuid }
+            : isTbdSentinel
+              ? { plate_number: 'TBD' }
+              : { id: payload.fleet_id },
+          transaction: t,
+        })
+        // FE lama mengirim 0 untuk TBD. Bila seed TBD tidak ada, perlakukan
+        // sebagai tanpa armada agar edit tetap dapat disimpan.
+        if (!f && isTbdSentinel) {
+          updates.fleet_id = null
+        } else {
+          if (!f) throw new NotFoundError('Fleet tidak ditemukan.')
+          const fleetUnchanged = Number(f.id) === Number(sj.fleet_id)
+          if (!fleetUnchanged && !f.is_tbd && f.status !== 'active') {
+            throw new BadRequestError(`Fleet berstatus ${fleetStatusLabel(f.status)} dan tidak bisa digunakan.`)
+          }
+          updates.fleet_id = f.id
+        }
       }
-      updates.fleet_id = f.id
     }
 
     if ('driver_uuid' in payload || 'driver_id' in payload) {
