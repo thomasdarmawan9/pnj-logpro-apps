@@ -236,7 +236,9 @@ async function clearAutoStockDisbursementsForSJ(sj, t) {
 async function syncAutoStockDisbursementsForSJ(sj, actor, t, context = {}) {
   await clearAutoStockDisbursementsForSJ(sj, t)
 
-  if (sj.status !== STATUS.ASSIGNED) return
+  // Stok otomatis tetap aktif setelah SJ diterbitkan maupun setelah terkirim.
+  // Status void dibersihkan oleh voidSJ dan draft belum mengalokasikan stok.
+  if (![STATUS.ASSIGNED, STATUS.DELIVERED].includes(sj.status)) return
   const lines = await resolveStockLineItems(getSJStockLines(sj.items), t)
   if (lines.length === 0) return
 
@@ -448,9 +450,13 @@ async function update(uuid, payload, actor) {
 
     const updates = {}
 
-    if (payload.fleet_uuid || payload.fleet_id) {
+    if (payload.fleet_uuid || ('fleet_id' in payload && payload.fleet_id !== null)) {
       const f = await Fleet.findOne({
-        where: payload.fleet_uuid ? { uuid: payload.fleet_uuid } : { id: payload.fleet_id },
+        where: payload.fleet_uuid
+          ? { uuid: payload.fleet_uuid }
+          : payload.fleet_id === 0
+            ? { plate_number: 'TBD' }
+            : { id: payload.fleet_id },
         transaction: t,
       })
       if (!f) throw new NotFoundError('Fleet tidak ditemukan.')
@@ -470,6 +476,10 @@ async function update(uuid, payload, actor) {
           transaction: t,
         })
         if (!d) throw new NotFoundError('Driver tidak ditemukan.')
+        const driverUnchanged = Number(d.id) === Number(sj.driver_id)
+        if (!driverUnchanged && d.status !== 'active') {
+          throw new BadRequestError('Driver berstatus inactive.')
+        }
         updates.driver_id = d.id
       }
     }
@@ -513,7 +523,7 @@ async function update(uuid, payload, actor) {
       'items', 'sj_date', 'destination', 'fleet_id', 'fleet_uuid',
       'driver_id', 'driver_uuid', 'driver_name_manual',
     ]
-    if (sj.status === STATUS.ASSIGNED && stockRelevantFields.some(k => k in payload)) {
+    if ([STATUS.ASSIGNED, STATUS.DELIVERED].includes(sj.status) && stockRelevantFields.some(k => k in payload)) {
       const [fleet, driver] = await Promise.all([
         Fleet.findByPk(sj.fleet_id, { transaction: t }),
         sj.driver_id ? Driver.findByPk(sj.driver_id, { transaction: t }) : null,

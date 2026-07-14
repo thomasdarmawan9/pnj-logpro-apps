@@ -109,8 +109,8 @@ export const updateSuratJalan = createAsyncThunk(
   async ({ uuid, dto }: { uuid: string; dto: UpdateSJDto }, { rejectWithValue }) => {
     try {
       return await suratJalanRepository.update(uuid, dto)
-    } catch {
-      return rejectWithValue('Gagal memperbarui surat jalan')
+    } catch (e) {
+      return rejectWithValue(e instanceof Error ? e.message : 'Gagal memperbarui surat jalan')
     }
   }
 )
