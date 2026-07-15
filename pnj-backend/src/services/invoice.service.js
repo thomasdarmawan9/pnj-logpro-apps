@@ -1025,7 +1025,8 @@ async function create(payload, actor) {
 
 // ── UPDATE ────────────────────────────────────────────────────────────────
 /**
- * Edit policy: items boleh diubah kapan saja kecuali status paid/void.
+ * Edit policy: PPN/PPh boleh diubah di semua status kecuali void.
+ * Items boleh diubah pada draft dan sent/terbit.
  * Kalau payload.items dikirim, items lama dihapus dan diganti.
  */
 async function update(uuid, payload, actor) {
@@ -1042,7 +1043,7 @@ async function update(uuid, payload, actor) {
     // Edit policy:
     //   - draft: edit penuh
     //   - sent/terbit: metode pembayaran/rekening + DP + rincian item
-    //   - outstanding/paid: hanya DP dan lampiran
+    //   - outstanding/paid: DP, lampiran, PPN, dan PPh
     //   - void: hanya tanggal invoice (invoice_date)
     // invoice_date (tanggal pembuatan, semua status) & settlement_date (tanggal
     // pelunasan, hanya invoice lunas) ditangani terpisah — keluarkan dari
@@ -1052,9 +1053,15 @@ async function update(uuid, payload, actor) {
     // sehingga tidak ikut membatasi editabilitas field lain per-status. Guard
     // proyek & cascade SJ ditangani di bawah.
     const payloadKeys = Object.keys(payload)
-    const nonDateKeys = payloadKeys.filter(k => k !== 'invoice_date' && k !== 'settlement_date' && k !== 'customer_id')
-    const isDpOnly = nonDateKeys.every(k => k === 'down_payment')
-    const isLampiranOnly = nonDateKeys.every(k => k === 'lampiran_paths')
+    const policyIgnoredKeys = new Set([
+      'invoice_date', 'settlement_date', 'customer_id',
+      // Flag kontrol sinkronisasi SJ, bukan field invoice yang diedit.
+      'auto_create_sj', 'overwrite_sj_confirmed',
+    ])
+    const nonDateKeys = payloadKeys.filter(k => !policyIgnoredKeys.has(k))
+    const isRestrictedStatusEdit = nonDateKeys.every(k =>
+      ['down_payment', 'lampiran_paths', 'tax_percent', 'pph_percent'].includes(k)
+    )
     const isSentBillingOnly = invoice.status === STATUS.SENT &&
       nonDateKeys.every(k => ['due_date', 'payment_method', 'bank_account_id', 'down_payment', 'items', 'delivery_pricing_mode', 'origin', 'destination', 'cargo_description', 'manual_sj_numbers', 'delivery_date', 'lampiran_paths', 'tax_percent', 'pph_percent', 'insurance_amount'].includes(k))
 
@@ -1063,7 +1070,7 @@ async function update(uuid, payload, actor) {
       if (nonDateKeys.length > 0) {
         throw new ForbiddenError('Invoice void hanya dapat mengubah tanggal invoice.')
       }
-    } else if (!isDpOnly && !isLampiranOnly && invoice.status !== STATUS.DRAFT && !isSentBillingOnly) {
+    } else if (!isRestrictedStatusEdit && invoice.status !== STATUS.DRAFT && !isSentBillingOnly) {
       throw new ForbiddenError(`Invoice status ${invoice.status} tidak dapat diedit untuk field yang dikirim.`)
     }
 
@@ -1206,6 +1213,11 @@ async function update(uuid, payload, actor) {
           `Hapus/turunkan DP atau pembayaran dulu sebelum mengubah items/pajak.`,
           { code: 'TOTAL_BELOW_PAID' },
         )
+      }
+      // Bila pajak dinaikkan pada invoice lunas, pembayaran yang sudah tercatat
+      // bisa menjadi kurang dari total baru. Kembalikan status ke outstanding.
+      if (invoice.status === STATUS.PAID && currentPaid + 0.001 < round2(newTotals.total_amount)) {
+        updates.status = STATUS.OUTSTANDING
       }
     }
 

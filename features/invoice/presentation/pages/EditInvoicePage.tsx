@@ -98,6 +98,7 @@ export default function EditInvoicePage({ uuid }: Props) {
   const fullEditable = isDraft
   const canEditPaymentSetup = isDraft || invoice?.status === InvoiceStatus.SENT
   const canEditItems = isDraft || invoice?.status === InvoiceStatus.SENT
+  const canEditTaxes = !isVoid
 
   const { items, subtotalAmount, addItem, updateItem, removeItem, reorderItems, resetItems, calculateTax, totalAmount } = useInvoiceItems()
 
@@ -667,7 +668,14 @@ export default function EditInvoicePage({ uuid }: Props) {
             down_payment: dpPayload,
             ...customerPatch,
           }
-        : { invoice_date: invoiceDate, down_payment: dpPayload, ...(isPaid ? { settlement_date: settlementDate } : {}), ...customerPatch }
+        : {
+            invoice_date: invoiceDate,
+            tax_percent: taxEnabled ? taxPercent : 0,
+            pph_percent: pphEnabled ? pphPercent : 0,
+            down_payment: dpPayload,
+            ...(isPaid ? { settlement_date: settlementDate } : {}),
+            ...customerPatch,
+          }
 
       const result = validateUpdateInvoice(dto as Parameters<typeof validateUpdateInvoice>[0], invoice?.service_type, invoice?.custom_service_name)
       setErrors(result.errors)
@@ -714,7 +722,7 @@ export default function EditInvoicePage({ uuid }: Props) {
                 ? `Mode Edit Penuh — Invoice #${invoice?.invoice_number}`
                 : canEditPaymentSetup
                   ? `Mode Edit Invoice Terbit — Invoice #${invoice?.invoice_number}`
-                  : `Mode Edit DP — Invoice #${invoice?.invoice_number}`
+                  : `Mode Edit DP & Pajak — Invoice #${invoice?.invoice_number}`
             }
           </div>
           <div className="text-xs" style={{ color: fullEditable ? '#B45309' : '#075985' }}>
@@ -724,7 +732,7 @@ export default function EditInvoicePage({ uuid }: Props) {
                 ? 'Anda sedang mengedit invoice draft. Perubahan belum disimpan.'
                 : canEditPaymentSetup
                   ? 'Invoice terbit bisa mengubah tanggal jatuh tempo, metode pembayaran, DP, rincian item, serta PPN/PPh/Asuransi.'
-                  : 'Invoice sudah berjalan. Hanya tanggal invoice dan DP/Uang Muka yang bisa diedit. Item & pajak terkunci.'
+                  : 'Invoice sudah berjalan. Tanggal invoice, DP/Uang Muka, PPN, dan PPh bisa diedit. Item tetap terkunci.'
             }
           </div>
         </div>
@@ -1050,7 +1058,7 @@ export default function EditInvoicePage({ uuid }: Props) {
           )}
 
           {/* Tax */}
-          {canEditPaymentSetup && <div className="bg-white rounded-xl border p-6" style={{ borderColor: 'var(--border-card)' }}>
+          {canEditTaxes && <div className="bg-white rounded-xl border p-6" style={{ borderColor: 'var(--border-card)' }}>
             <h2 className="text-base font-semibold mb-4">Kalkulasi Pajak</h2>
             <InvoiceTaxCalculator
               subtotal={invoiceSubtotalAmount}
@@ -1065,6 +1073,7 @@ export default function EditInvoicePage({ uuid }: Props) {
               onChangePphPercent={setPphPercent}
               insuranceEnabled={insuranceEnabled}
               insuranceAmount={insuranceAmount}
+              insuranceReadOnly={!canEditPaymentSetup}
               onToggleInsurance={toggleInsurance}
               onChangeInsuranceAmount={setInsuranceAmount}
             />

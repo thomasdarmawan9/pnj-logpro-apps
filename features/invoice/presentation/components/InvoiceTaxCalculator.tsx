@@ -12,6 +12,7 @@ interface Props {
   pphEnabled: boolean
   insuranceEnabled: boolean
   insuranceAmount: number
+  insuranceReadOnly?: boolean
   onToggleInsurance: (enabled: boolean) => void
   onChangeInsuranceAmount: (amount: number) => void
   isPkp?: boolean
@@ -29,6 +30,7 @@ export default function InvoiceTaxCalculator({
   pphEnabled,
   insuranceEnabled,
   insuranceAmount,
+  insuranceReadOnly = false,
   onToggleInsurance,
   onChangeInsuranceAmount,
   isPkp,
@@ -129,13 +131,14 @@ export default function InvoiceTaxCalculator({
           <div className="flex items-center gap-2">
             <button
               onClick={() => onToggleInsurance(!insuranceEnabled)}
-              className="relative inline-flex h-5 w-9 items-center rounded-full transition-colors"
+              disabled={insuranceReadOnly}
+              className="relative inline-flex h-5 w-9 items-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-60"
               style={{ backgroundColor: insuranceEnabled ? '#0369A1' : '#D1D5DB' }}
             >
               <span className="sr-only">Toggle Asuransi</span>
               <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${insuranceEnabled ? 'translate-x-4' : 'translate-x-1'}`} />
             </button>
-            <span className="text-gray-600">Asuransi</span>
+            <span className="text-gray-600">Asuransi{insuranceReadOnly ? ' (terkunci)' : ''}</span>
           </div>
           <div className="flex items-center gap-1">
             {insuranceEnabled && (
@@ -149,6 +152,7 @@ export default function InvoiceTaxCalculator({
                 className="w-28 text-right form-input text-sm py-1"
                 value={insuranceAmount || ''}
                 placeholder="0"
+                disabled={insuranceReadOnly}
                 onChange={e => onChangeInsuranceAmount(Math.max(0, Number(e.target.value) || 0))}
               />
             ) : (
