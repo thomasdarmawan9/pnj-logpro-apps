@@ -189,8 +189,10 @@ const updateInvoiceSchema = Joi.object({
   //   - null   → hapus DP existing
   //   - tidak dikirim → tidak diubah
   down_payment:    downPaymentSchema.allow(null),
-  auto_create_sj:         Joi.boolean().default(true),
-  overwrite_sj_confirmed: Joi.boolean().default(false),
+  // Jangan beri default pada update: field yang tidak dikirim harus tetap absent
+  // agar pemeriksaan policy status hanya melihat perubahan yang diminta user.
+  auto_create_sj:         Joi.boolean(),
+  overwrite_sj_confirmed: Joi.boolean(),
 }).min(1).custom((val, helpers) => {
   if (val.invoice_date && val.due_date &&
       new Date(val.due_date) < new Date(val.invoice_date)) {
