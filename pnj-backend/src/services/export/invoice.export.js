@@ -2,6 +2,7 @@
 
 const invoiceService = require('../invoice.service')
 const { newWorkbook, addSheet, streamWorkbook, FMT } = require('./xlsxRenderer')
+const { todayDateOnly } = require('../../utils/dateOnly')
 
 const STATUS_LABEL = {
   draft:       'Draft',
@@ -93,7 +94,7 @@ async function exportXlsx(filters, res) {
     ],
   })
 
-  const filename = `invoice_${new Date().toISOString().slice(0, 10)}.xlsx`
+  const filename = `invoice_${todayDateOnly()}.xlsx`
   await streamWorkbook(wb, res, filename)
 }
 

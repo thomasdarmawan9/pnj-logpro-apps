@@ -9,6 +9,7 @@ const agingArSvc      = require('../services/reports/agingAr.service')
 const profitLossSvc   = require('../services/reports/profitLoss.service')
 const auditTrailSvc   = require('../services/reports/auditTrail.service')
 const { formatIDR, formatDateShort } = require('../pdf/utils')
+const { todayDateOnly } = require('../utils/dateOnly')
 
 // ── Aging AR ───────────────────────────────────────────────────────────────
 const getAgingAR = asyncHandler(async (req, res) => {
@@ -366,7 +367,7 @@ const exportAgingAR = asyncHandler(async (req, res) => {
     const col = sheet.getColumn(key)
     col.numFmt = '"Rp"#,##0'
   })
-  await sendWorkbook(res, workbook, `aging-ar-${new Date().toISOString().slice(0, 10)}.xlsx`)
+  await sendWorkbook(res, workbook, `aging-ar-${todayDateOnly()}.xlsx`)
 })
 
 const exportAgingARCustomerExcel = asyncHandler(async (req, res) => {
@@ -451,7 +452,7 @@ const exportAgingARCustomerExcel = asyncHandler(async (req, res) => {
     keys.forEach(key => sheet.getColumn(key).numFmt = '"Rp"#,##0')
   })
 
-  const filename = `aging-ar-customer-${safeFilename(data.customer_name)}-${new Date().toISOString().slice(0, 10)}.xlsx`
+  const filename = `aging-ar-customer-${safeFilename(data.customer_name)}-${todayDateOnly()}.xlsx`
   await sendWorkbook(res, workbook, filename)
 })
 
@@ -469,8 +470,7 @@ const exportAgingARCustomerPdf = asyncHandler(async (req, res) => {
   // Optional status filter: ?status=outstanding|paid|sent|draft|void
   const statusFilter = req.query.status && req.query.status !== 'all' ? req.query.status : null
   if (statusFilter) {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
+    const today = todayDateOnly()
 
     data.projects.forEach(project => {
       project.invoices = project.invoices.filter(inv => {
@@ -479,7 +479,7 @@ const exportAgingARCustomerPdf = asyncHandler(async (req, res) => {
           const isExplicitlyOutstanding = inv.status === 'outstanding'
           const isSentOverdue = inv.status === 'sent'
             && Number(inv.remaining_amount) > 0
-            && new Date(inv.due_date) < today
+            && inv.due_date < today
           return isExplicitlyOutstanding || isSentOverdue
         }
         return inv.status === statusFilter
@@ -501,7 +501,7 @@ const exportAgingARCustomerPdf = asyncHandler(async (req, res) => {
   }
 
   const { projectRows, invoiceRows, sjRows } = customerDetailRows(data)
-  const date = new Date().toISOString().slice(0, 10)
+  const date = todayDateOnly()
   const statusSuffix = statusFilter ? `-${statusFilter}` : ''
   const filename = `aging-ar-customer-${safeFilename(data.customer_name)}${statusSuffix}-${date}.pdf`
 
@@ -597,7 +597,7 @@ const exportProfitLoss = asyncHandler(async (req, res) => {
   ]
   data.projects.forEach(p => sheet.addRow(p))
   styleWorkbook(workbook)
-  await sendWorkbook(res, workbook, `profit-loss-${new Date().toISOString().slice(0, 10)}.xlsx`)
+  await sendWorkbook(res, workbook, `profit-loss-${todayDateOnly()}.xlsx`)
 })
 
 module.exports = {

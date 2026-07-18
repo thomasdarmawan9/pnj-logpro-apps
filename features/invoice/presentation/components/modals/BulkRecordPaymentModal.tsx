@@ -5,7 +5,8 @@ import { useDispatch } from 'react-redux'
 import { AppDispatch } from '@/store'
 import ModalShell from '../../../../surat-jalan/presentation/components/modals/ModalShell'
 import { Invoice } from '../../../domain/entities/Invoice'
-import { recordPayment } from '@/store/slices/invoiceSlice'
+import { bulkRecordPayments } from '@/store/slices/invoiceSlice'
+import { todayDateOnly } from '@/lib/dateOnly'
 
 function formatRupiah(amount: number): string {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(amount)
@@ -26,7 +27,7 @@ interface Props {
 
 export default function BulkRecordPaymentModal({ open, invoices, onClose, onSuccess }: Props) {
   const dispatch = useDispatch<AppDispatch>()
-  const today = new Date().toISOString().split('T')[0]
+  const today = todayDateOnly()
 
   const [paymentDate, setPaymentDate] = useState(today)
   const [methods, setMethods] = useState<Record<string, 'transfer' | 'cash' | 'check' | ''>>({})
@@ -41,37 +42,31 @@ export default function BulkRecordPaymentModal({ open, invoices, onClose, onSucc
   }, [open])
 
   const total = invoices.reduce((sum, inv) => sum + inv.remaining_amount, 0)
+  const minimumPaymentDate = invoices.reduce(
+    (latest, invoice) => invoice.invoice_date > latest ? invoice.invoice_date : latest,
+    '',
+  )
   const allMethodsSelected = invoices.length > 0 && invoices.every(inv => methods[inv.uuid])
-  const canSubmit = allMethodsSelected && !!paymentDate && !isSubmitting
+  const canSubmit = allMethodsSelected && !!paymentDate && paymentDate >= minimumPaymentDate && paymentDate <= today && !isSubmitting
 
   const handleSubmit = async () => {
     if (!canSubmit) return
     setIsSubmitting(true)
 
-    let successCount = 0
-    let failCount = 0
-    for (const inv of invoices) {
-      const method = methods[inv.uuid]
-      if (!method) continue
-      const result = await dispatch(recordPayment({
-        uuid: inv.uuid,
-        dto: {
-          payment_date: paymentDate,
-          amount: inv.remaining_amount,
-          method,
-          proof_path: null,
-          notes: 'Pembayaran pelunasan',
-        },
-      }))
-      if (recordPayment.fulfilled.match(result)) {
-        successCount += 1
-      } else {
-        failCount += 1
-      }
-    }
+    const result = await dispatch(bulkRecordPayments({
+      payment_date: paymentDate,
+      payments: invoices.map(inv => ({
+        invoice_uuid: inv.uuid,
+        method: methods[inv.uuid] as 'transfer' | 'cash' | 'check',
+      })),
+      notes: 'Pembayaran pelunasan',
+    }))
 
     setIsSubmitting(false)
-    onSuccess(successCount, failCount)
+    onSuccess(
+      bulkRecordPayments.fulfilled.match(result) ? invoices.length : 0,
+      bulkRecordPayments.fulfilled.match(result) ? 0 : invoices.length,
+    )
   }
 
   return (
@@ -91,7 +86,12 @@ export default function BulkRecordPaymentModal({ open, invoices, onClose, onSucc
             className="form-input w-full text-sm"
             value={paymentDate}
             onChange={e => setPaymentDate(e.target.value)}
+            min={minimumPaymentDate || undefined}
+            max={today}
           />
+          {paymentDate && paymentDate < minimumPaymentDate && (
+            <p className="text-xs text-red-500 mt-1">Tanggal pelunasan tidak boleh sebelum tanggal invoice yang dipilih.</p>
+          )}
         </div>
 
         {/* Nominal Pembayaran */}

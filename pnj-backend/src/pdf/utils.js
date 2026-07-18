@@ -1,5 +1,7 @@
 'use strict'
 
+const { BUSINESS_TIME_ZONE, normalizeDateOnly } = require('../utils/dateOnly')
+
 /**
  * Helper format Rp + tanggal Indonesia untuk PDF templates.
  */
@@ -17,19 +19,36 @@ const BULAN_ID = [
   'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
 ]
 
+function calendarParts(input) {
+  const dateOnly = typeof input === 'string' ? normalizeDateOnly(input) : null
+  if (dateOnly) {
+    const [year, month, day] = dateOnly.split('-').map(Number)
+    return { year, month, day }
+  }
+  const date = input instanceof Date ? input : new Date(input)
+  if (Number.isNaN(date.getTime())) return null
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: BUSINESS_TIME_ZONE,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+    }).formatToParts(date).filter(part => part.type !== 'literal').map(part => [part.type, part.value]),
+  )
+  return { year: Number(parts.year), month: Number(parts.month), day: Number(parts.day) }
+}
+
 function formatDateID(input) {
   if (!input) return '-'
-  const d = new Date(input)
-  if (Number.isNaN(d.getTime())) return String(input)
-  return `${d.getDate()} ${BULAN_ID[d.getMonth()]} ${d.getFullYear()}`
+  const parts = calendarParts(input)
+  if (!parts) return String(input)
+  return `${parts.day} ${BULAN_ID[parts.month - 1]} ${parts.year}`
 }
 
 function formatDateShort(input) {
   if (!input) return '-'
-  const d = new Date(input)
-  if (Number.isNaN(d.getTime())) return String(input)
-  const yy = String(d.getFullYear()).slice(-2)
-  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${yy}`
+  const parts = calendarParts(input)
+  if (!parts) return String(input)
+  const yy = String(parts.year).slice(-2)
+  return `${String(parts.day).padStart(2, '0')}/${String(parts.month).padStart(2, '0')}/${yy}`
 }
 
 /**

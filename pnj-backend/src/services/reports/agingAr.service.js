@@ -14,6 +14,7 @@ const {
 } = require('../../models')
 const { NotFoundError } = require('../../utils/AppError')
 const { toISODate } = require('../../utils/reportPeriods')
+const { differenceInCalendarDays, normalizeDateOnly, todayDateOnly } = require('../../utils/dateOnly')
 
 const ALL_BUCKETS = ['current', '1-30', '31-60', '61-90', '>90']
 
@@ -22,12 +23,9 @@ function emptyBucketTotals() {
 }
 
 function getAgingBucket(dueDate, asOf) {
-  const due = dueDate instanceof Date ? dueDate : new Date(dueDate)
-  const now = asOf   instanceof Date ? asOf   : new Date(asOf)
-  // Pakai UTC components supaya konsisten lintas timezone server.
-  const dueUTC = Date.UTC(due.getUTCFullYear(), due.getUTCMonth(), due.getUTCDate())
-  const nowUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
-  const diffDays = Math.floor((nowUTC - dueUTC) / (1000 * 60 * 60 * 24))
+  const due = normalizeDateOnly(toISODate(dueDate))
+  const asOfDate = normalizeDateOnly(toISODate(asOf)) || todayDateOnly()
+  const diffDays = differenceInCalendarDays(asOfDate, due)
   if (diffDays <= 0)  return { bucket: 'current',  daysOverdue: 0 }
   if (diffDays <= 30) return { bucket: '1-30',     daysOverdue: diffDays }
   if (diffDays <= 60) return { bucket: '31-60',    daysOverdue: diffDays }
@@ -174,8 +172,8 @@ function buildSJDetails(sjs) {
  *   - as_of: ISO date (default = today)
  */
 async function getSummary(filters = {}) {
-  const asOf = filters.as_of ? new Date(filters.as_of) : new Date()
-  const asOfISO = toISODate(asOf)
+  const asOf = filters.as_of || todayDateOnly()
+  const asOfISO = asOf
 
   const invoices = await fetchOutstandingInvoices({
     asOfDate:   asOf,
@@ -492,7 +490,7 @@ const addExportInvoiceMetric = addInvoiceMetric
 
 async function getExportSummary(filters = {}) {
   const summary = await getSummary(filters)
-  const asOf = filters.as_of ? new Date(filters.as_of) : new Date()
+  const asOf = filters.as_of || todayDateOnly()
   const metricsByCustomer = new Map()
   const sjCountsByCustomer = await fetchExportSjCounts(filters)
 
@@ -596,7 +594,7 @@ async function getCustomerDetail(customerId) {
   const projectIds = new Set()
   const invoiceCount = invoices.filter(i => i.status !== 'void').length
 
-  const asOf = new Date()
+  const asOf = todayDateOnly()
   for (const inv of invoices) {
     if (inv.status === 'void') continue
     if (inv.project?.id) projectIds.add(inv.project.id)
@@ -739,7 +737,7 @@ async function getProjectDetail(projectId, opts = {}) {
   })
   if (!project) throw new NotFoundError('Project tidak ditemukan.')
 
-  const asOf = opts.asOf ? new Date(opts.asOf) : new Date()
+  const asOf = opts.asOf || todayDateOnly()
 
   // Invoices + items + payments (incl creator) + attached SJs.
   const invoices = await Invoice.findAll({

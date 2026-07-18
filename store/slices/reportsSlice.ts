@@ -7,6 +7,7 @@ import { AuditLog } from '@/features/reports/domain/entities/AuditLog'
 import { AgingBucket } from '@/features/reports/domain/value-objects/AgingBucket'
 import { PeriodPreset, ProfitabilityFilter } from '@/features/reports/application/dto/ProfitLossFilterDto'
 import { reportsRepository } from '@/features/reports/infrastructure/repositories/MockReportsRepository'
+import { addMonthsDateOnly, todayDateOnly } from '@/lib/dateOnly'
 
 // ─── Filter State Types ────────────────────────────────────────────────────────
 
@@ -76,13 +77,8 @@ interface ReportsState {
   isExporting: boolean
 }
 
-const sixMonthsAgo = (() => {
-  const d = new Date()
-  d.setMonth(d.getMonth() - 6)
-  return d.toISOString().split('T')[0]
-})()
-
-const today = new Date().toISOString().split('T')[0]
+const today = todayDateOnly()
+const sixMonthsAgo = addMonthsDateOnly(today, -6)
 
 const initialState: ReportsState = {
   agingAR: {

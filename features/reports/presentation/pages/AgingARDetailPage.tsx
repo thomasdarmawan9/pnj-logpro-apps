@@ -30,6 +30,7 @@ import { useAgingARDetail } from '../hooks/useAgingARDetail'
 import { useAgingARCustomerDetail } from '../hooks/useAgingARCustomerDetail'
 import { AgingARProjectDetail, ProjectDetailInvoice, ProjectDetailSuratJalan } from '@/features/reports/domain/entities/AgingARProjectDetail'
 import { formatRupiah, formatDate } from '@/lib/formatters'
+import { todayDateOnly } from '@/lib/dateOnly'
 import { AGING_BUCKET_CONFIG } from '@/features/reports/domain/value-objects/AgingBucket'
 
 // ─── Status Helpers ───────────────────────────────────────────────────────────
@@ -192,7 +193,7 @@ function OperationalReportSection({
   const handleAdd = () => {
     setDraftItems(items => ([
       ...items,
-      { id: `manual-${Date.now()}`, date: new Date().toISOString().split('T')[0], category: '', description: '', sj_uuid: '', amount: 0 },
+      { id: `manual-${Date.now()}`, date: todayDateOnly(), category: '', description: '', sj_uuid: '', amount: 0 },
     ]))
   }
 

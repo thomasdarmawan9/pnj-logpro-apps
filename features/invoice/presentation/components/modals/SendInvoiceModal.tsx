@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Send } from 'lucide-react'
 import ModalShell from '../../../../surat-jalan/presentation/components/modals/ModalShell'
+import { formatDateOnly } from '@/lib/dateOnly'
 import { Invoice } from '../../../domain/entities/Invoice'
 
 function formatRupiah(amount: number): string {
@@ -10,7 +11,7 @@ function formatRupiah(amount: number): string {
 }
 
 function formatDate(d: string): string {
-  return new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })
+  return formatDateOnly(d, { day: '2-digit', month: 'long', year: 'numeric' })
 }
 
 interface Props {

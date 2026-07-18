@@ -1,5 +1,6 @@
 import type { AgingARSummary } from '../../domain/entities/AgingARReport'
 import { AgingBucket } from '../../domain/value-objects/AgingBucket'
+import { formatDateOnly } from '@/lib/dateOnly'
 
 function rp(value: number): string {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(value || 0)
@@ -12,8 +13,7 @@ export async function exportAgingARPdf(data: AgingARSummary): Promise<void> {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
 
   const pageW = doc.internal.pageSize.getWidth()
-  const today = new Date(data.as_of_date)
-  const asOfLabel = today.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })
+  const asOfLabel = formatDateOnly(data.as_of_date, { day: '2-digit', month: 'long', year: 'numeric' })
   const printedAt = new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 
   // ── Header ────────────────────────────────────────────────────────────────

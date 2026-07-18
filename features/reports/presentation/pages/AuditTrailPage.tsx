@@ -8,8 +8,9 @@ import { RootState } from '@/store'
 import { useAuditTrail } from '../hooks/useAuditTrail'
 import AuditTrailTable from '../components/AuditTrailTable'
 import { MODULE_LABELS, ACTION_BADGE_CONFIG } from '@/features/reports/domain/entities/AuditLog'
+import { todayDateOnly } from '@/lib/dateOnly'
 
-const today = new Date().toISOString().split('T')[0]
+const today = todayDateOnly()
 
 const PERIOD_OPTIONS = [
   { value: 'today', label: 'Hari Ini' },

@@ -8,6 +8,7 @@ import { AgingARSummary } from '@/features/reports/domain/entities/AgingARReport
 import { ProfitLossSummary } from '@/features/reports/domain/entities/ProfitLossReport'
 import { exportAgingARReport, exportProfitLossReport } from '../../infrastructure/repositories/MockReportsRepository'
 import { exportAgingARPdf } from '../../application/use-cases/ExportAgingARPdf'
+import { todayDateOnly } from '@/lib/dateOnly'
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
@@ -33,7 +34,7 @@ export function useReportExport() {
     dispatch(setExporting(true))
     try {
       const blob = await exportAgingARReport(agingFilters)
-      downloadBlob(blob, `aging-ar-${new Date().toISOString().slice(0, 10)}.xlsx`)
+      downloadBlob(blob, `aging-ar-${todayDateOnly()}.xlsx`)
     } finally {
       setIsExportingLocal(false)
       dispatch(setExporting(false))
@@ -45,7 +46,7 @@ export function useReportExport() {
     dispatch(setExporting(true))
     try {
       const blob = await exportProfitLossReport(profitLossFilters)
-      downloadBlob(blob, `profit-loss-${new Date().toISOString().slice(0, 10)}.xlsx`)
+      downloadBlob(blob, `profit-loss-${todayDateOnly()}.xlsx`)
     } finally {
       setIsExportingLocal(false)
       dispatch(setExporting(false))

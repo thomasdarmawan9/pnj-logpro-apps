@@ -1,3 +1,5 @@
+import { differenceInCalendarDays, todayDateOnly } from '@/lib/dateOnly'
+
 export enum AgingBucket {
   CURRENT    = 'current',
   DAYS_1_30  = '1-30',
@@ -21,10 +23,8 @@ export const AGING_BUCKET_CONFIG: Record<AgingBucket, {
   [AgingBucket.OVER_90]:    { label: '> 90 Hari',         color: '#7F1D1D', bg: '#FEF2F2', border: '#7F1D1D', badgeBg: '#FECACA', days: [91, null] },
 }
 
-export function getAgingBucket(dueDate: string, today: string = new Date().toISOString()): AgingBucket {
-  const due = new Date(dueDate)
-  const now = new Date(today)
-  const diffDays = Math.floor((now.getTime() - due.getTime()) / (1000 * 60 * 60 * 24))
+export function getAgingBucket(dueDate: string, today: string = todayDateOnly()): AgingBucket {
+  const diffDays = differenceInCalendarDays(today, dueDate)
   if (diffDays <= 0)  return AgingBucket.CURRENT
   if (diffDays <= 30) return AgingBucket.DAYS_1_30
   if (diffDays <= 60) return AgingBucket.DAYS_31_60

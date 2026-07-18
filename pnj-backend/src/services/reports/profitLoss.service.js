@@ -10,7 +10,7 @@ const {
   Driver,
   Fleet,
 } = require('../../models')
-const { resolvePeriod, toISODate } = require('../../utils/reportPeriods')
+const { resolveDateOnlyPeriod, toISODate } = require('../../utils/reportPeriods')
 
 function round2(n) { return Math.round(Number(n) * 100) / 100 }
 
@@ -117,7 +117,7 @@ function finalizeEntry(e, includeDetails) {
  *   - include_details: boolean
  */
 async function getSummary(filters = {}) {
-  const period = resolvePeriod(
+  const period = resolveDateOnlyPeriod(
     filters.period_preset,
     filters.period_from,
     filters.period_to,

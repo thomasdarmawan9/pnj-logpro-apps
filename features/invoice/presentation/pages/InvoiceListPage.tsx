@@ -35,6 +35,7 @@ import GeneratePDFModal from '../components/modals/GeneratePDFModal'
 import { exportInvoices } from '../../infrastructure/repositories/MockInvoiceRepository'
 import { fetchCustomers, fetchProjects } from '@/store/slices/masterSlice'
 import TablePagination from '@/features/master/presentation/components/TablePagination'
+import { todayDateOnly } from '@/lib/dateOnly'
 
 function isEligibleForBulkPayment(invoice: Invoice): boolean {
   return invoice.status === InvoiceStatus.SENT || invoice.status === InvoiceStatus.OUTSTANDING
@@ -152,7 +153,7 @@ export default function InvoiceListPage() {
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `invoice-export-${new Date().toISOString().slice(0, 10)}.xlsx`
+    link.download = `invoice-export-${todayDateOnly()}.xlsx`
     link.click()
     URL.revokeObjectURL(url)
   }
@@ -352,8 +353,8 @@ export default function InvoiceListPage() {
             return
           }
           pushToast({
-            title: 'Sebagian Gagal',
-            description: `${successCount} invoice berhasil dilunasi, ${failCount} gagal. Silakan coba lagi untuk yang gagal.`,
+            title: 'Pelunasan Massal Gagal',
+            description: `Tidak ada perubahan disimpan. ${failCount} invoice batal dilunasi agar data tetap konsisten.`,
             variant: 'error',
           })
         }}

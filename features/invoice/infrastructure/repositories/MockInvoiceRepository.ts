@@ -3,7 +3,7 @@ import { Invoice, InvoiceStatus, InvoiceFilterState, PaginationState, AttachedSJ
 import { IInvoiceRepository, PaginatedResult } from './IInvoiceRepository'
 import { CreateInvoiceDto, CreateInvoiceItemDto } from '../../application/dto/CreateInvoiceDto'
 import { UpdateInvoiceDto } from '../../application/dto/UpdateInvoiceDto'
-import { RecordPaymentDto } from '../../application/dto/RecordPaymentDto'
+import { BulkRecordPaymentDto, RecordPaymentDto } from '../../application/dto/RecordPaymentDto'
 import { resolveEffectiveInvoiceServiceType } from '../../domain/services/invoiceServiceType'
 
 type ApiId = number | string | null
@@ -173,6 +173,7 @@ function normalizeInvoice(inv: ApiInvoice): Invoice {
   return {
     ...inv,
     payment_method: inv.payment_method ?? 'transfer',
+    settlement_date: inv.settlement_date ?? null,
     service_type: inv.service_type ?? 'delivery',
     custom_service_name: inv.custom_service_name ?? null,
     delivery_pricing_mode: inv.delivery_pricing_mode ?? 'shipment',
@@ -330,6 +331,14 @@ export class MockInvoiceRepository implements IInvoiceRepository {
       body: dto,
     })
     return normalizeInvoice(response.data)
+  }
+
+  async recordBulkPayments(dto: BulkRecordPaymentDto): Promise<Invoice[]> {
+    const response = await apiRequest<ApiInvoice[]>('/invoices/payments/bulk', {
+      method: 'POST',
+      body: dto,
+    })
+    return response.data.map(normalizeInvoice)
   }
 
   async void(uuid: string, reason: string): Promise<Invoice> {

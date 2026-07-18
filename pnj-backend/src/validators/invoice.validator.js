@@ -1,6 +1,7 @@
 'use strict'
 
 const Joi = require('joi')
+const { normalizeDateOnly } = require('../utils/dateOnly')
 
 const STATUSES = ['draft', 'sent', 'outstanding', 'paid', 'void']
 const PAYMENT_METHODS = ['transfer', 'cash', 'check']
@@ -9,6 +10,14 @@ const DELIVERY_PRICING_MODES = ['shipment', 'item']
 const PERIODS = ['today', 'week', 'month', 'last_month', 'all']
 const DELIVERY_ADDITIONAL_CHARGE_LABEL = 'Pembiayaan Lainnya'
 
+const dateOnlySchema = Joi.string().trim().custom((value, helpers) => {
+  const normalized = normalizeDateOnly(value)
+  return normalized || helpers.error('dateOnly.format')
+}).messages({
+  'dateOnly.format': '{{#label}} harus menggunakan tanggal valid dengan format YYYY-MM-DD.',
+  'string.base': '{{#label}} harus menggunakan format YYYY-MM-DD.',
+})
+
 /**
  * Down Payment (DP / Uang Muka) sub-schema.
  *  - Boleh dikirim saat create invoice atau via update.
@@ -16,7 +25,7 @@ const DELIVERY_ADDITIONAL_CHARGE_LABEL = 'Pembiayaan Lainnya'
  *  - Untuk SET/REPLACE: kirim object dengan amount > 0.
  */
 const downPaymentSchema = Joi.object({
-  payment_date: Joi.date().iso().required(),
+  payment_date: dateOnlySchema.required(),
   amount:       Joi.number().precision(2).min(0.01).required().messages({
     'number.min': 'Nominal DP harus lebih dari 0.',
   }),
@@ -35,8 +44,8 @@ const itemSchema = Joi.object({
   driver_name_manual: Joi.string().trim().max(100).allow('', null),
   fleet_label:   Joi.string().trim().min(1).max(150).required(),
   description:   Joi.string().trim().allow('', null),
-  period_start:  Joi.date().iso().allow(null),
-  period_end:    Joi.date().iso().allow(null),
+  period_start:  dateOnlySchema.allow(null),
+  period_end:    dateOnlySchema.allow(null),
   rental_duration_years:  Joi.number().integer().min(0).default(0),
   rental_duration_months: Joi.number().integer().min(0).default(0),
   rental_duration_days:   Joi.number().integer().min(0).default(0),
@@ -51,8 +60,7 @@ const itemSchema = Joi.object({
   unit_price:    Joi.number().precision(2).min(0).required(),
   sort_order:    Joi.number().integer().min(0).default(0),
 }).custom((val, helpers) => {
-  if (val.period_start && val.period_end &&
-      new Date(val.period_start) > new Date(val.period_end)) {
+  if (val.period_start && val.period_end && val.period_start > val.period_end) {
     return helpers.error('any.custom', { message: 'period_start tidak boleh lebih besar dari period_end.' })
   }
   return val
@@ -113,13 +121,11 @@ const createInvoiceSchema = Joi.object({
   project_id:       Joi.number().integer().min(1).allow(null),
   customer_uuid:    Joi.string().uuid({ version: ['uuidv4'] }),
   customer_id:      Joi.number().integer().min(1).allow(null),
-  invoice_date:     Joi.date().iso().required(),
-  due_date:         Joi.date().iso().min(Joi.ref('invoice_date')).required().messages({
-    'date.min': 'Tanggal jatuh tempo tidak boleh lebih kecil dari tanggal invoice.',
-  }),
+  invoice_date:     dateOnlySchema.required(),
+  due_date:         dateOnlySchema.required(),
   service_type:     Joi.string().valid(...SERVICE_TYPES).required(),
   custom_service_name: Joi.string().trim().max(100).allow('', null),
-  delivery_date:    Joi.date().iso().allow(null),
+  delivery_date:    dateOnlySchema.allow(null),
   delivery_pricing_mode: Joi.string().valid(...DELIVERY_PRICING_MODES).default('shipment'),
   payment_method:   Joi.string().valid('transfer', 'cash', 'check').default('transfer'),
   bank_account_id:  Joi.number().integer().min(1).allow(null).optional(),
@@ -153,6 +159,9 @@ const createInvoiceSchema = Joi.object({
     if (val.payment_method === 'transfer' && !val.bank_account_id) {
       return helpers.error('any.custom', { message: 'Rekening tujuan wajib dipilih untuk metode Transfer Bank.' })
     }
+    if (val.due_date < val.invoice_date) {
+      return helpers.error('any.custom', { message: 'Tanggal jatuh tempo tidak boleh lebih kecil dari tanggal invoice.' })
+    }
     if (effectiveServiceType(val.service_type, val.custom_service_name) === 'rental' && (!Array.isArray(val.items) || val.items.length === 0)) {
       return helpers.error('any.custom', { message: 'Minimal 1 rincian item wajib diisi untuk invoice penyewaan.' })
     }
@@ -165,12 +174,12 @@ const createInvoiceSchema = Joi.object({
 })
 
 const updateInvoiceSchema = Joi.object({
-  invoice_date:    Joi.date().iso(),
-  due_date:        Joi.date().iso(),
-  settlement_date: Joi.date().iso(),
+  invoice_date:    dateOnlySchema,
+  due_date:        dateOnlySchema,
+  settlement_date: dateOnlySchema,
   // Ganti customer (hanya invoice tanpa proyek — divalidasi di service).
   customer_id:     Joi.number().integer().min(1),
-  delivery_date:   Joi.date().iso().allow(null),
+  delivery_date:   dateOnlySchema.allow(null),
   delivery_pricing_mode: Joi.string().valid(...DELIVERY_PRICING_MODES),
   payment_method:  Joi.string().valid('transfer', 'cash', 'check'),
   bank_account_id: Joi.number().integer().min(1).allow(null).optional(),
@@ -194,8 +203,7 @@ const updateInvoiceSchema = Joi.object({
   auto_create_sj:         Joi.boolean(),
   overwrite_sj_confirmed: Joi.boolean(),
 }).min(1).custom((val, helpers) => {
-  if (val.invoice_date && val.due_date &&
-      new Date(val.due_date) < new Date(val.invoice_date)) {
+  if (val.invoice_date && val.due_date && val.due_date < val.invoice_date) {
     return helpers.error('any.custom', { message: 'due_date tidak boleh lebih kecil dari invoice_date.' })
   }
   return val
@@ -207,11 +215,20 @@ const updateInvoiceSchema = Joi.object({
 })
 
 const recordPaymentSchema = Joi.object({
-  payment_date:  Joi.date().iso().required(),
+  payment_date:  dateOnlySchema.required(),
   amount:        Joi.number().precision(2).min(0.01).required(),
   method:        Joi.string().valid(...PAYMENT_METHODS).required(),
   proof_path:    Joi.string().trim().max(255).allow('', null),
   notes:         Joi.string().trim().allow('', null),
+})
+
+const bulkRecordPaymentSchema = Joi.object({
+  payment_date: dateOnlySchema.required(),
+  payments: Joi.array().items(Joi.object({
+    invoice_uuid: Joi.string().uuid({ version: ['uuidv4'] }).required(),
+    method: Joi.string().valid(...PAYMENT_METHODS).required(),
+  })).min(1).max(100).unique('invoice_uuid').required(),
+  notes: Joi.string().trim().max(500).allow('', null),
 })
 
 const voidInvoiceSchema = Joi.object({
@@ -259,8 +276,8 @@ const listInvoiceQuery = Joi.object({
   customer_uuid:  Joi.string().uuid({ version: ['uuidv4'] }),
   project_uuid:   Joi.string().uuid({ version: ['uuidv4'] }),
   period:         Joi.string().valid(...PERIODS).default('all'),
-  from:           Joi.date().iso(),
-  to:             Joi.date().iso(),
+  from:           dateOnlySchema,
+  to:             dateOnlySchema,
 })
 
 module.exports = {
@@ -273,6 +290,7 @@ module.exports = {
   createInvoiceSchema,
   updateInvoiceSchema,
   recordPaymentSchema,
+  bulkRecordPaymentSchema,
   revertPaymentSchema,
   voidInvoiceSchema,
   attachSJSchema,

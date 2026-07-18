@@ -3,7 +3,7 @@ import { Invoice, InvoiceFilterState, PaginationState, AttachedSJ, InvoiceSummar
 import { invoiceRepository } from '../../features/invoice/infrastructure/repositories/MockInvoiceRepository'
 import { CreateInvoiceDto } from '../../features/invoice/application/dto/CreateInvoiceDto'
 import { UpdateInvoiceDto } from '../../features/invoice/application/dto/UpdateInvoiceDto'
-import { RecordPaymentDto } from '../../features/invoice/application/dto/RecordPaymentDto'
+import { BulkRecordPaymentDto, RecordPaymentDto } from '../../features/invoice/application/dto/RecordPaymentDto'
 
 interface InvoiceState {
   list: Invoice[]
@@ -136,6 +136,17 @@ export const recordPayment = createAsyncThunk(
       return rejectWithValue(e instanceof Error ? e.message : 'Gagal mencatat pembayaran')
     }
   }
+)
+
+export const bulkRecordPayments = createAsyncThunk(
+  'invoice/bulkRecordPayments',
+  async (dto: BulkRecordPaymentDto, { rejectWithValue }) => {
+    try {
+      return await invoiceRepository.recordBulkPayments(dto)
+    } catch (e) {
+      return rejectWithValue(e instanceof Error ? e.message : 'Gagal mencatat pelunasan massal')
+    }
+  },
 )
 
 export const voidInvoice = createAsyncThunk(
@@ -303,6 +314,16 @@ const invoiceSlice = createSlice({
         state.modals.recordPayment = false
       })
       .addCase(recordPayment.rejected, state => {
+        state.isSubmitting = false
+      })
+      .addCase(bulkRecordPayments.pending, state => { state.isSubmitting = true })
+      .addCase(bulkRecordPayments.fulfilled, (state, action) => {
+        state.isSubmitting = false
+        for (const invoice of action.payload) {
+          state.list = updateInvoiceInList(state.list, invoice)
+        }
+      })
+      .addCase(bulkRecordPayments.rejected, state => {
         state.isSubmitting = false
       })
       .addCase(voidInvoice.pending, state => { state.isSubmitting = true })

@@ -121,6 +121,7 @@ export interface Invoice {
   }
   invoice_date: string
   due_date: string
+  settlement_date?: string | null
   delivery_date?: string | null
   service_type: InvoiceServiceType
   custom_service_name?: string | null

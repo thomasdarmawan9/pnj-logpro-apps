@@ -36,6 +36,11 @@ module.exports = (sequelize) => {
       type:      DataTypes.DATEONLY,
       allowNull: false,
     },
+    settlement_date: {
+      type:      DataTypes.DATEONLY,
+      allowNull: true,
+      comment:   'Tanggal pembayaran yang membuat invoice berstatus lunas.',
+    },
     delivery_date: {
       type:      DataTypes.DATEONLY,
       allowNull: true,
