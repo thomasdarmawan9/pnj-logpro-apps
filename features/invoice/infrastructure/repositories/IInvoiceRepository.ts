@@ -1,7 +1,7 @@
 import { Invoice, InvoiceFilterState, PaginationState, AttachedSJ, InvoiceSummaryStats } from '../../domain/entities/Invoice'
 import { CreateInvoiceDto } from '../../application/dto/CreateInvoiceDto'
 import { UpdateInvoiceDto } from '../../application/dto/UpdateInvoiceDto'
-import { RecordPaymentDto } from '../../application/dto/RecordPaymentDto'
+import { BulkRecordPaymentDto, RecordPaymentDto } from '../../application/dto/RecordPaymentDto'
 
 export interface PaginatedResult<T> {
   data: T[]
@@ -18,6 +18,7 @@ export interface IInvoiceRepository {
   update(uuid: string, dto: UpdateInvoiceDto): Promise<Invoice>
   send(uuid: string): Promise<Invoice>
   recordPayment(uuid: string, dto: RecordPaymentDto): Promise<Invoice>
+  recordBulkPayments(dto: BulkRecordPaymentDto): Promise<Invoice[]>
   void(uuid: string, reason: string): Promise<Invoice>
   revertPayment(uuid: string, reason: string): Promise<Invoice>
   attachSJ(invoiceUuid: string, sjUuids: string[]): Promise<Invoice>

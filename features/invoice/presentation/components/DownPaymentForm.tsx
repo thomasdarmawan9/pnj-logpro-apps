@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Wallet, Trash2 } from 'lucide-react'
 import type { CreateDownPaymentDto } from '../../application/dto/CreateInvoiceDto'
+import { todayDateOnly } from '@/lib/dateOnly'
 
 function formatRupiah(n: number): string {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n)
@@ -27,7 +28,7 @@ export default function DownPaymentForm({
   paymentMethod,
 }: DownPaymentFormProps) {
   const [enabled, setEnabled] = useState<boolean>(!!initialValue)
-  const [payment_date, setPaymentDate] = useState<string>(initialValue?.payment_date || defaultDate || new Date().toISOString().slice(0, 10))
+  const [payment_date, setPaymentDate] = useState<string>(initialValue?.payment_date || defaultDate || todayDateOnly())
   const [amount, setAmount] = useState<number>(initialValue?.amount || 0)
   const [notes, setNotes] = useState<string>(initialValue?.notes || '')
   const [error, setError] = useState<string | null>(null)
@@ -124,6 +125,7 @@ export default function DownPaymentForm({
                 className="form-input w-full"
                 value={payment_date}
                 onChange={e => setPaymentDate(e.target.value)}
+                max={todayDateOnly()}
                 disabled={readOnly}
               />
             </div>

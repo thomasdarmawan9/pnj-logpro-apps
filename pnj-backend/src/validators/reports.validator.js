@@ -1,6 +1,13 @@
 'use strict'
 
 const Joi = require('joi')
+const { normalizeDateOnly } = require('../utils/dateOnly')
+
+const dateOnlySchema = Joi.string().trim().custom((value, helpers) => (
+  normalizeDateOnly(value) || helpers.error('dateOnly.format')
+)).messages({
+  'dateOnly.format': '{{#label}} harus menggunakan tanggal valid dengan format YYYY-MM-DD.',
+})
 
 // ── Aging AR ───────────────────────────────────────────────────────────────
 const AGING_BUCKETS = ['current', '1-30', '31-60', '61-90', '>90']
@@ -11,10 +18,10 @@ const agingARQuery = Joi.object({
     Joi.string().valid('all'),
   ).default('all'),
   bucket: Joi.string().valid(...AGING_BUCKETS, 'all').default('all'),
-  period_from: Joi.date().iso(),
-  period_to:   Joi.date().iso(),
+  period_from: dateOnlySchema,
+  period_to:   dateOnlySchema,
   search:      Joi.string().trim().allow('', null).default(''),
-  as_of:       Joi.date().iso(),
+  as_of:       dateOnlySchema,
 })
 
 const agingARIdParam = Joi.object({
@@ -31,8 +38,8 @@ const PROJECT_STATUSES   = ['all', 'active', 'completed', 'on_hold']
 
 const profitLossQuery = Joi.object({
   period_preset: Joi.string().valid(...PERIOD_PRESETS_PL).default('this_month'),
-  period_from:   Joi.date().iso(),
-  period_to:     Joi.date().iso(),
+  period_from:   dateOnlySchema,
+  period_to:     dateOnlySchema,
   customer_id:   Joi.alternatives().try(
     Joi.number().integer().min(1),
     Joi.string().valid('all'),

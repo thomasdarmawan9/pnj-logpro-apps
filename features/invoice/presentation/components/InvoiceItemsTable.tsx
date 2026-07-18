@@ -1,4 +1,5 @@
 import { DeliveryPricingMode, InvoiceItem, InvoiceServiceType } from '../../domain/entities/Invoice'
+import { formatDateOnly } from '@/lib/dateOnly'
 
 const DELIVERY_ADDITIONAL_CHARGE_LABEL = 'Pembiayaan Lainnya'
 
@@ -8,7 +9,7 @@ function formatRupiah(amount: number): string {
 
 function formatDate(d: string | null): string {
   if (!d) return '—'
-  return new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
+  return formatDateOnly(d)
 }
 
 function calcDuration(start: string | null, end: string | null): string | null {

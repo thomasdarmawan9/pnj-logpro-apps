@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { apiRequestAllPages } from '@/lib/apiClient'
+import { addDaysDateOnly, todayDateOnly } from '@/lib/dateOnly'
 
 interface InvoiceProjectOption {
   id: number
@@ -41,8 +42,8 @@ export interface InvoiceFormHeader {
 }
 
 export default function useInvoiceForm(initial?: Partial<InvoiceFormHeader>) {
-  const today = new Date().toISOString().split('T')[0]
-  const defaultDue = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+  const today = todayDateOnly()
+  const defaultDue = addDaysDateOnly(today, 30)
 
   const [header, setHeader] = useState<InvoiceFormHeader>({
     project_id: initial?.project_id ?? null,

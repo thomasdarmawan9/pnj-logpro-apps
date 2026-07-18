@@ -3,13 +3,14 @@
 import { DollarSign, ExternalLink } from 'lucide-react'
 import { Payment, InvoiceStatus } from '../../domain/entities/Invoice'
 import PaymentProgressBar from './PaymentProgressBar'
+import { formatDateOnly } from '@/lib/dateOnly'
 
 function formatRupiah(amount: number): string {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(amount)
 }
 
 function formatDate(d: string): string {
-  return new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })
+  return formatDateOnly(d, { day: '2-digit', month: 'long', year: 'numeric' })
 }
 
 const METHOD_LABELS: Record<string, string> = {

@@ -8,19 +8,18 @@ import { resolveEffectiveInvoiceServiceType } from '../../domain/services/invoic
 import { buildInvoiceItemSummary } from '../utils/itemSummary'
 import { getSettlementDate } from '../utils/settlementDate'
 import InvoiceStatusBadge from './InvoiceStatusBadge'
+import { differenceInCalendarDays, formatDateOnly, todayDateOnly } from '@/lib/dateOnly'
 
 function formatRupiah(amount: number): string {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(amount)
 }
 
 function formatDate(d: string): string {
-  return new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
+  return formatDateOnly(d)
 }
 
 function daysOverdue(due: string): number {
-  const now = new Date()
-  const dueDate = new Date(due)
-  return Math.floor((now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24))
+  return differenceInCalendarDays(todayDateOnly(), due)
 }
 
 
@@ -37,7 +36,7 @@ export default function InvoiceTableRow({ invoice, checked, onToggle, onAction, 
   const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
-  const overdue = invoice.status === InvoiceStatus.OUTSTANDING && new Date(invoice.due_date) < new Date()
+  const overdue = invoice.status === InvoiceStatus.OUTSTANDING && invoice.due_date < todayDateOnly()
   const overdayCount = overdue ? daysOverdue(invoice.due_date) : 0
   const settlementDate = getSettlementDate(invoice)
   const effectiveServiceType = resolveEffectiveInvoiceServiceType(invoice.service_type, invoice.custom_service_name)

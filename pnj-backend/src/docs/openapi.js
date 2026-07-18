@@ -1045,6 +1045,7 @@ Object.assign(openApiSpec.components.schemas, {
       customer_id: { type: 'string', example: '1' },
       invoice_date: { type: 'string', format: 'date', example: '2026-04-28' },
       due_date: { type: 'string', format: 'date', example: '2026-05-28' },
+      settlement_date: { type: 'string', format: 'date', nullable: true, example: '2026-05-10' },
       service_type: { type: 'string', enum: ['delivery', 'rental', 'other'], example: 'delivery' },
       custom_service_name: { type: 'string', nullable: true, example: 'Jasa Bongkar Muat' },
       delivery_pricing_mode: { type: 'string', enum: ['shipment', 'item'], example: 'shipment' },
@@ -1124,6 +1125,7 @@ Object.assign(openApiSpec.components.schemas, {
     properties: {
       invoice_date: { type: 'string', format: 'date' },
       due_date: { type: 'string', format: 'date' },
+      settlement_date: { type: 'string', format: 'date', description: 'Hanya untuk koreksi invoice yang sudah lunas.' },
       delivery_pricing_mode: { type: 'string', enum: ['shipment', 'item'] },
       tax_percent: { type: 'number', minimum: 0, maximum: 100 },
       pph_percent: { type: 'number', minimum: 0, maximum: 100 },
@@ -1144,6 +1146,28 @@ Object.assign(openApiSpec.components.schemas, {
       method: { type: 'string', enum: ['transfer', 'cash', 'check'], example: 'transfer' },
       proof_path: { type: 'string', nullable: true },
       notes: { type: 'string', nullable: true },
+    },
+  },
+  BulkRecordPaymentRequest: {
+    type: 'object',
+    required: ['payment_date', 'payments'],
+    properties: {
+      payment_date: { type: 'string', format: 'date', example: '2026-07-18' },
+      payments: {
+        type: 'array',
+        minItems: 1,
+        maxItems: 100,
+        uniqueItems: true,
+        items: {
+          type: 'object',
+          required: ['invoice_uuid', 'method'],
+          properties: {
+            invoice_uuid: { type: 'string', format: 'uuid' },
+            method: { type: 'string', enum: ['transfer', 'cash', 'check'] },
+          },
+        },
+      },
+      notes: { type: 'string', nullable: true, maxLength: 500 },
     },
   },
   VoidInvoiceRequest: {
@@ -1300,6 +1324,24 @@ Object.assign(openApiSpec.paths, {
       requestBody: { required: true, content: { 'application/json': { schema: { $ref: '#/components/schemas/RecordPaymentRequest' } } } },
       responses: {
         201: { description: 'Pembayaran berhasil dicatat.', content: { 'application/json': { schema: { $ref: '#/components/schemas/InvoiceSuccessResponse' } } } },
+        400: { $ref: '#/components/responses/ValidationError' },
+        401: { $ref: '#/components/responses/Unauthorized' },
+        403: { $ref: '#/components/responses/Forbidden' },
+        404: { $ref: '#/components/responses/NotFound' },
+        409: { $ref: '#/components/responses/Conflict' },
+        422: { $ref: '#/components/responses/ValidationError' },
+      },
+    },
+  },
+  '/invoices/payments/bulk': {
+    post: {
+      tags: ['Invoice'],
+      summary: 'Catat pelunasan beberapa Invoice secara atomik',
+      description: 'Seluruh pelunasan berhasil bersama-sama atau seluruhnya dibatalkan bila satu invoice gagal divalidasi.',
+      security: [{ bearerAuth: [] }],
+      requestBody: { required: true, content: { 'application/json': { schema: { $ref: '#/components/schemas/BulkRecordPaymentRequest' } } } },
+      responses: {
+        201: { description: 'Seluruh pelunasan berhasil dicatat.' },
         400: { $ref: '#/components/responses/ValidationError' },
         401: { $ref: '#/components/responses/Unauthorized' },
         403: { $ref: '#/components/responses/Forbidden' },

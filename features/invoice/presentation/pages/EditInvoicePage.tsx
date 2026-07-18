@@ -30,6 +30,7 @@ import ClearManualSJPrompt from '../components/modals/ClearManualSJPrompt'
 import { suratJalanRepository } from '../../../surat-jalan/infrastructure/repositories/MockSuratJalanRepository'
 import type { SjLookupResult } from '../../../surat-jalan/infrastructure/repositories/ISuratJalanRepository'
 import type { CreateDownPaymentDto } from '../../application/dto/CreateInvoiceDto'
+import { todayDateOnly } from '@/lib/dateOnly'
 
 const DELIVERY_ADDITIONAL_CHARGE_LABEL = 'Pembiayaan Lainnya'
 
@@ -318,8 +319,9 @@ export default function EditInvoicePage({ uuid }: Props) {
     }
   }, [invoice?.down_payment])
   const displayedDownPayment = downPayment ?? dpInitialValue
-  const today = new Date().toISOString().split('T')[0]
+  const today = todayDateOnly()
   const isDueDatePast = dueDate < today
+  const invoiceDateMax = dueDate && dueDate < today ? dueDate : today
 
   const addAdditionalCharge = () => {
     setAdditionalCharges(prev => [...prev, { uuid: crypto.randomUUID(), name: '', amount: 0 }])
@@ -642,7 +644,7 @@ export default function EditInvoicePage({ uuid }: Props) {
         down_payment: dpPayload,
         ...customerPatch,
       }
-      const result = validateUpdateInvoice(dto as Parameters<typeof validateUpdateInvoice>[0], invoice?.service_type, invoice?.custom_service_name)
+      const result = validateUpdateInvoice(dto as Parameters<typeof validateUpdateInvoice>[0], invoice?.service_type, invoice?.custom_service_name, invoice?.invoice_date)
       setErrors(result.errors)
       if (!result.valid) {
         pushToast({ title: 'Data belum lengkap', description: Object.values(result.errors)[0], variant: 'error' })
@@ -673,11 +675,11 @@ export default function EditInvoicePage({ uuid }: Props) {
             tax_percent: taxEnabled ? taxPercent : 0,
             pph_percent: pphEnabled ? pphPercent : 0,
             down_payment: dpPayload,
-            ...(isPaid ? { settlement_date: settlementDate } : {}),
+            ...(isPaid && settlementDate !== (getSettlementDate(invoice!) ?? '') ? { settlement_date: settlementDate } : {}),
             ...customerPatch,
           }
 
-      const result = validateUpdateInvoice(dto as Parameters<typeof validateUpdateInvoice>[0], invoice?.service_type, invoice?.custom_service_name)
+      const result = validateUpdateInvoice(dto as Parameters<typeof validateUpdateInvoice>[0], invoice?.service_type, invoice?.custom_service_name, invoice?.invoice_date)
       setErrors(result.errors)
       if (!result.valid) {
         pushToast({ title: 'Data belum lengkap', description: Object.values(result.errors)[0], variant: 'error' })
@@ -836,7 +838,7 @@ export default function EditInvoicePage({ uuid }: Props) {
                   type="date"
                   className="form-input w-full"
                   value={invoiceDate}
-                  max={dueDate || undefined}
+                  max={invoiceDateMax}
                   onChange={e => setInvoiceDate(e.target.value)}
                 />
                 {errors.invoice_date && <p className="text-xs text-red-500 mt-1">{errors.invoice_date}</p>}
@@ -870,6 +872,7 @@ export default function EditInvoicePage({ uuid }: Props) {
                   className="form-input w-full disabled:bg-gray-50 disabled:text-gray-500"
                   value={settlementDate}
                   min={invoiceDate || invoice?.invoice_date}
+                  max={today}
                   onChange={e => setSettlementDate(e.target.value)}
                   disabled={!isPaid}
                 />

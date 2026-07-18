@@ -21,6 +21,8 @@ const {
 const { generateInvoiceNumber } = require('../utils/numberGenerator')
 const lampiranSvc = require('./lampiran.service')
 const { randomUUID } = require('crypto')
+const { Op } = require('sequelize')
+const { addDaysDateOnly, todayDateOnly } = require('../utils/dateOnly')
 
 const STATUS = {
   DRAFT:       'draft',
@@ -56,31 +58,26 @@ const FINAL_STATUSES = [STATUS.PAID, STATUS.VOID]
 
 function periodToRange(period) {
   if (!period || period === 'all') return null
-  const now   = new Date()
-  const year  = now.getFullYear()
-  const month = now.getMonth()
-  const day   = now.getDate()
+  const today = todayDateOnly()
+  const [year, month] = today.split('-').map(Number)
+  const format = (y, m, d) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+  const lastDay = (y, m) => new Date(Date.UTC(y, m, 0)).getUTCDate()
 
   switch (period) {
-    case 'today': {
-      const d = new Date(year, month, day)
-      return { from: d, to: new Date(year, month, day, 23, 59, 59) }
-    }
-    case 'week': {
-      const d = new Date(now)
-      d.setDate(d.getDate() - 7)
-      return { from: d, to: now }
-    }
+    case 'today': return { from: today, to: today }
+    case 'week': return { from: addDaysDateOnly(today, -7), to: today }
     case 'month': {
       return {
-        from: new Date(year, month, 1),
-        to:   new Date(year, month + 1, 0, 23, 59, 59),
+        from: format(year, month, 1),
+        to:   format(year, month, lastDay(year, month)),
       }
     }
     case 'last_month': {
+      const previousMonth = month === 1 ? 12 : month - 1
+      const previousYear = month === 1 ? year - 1 : year
       return {
-        from: new Date(year, month - 1, 1),
-        to:   new Date(year, month, 0, 23, 59, 59),
+        from: format(previousYear, previousMonth, 1),
+        to:   format(previousYear, previousMonth, lastDay(previousYear, previousMonth)),
       }
     }
     default:
@@ -109,6 +106,28 @@ function calcTotals(items, taxPercent, pphPercent, insuranceAmount = 0) {
 
 function round2(n) {
   return Math.round(Number(n) * 100) / 100
+}
+
+function assertNotFutureDate(date, label) {
+  if (date > todayDateOnly()) {
+    throw new BadRequestError(`${label} tidak boleh melewati tanggal hari ini.`)
+  }
+}
+
+async function assertRegularPaymentDate(invoice, paymentDate, t) {
+  assertNotFutureDate(paymentDate, 'Tanggal pembayaran')
+  if (paymentDate < invoice.invoice_date) {
+    throw new BadRequestError('Tanggal pembayaran tidak boleh sebelum tanggal invoice.')
+  }
+  const latest = await Payment.findOne({
+    where: { invoice_id: invoice.id, is_down_payment: false },
+    attributes: ['payment_date'],
+    order: [['payment_date', 'DESC'], ['id', 'DESC']],
+    transaction: t,
+  })
+  if (latest && paymentDate < latest.payment_date) {
+    throw new BadRequestError(`Tanggal pembayaran tidak boleh sebelum pembayaran terakhir (${latest.payment_date}).`)
+  }
 }
 
 function fleetStatusLabel(status) {
@@ -166,6 +185,13 @@ function decorate(row) {
   plain.has_down_payment    = !!dpRow
   plain.remaining_amount    = round2(Math.max(0, total - paid))
   plain.payments            = regularPayments
+  if (plain.status === STATUS.PAID && !plain.settlement_date && allPayments.length > 0) {
+    plain.settlement_date = allPayments.reduce(
+      (latest, payment) => payment.payment_date > latest ? payment.payment_date : latest,
+      allPayments[0].payment_date,
+    )
+  }
+  if (plain.status !== STATUS.PAID) plain.settlement_date = null
 
   return plain
 }
@@ -734,8 +760,10 @@ async function getSummaryStats(params) {
     return allowed.includes(statusFilter) ? statusFilter : null
   }
 
-  const now = new Date()
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+  const businessToday = todayDateOnly()
+  const [businessYear, businessMonth] = businessToday.split('-').map(Number)
+  const startOfMonth = `${businessYear}-${String(businessMonth).padStart(2, '0')}-01`
+  const endOfMonth = `${businessYear}-${String(businessMonth).padStart(2, '0')}-${String(new Date(Date.UTC(businessYear, businessMonth, 0)).getUTCDate()).padStart(2, '0')}`
 
   // ── Piutang aktif (sent/outstanding, remaining > 0) ──
   // Filter 'outstanding' dari user merepresentasikan piutang aktif secara
@@ -753,7 +781,7 @@ async function getSummaryStats(params) {
       attributes: [
         [fn('COALESCE', fn('SUM', literal('GREATEST(total_amount - paid_amount, 0)')), 0), 'total_piutang'],
         [fn('COUNT', literal('CASE WHEN (total_amount - paid_amount) > 0 THEN 1 END')), 'count_outstanding'],
-        [fn('COUNT', literal("CASE WHEN (total_amount - paid_amount) > 0 AND due_date < NOW() THEN 1 END")), 'jatuh_tempo'],
+        [fn('COUNT', literal(`CASE WHEN (total_amount - paid_amount) > 0 AND due_date < '${businessToday}' THEN 1 END`)), 'jatuh_tempo'],
       ],
       raw: true,
     })
@@ -762,13 +790,17 @@ async function getSummaryStats(params) {
     jatuhTempo      = Number(row?.jatuh_tempo || 0)
   }
 
-  // ── Lunas bulan ini (status paid, updated_at di bulan ini) ──
+  // ── Lunas bulan ini (berdasarkan tanggal pelunasan bisnis) ──
   const paidStatus = intersect(['paid'])
   let terbayarBulanIni = 0
   let countPaidThisMonth = 0
   if (paidStatus) {
     const row = await Invoice.findOne({
-      where: { ...baseWhere, status: paidStatus, updated_at: { [Op.gte]: startOfMonth } },
+      where: {
+        ...baseWhere,
+        status: paidStatus,
+        settlement_date: { [Op.between]: [startOfMonth, endOfMonth] },
+      },
       attributes: [
         [fn('COALESCE', fn('SUM', literal('paid_amount')), 0), 'terbayar'],
         [fn('COUNT', literal('*')), 'count_paid'],
@@ -842,7 +874,7 @@ async function upsertDownPayment(invoice, dp, actor, t) {
   // Sum payment regular (non-DP).
   const regularPayments = await Payment.findAll({
     where: { invoice_id: invoice.id, is_down_payment: false },
-    attributes: ['amount'],
+    attributes: ['amount', 'payment_date'],
     transaction: t,
   })
   const regularPaid = regularPayments.reduce((s, p) => s + Number(p.amount || 0), 0)
@@ -856,12 +888,22 @@ async function upsertDownPayment(invoice, dp, actor, t) {
     const updates = { paid_amount: round2(regularPaid) }
     if (invoice.status === STATUS.PAID && round2(regularPaid) < round2(invoice.total_amount || 0)) {
       updates.status = STATUS.OUTSTANDING
+      updates.settlement_date = null
+    } else if (invoice.status === STATUS.PAID) {
+      updates.settlement_date = regularPayments.reduce(
+        (latest, payment) => payment.payment_date > latest ? payment.payment_date : latest,
+        '',
+      ) || null
     }
     await invoice.update(updates, { transaction: t })
     return
   }
 
   // Upsert DP.
+  assertNotFutureDate(dp.payment_date, 'Tanggal DP')
+  if (dp.payment_date < invoice.invoice_date) {
+    throw new BadRequestError('Tanggal DP tidak boleh sebelum tanggal invoice.')
+  }
   const dpAmount = round2(dp.amount)
   const total = round2(invoice.total_amount || 0)
   const nextPaid = round2(regularPaid + dpAmount)
@@ -899,6 +941,12 @@ async function upsertDownPayment(invoice, dp, actor, t) {
   const updates = { paid_amount: newPaid }
   if (invoice.status === STATUS.PAID && newPaid < round2(invoice.total_amount || 0)) {
     updates.status = STATUS.OUTSTANDING
+    updates.settlement_date = null
+  } else if (invoice.status === STATUS.PAID) {
+    updates.settlement_date = regularPayments.reduce(
+      (latest, payment) => payment.payment_date > latest ? payment.payment_date : latest,
+      dp.payment_date,
+    )
   }
   await invoice.update(updates, { transaction: t })
 }
@@ -906,6 +954,10 @@ async function upsertDownPayment(invoice, dp, actor, t) {
 // ── CREATE ────────────────────────────────────────────────────────────────
 async function create(payload, actor) {
   return sequelize.transaction(async (t) => {
+    assertNotFutureDate(payload.invoice_date, 'Tanggal invoice')
+    if (payload.due_date < payload.invoice_date) {
+      throw new BadRequestError('Tanggal jatuh tempo tidak boleh lebih kecil dari tanggal invoice.')
+    }
     const scope = await resolveBillingScope(payload, t)
     const serviceType = payload.service_type || 'delivery'
     const customServiceName = serviceType === 'other' ? payload.custom_service_name || null : null
@@ -1037,6 +1089,8 @@ async function update(uuid, payload, actor) {
     })
     if (!invoice) throw new NotFoundError('Invoice tidak ditemukan.')
 
+    if (payload.invoice_date) assertNotFutureDate(payload.invoice_date, 'Tanggal invoice')
+
     // Status awal (sebelum mutasi) — dipakai untuk gating settlement_date.
     const wasPaid = invoice.status === STATUS.PAID
 
@@ -1103,7 +1157,7 @@ async function update(uuid, payload, actor) {
     // saat edit hanya due_date, bandingkan dengan invoice_date tersimpan.
     if (updates.due_date) {
       const baseInvoiceDate = updates.invoice_date ?? invoice.invoice_date
-      if (baseInvoiceDate && new Date(updates.due_date) < new Date(baseInvoiceDate)) {
+      if (baseInvoiceDate && updates.due_date < baseInvoiceDate) {
         throw new BadRequestError('Tanggal jatuh tempo tidak boleh lebih kecil dari tanggal invoice.')
       }
     }
@@ -1112,8 +1166,24 @@ async function update(uuid, payload, actor) {
     // due_date tidak dikirim sehingga Joi tidak membandingkannya — cek di sini
     // terhadap due_date tersimpan.
     if (updates.invoice_date && !updates.due_date) {
-      if (invoice.due_date && new Date(updates.invoice_date) > new Date(invoice.due_date)) {
+      if (invoice.due_date && updates.invoice_date > invoice.due_date) {
         throw new BadRequestError('Tanggal invoice tidak boleh setelah tanggal jatuh tempo.')
+      }
+    }
+
+    // Tanggal invoice tidak boleh dimajukan melewati transaksi pembayaran
+    // yang sudah tersimpan, termasuk DP.
+    if (updates.invoice_date && updates.invoice_date !== invoice.invoice_date) {
+      const earliestPayment = await Payment.findOne({
+        where: { invoice_id: invoice.id },
+        attributes: ['payment_date'],
+        order: [['payment_date', 'ASC'], ['id', 'ASC']],
+        transaction: t,
+      })
+      if (earliestPayment && updates.invoice_date > earliestPayment.payment_date) {
+        throw new BadRequestError(
+          `Tanggal invoice tidak boleh setelah pembayaran pertama (${earliestPayment.payment_date}).`,
+        )
       }
     }
 
@@ -1218,6 +1288,7 @@ async function update(uuid, payload, actor) {
       // bisa menjadi kurang dari total baru. Kembalikan status ke outstanding.
       if (invoice.status === STATUS.PAID && currentPaid + 0.001 < round2(newTotals.total_amount)) {
         updates.status = STATUS.OUTSTANDING
+        updates.settlement_date = null
       }
     }
 
@@ -1241,9 +1312,12 @@ async function update(uuid, payload, actor) {
       if (!wasPaid) {
         throw new BadRequestError('Tanggal pelunasan hanya bisa diubah untuk invoice yang sudah lunas.')
       }
+      if (updates.status === STATUS.OUTSTANDING) {
+        throw new BadRequestError('Tanggal pelunasan tidak dapat diubah karena total baru membuat invoice kembali outstanding.')
+      }
       const newDate = payload.settlement_date
-      const toYmd = (d) => (d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10))
-      if (toYmd(newDate) < toYmd(invoice.invoice_date)) {
+      assertNotFutureDate(newDate, 'Tanggal pelunasan')
+      if (newDate < invoice.invoice_date) {
         throw new BadRequestError('Tanggal pelunasan tidak boleh sebelum tanggal invoice.')
       }
       const payments = await Payment.findAll({ where: { invoice_id: invoice.id }, transaction: t })
@@ -1252,13 +1326,20 @@ async function update(uuid, payload, actor) {
       }
       // Pembayaran pelunas = payment_date terbaru (tie → id terbesar/paling akhir).
       const settling = payments.reduce((latest, p) => {
-        const a = toYmd(p.payment_date)
-        const b = toYmd(latest.payment_date)
+        const a = p.payment_date
+        const b = latest.payment_date
         if (a > b) return p
         if (a === b && p.id > latest.id) return p
         return latest
       }, payments[0])
+      const laterOtherPayment = payments.find(p => p.id !== settling.id && p.payment_date > newDate)
+      if (laterOtherPayment) {
+        throw new BadRequestError(
+          `Tanggal pelunasan tidak boleh sebelum pembayaran lain (${laterOtherPayment.payment_date}).`,
+        )
+      }
       await settling.update({ payment_date: newDate }, { transaction: t })
+      await invoice.update({ settlement_date: newDate }, { transaction: t })
     }
 
     // Auto-create/overwrite SJ dari nomor manual — hanya saat edit menyentuh
@@ -1377,6 +1458,7 @@ async function revertToUnpaid(uuid, payload, actor) {
     await invoice.update({
       status:      STATUS.SENT,
       paid_amount: dpTotal,
+      settlement_date: null,
       // Invoice yang pernah lunas pasti sudah terbit; jaga-jaga jika sent_at
       // belum terisi (mis. jalur draft→outstanding→paid).
       sent_at:     invoice.sent_at || new Date(),
@@ -1397,6 +1479,8 @@ async function recordPayment(invoiceUuid, payload, actor) {
         `Tidak bisa mencatat pembayaran untuk invoice status ${invoice.status}.`,
       )
     }
+
+    await assertRegularPaymentDate(invoice, payload.payment_date, t)
 
     const total     = Number(invoice.total_amount || 0)
     const paid      = Number(invoice.paid_amount  || 0)
@@ -1425,6 +1509,7 @@ async function recordPayment(invoiceUuid, payload, actor) {
     // Auto-transition outstanding → paid kalau lunas.
     if (newPaid >= total && total > 0) {
       updates.status = STATUS.PAID
+      updates.settlement_date = payload.payment_date
     } else if (invoice.status === STATUS.SENT) {
       // Kalau ada payment masuk pada status sent, tidak otomatis pindah outstanding —
       // outstanding adalah pilihan manual user. Status tetap.
@@ -1433,6 +1518,67 @@ async function recordPayment(invoiceUuid, payload, actor) {
     await invoice.update(updates, { transaction: t })
     const fresh = await repo.findByUuid(invoice.uuid, { transaction: t })
     return decorate(fresh)
+  })
+}
+
+/** Catat pelunasan beberapa invoice secara atomik dalam satu transaksi. */
+async function recordBulkPayments(payload, actor) {
+  return sequelize.transaction(async (t) => {
+    const entries = payload.payments
+    const uuids = entries.map(entry => entry.invoice_uuid)
+    const invoices = await Invoice.findAll({
+      where: { uuid: { [Op.in]: uuids } },
+      order: [['id', 'ASC']],
+      transaction: t,
+      lock: t.LOCK.UPDATE,
+    })
+    if (invoices.length !== uuids.length) {
+      const found = new Set(invoices.map(invoice => invoice.uuid))
+      const missing = uuids.filter(uuid => !found.has(uuid))
+      throw new NotFoundError(`Invoice tidak ditemukan: ${missing.join(', ')}`)
+    }
+
+    const invoiceByUuid = new Map(invoices.map(invoice => [invoice.uuid, invoice]))
+    const results = []
+    for (const entry of entries) {
+      const invoice = invoiceByUuid.get(entry.invoice_uuid)
+      if ([STATUS.DRAFT, STATUS.PAID, STATUS.VOID].includes(invoice.status)) {
+        throw new ConflictError(
+          `Invoice ${invoice.invoice_number} tidak dapat dilunasi dari status ${invoice.status}.`,
+        )
+      }
+      await assertRegularPaymentDate(invoice, payload.payment_date, t)
+
+      const total = round2(invoice.total_amount)
+      const paid = round2(invoice.paid_amount)
+      const remaining = round2(Math.max(0, total - paid))
+      if (remaining <= 0) {
+        throw new ConflictError(`Invoice ${invoice.invoice_number} tidak memiliki sisa tagihan.`)
+      }
+
+      await Payment.create({
+        invoice_id: invoice.id,
+        payment_date: payload.payment_date,
+        amount: remaining,
+        method: entry.method,
+        proof_path: null,
+        notes: payload.notes || 'Pembayaran pelunasan',
+        created_by: actor?.id || null,
+      }, { transaction: t })
+
+      await invoice.update({
+        paid_amount: total,
+        status: STATUS.PAID,
+        settlement_date: payload.payment_date,
+      }, { transaction: t })
+      results.push(invoice.uuid)
+    }
+
+    const freshInvoices = []
+    for (const uuid of results) {
+      freshInvoices.push(decorate(await repo.findByUuid(uuid, { transaction: t })))
+    }
+    return freshInvoices
   })
 }
 
@@ -1664,6 +1810,7 @@ module.exports = {
   voidInvoice,
   revertToUnpaid,
   recordPayment,
+  recordBulkPayments,
   attachSJ,
   detachSJ,
   getAttachableSJ,

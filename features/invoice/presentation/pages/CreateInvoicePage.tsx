@@ -28,6 +28,7 @@ import ConfirmOverwriteSJModal from '../components/modals/ConfirmOverwriteSJModa
 import ClearManualSJPrompt from '../components/modals/ClearManualSJPrompt'
 import { suratJalanRepository } from '../../../surat-jalan/infrastructure/repositories/MockSuratJalanRepository'
 import type { SjLookupResult } from '../../../surat-jalan/infrastructure/repositories/ISuratJalanRepository'
+import { todayDateOnly } from '@/lib/dateOnly'
 
 function formatRupiah(amount: number): string {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(amount)
@@ -878,7 +879,7 @@ export default function CreateInvoicePage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-medium text-gray-600 block mb-1">Tanggal Invoice *</label>
-                  <input type="date" className={`form-input w-full ${errors.invoice_date ? 'border-red-400' : ''}`} value={header.invoice_date} onChange={e => updateHeader('invoice_date', e.target.value)} />
+                  <input type="date" className={`form-input w-full ${errors.invoice_date ? 'border-red-400' : ''}`} value={header.invoice_date} max={todayDateOnly()} onChange={e => updateHeader('invoice_date', e.target.value)} />
                 </div>
                 <div>
                   <label className="text-xs font-medium text-gray-600 block mb-1">Tanggal Jatuh Tempo *</label>

@@ -2,6 +2,7 @@
 
 import { Paperclip, Unlink, ExternalLink } from 'lucide-react'
 import { AttachedSJ, InvoiceStatus } from '../../domain/entities/Invoice'
+import { formatDateOnly } from '@/lib/dateOnly'
 
 const SJ_STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   delivered: { label: 'DELIVERED', color: '#166534' },
@@ -11,7 +12,7 @@ const SJ_STATUS_CONFIG: Record<string, { label: string; color: string }> = {
 }
 
 function formatDate(d: string): string {
-  return new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
+  return formatDateOnly(d)
 }
 
 interface Props {

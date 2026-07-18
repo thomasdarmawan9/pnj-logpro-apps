@@ -21,6 +21,7 @@ import {
 import { RootState } from '@/store'
 import { useAgingARCustomerDetail } from '../hooks/useAgingARCustomerDetail'
 import { formatRupiah, formatDate } from '@/lib/formatters'
+import { todayDateOnly } from '@/lib/dateOnly'
 import { ProjectDetailInvoice, ProjectDetailSuratJalan } from '@/features/reports/domain/entities/AgingARProjectDetail'
 import {
   exportAgingARCustomerExcel,
@@ -473,7 +474,7 @@ export default function AgingARCustomerDetailPage() {
   const hasOutstanding = data.total_outstanding > 0
   const nonProjectSection = data.projects.find(project => project.project_id === null)
   const actualProjectCount = data.projects.filter(project => project.project_id !== null).length
-  const exportFilenameBase = `aging-ar-customer-${safeFilename(data.customer_name)}-${new Date().toISOString().slice(0, 10)}`
+  const exportFilenameBase = `aging-ar-customer-${safeFilename(data.customer_name)}-${todayDateOnly()}`
 
   const handleExportExcel = async () => {
     if (!customerId) return

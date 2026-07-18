@@ -1,5 +1,7 @@
 'use strict'
 
+const { addMonthsDateOnly, normalizeDateOnly, todayDateOnly } = require('./dateOnly')
+
 /**
  * Period-preset → { from, to } resolver untuk reports module.
  * Semua preset return Date objects (inclusive range).
@@ -59,6 +61,36 @@ function resolvePeriod(preset, customFrom, customTo) {
   }
 }
 
+/** Preset kalender untuk kolom DATEONLY (invoice/payment/SJ), berbasis WIB. */
+function resolveDateOnlyPeriod(preset, customFrom, customTo) {
+  if (preset === 'custom' && (customFrom || customTo)) {
+    return {
+      from: customFrom ? normalizeDateOnly(toISODate(customFrom)) : null,
+      to: customTo ? normalizeDateOnly(toISODate(customTo)) : null,
+    }
+  }
+
+  const today = todayDateOnly()
+  const [year, month] = today.split('-').map(Number)
+  const make = (y, m, d) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+  const endOfCalendarMonth = (y, m) => make(y, m, new Date(Date.UTC(y, m, 0)).getUTCDate())
+
+  switch (preset) {
+    case 'this_month':
+      return { from: make(year, month, 1), to: endOfCalendarMonth(year, month) }
+    case 'this_quarter': {
+      const quarterStart = Math.floor((month - 1) / 3) * 3 + 1
+      return { from: make(year, quarterStart, 1), to: endOfCalendarMonth(year, quarterStart + 2) }
+    }
+    case '6_months':
+      return { from: addMonthsDateOnly(today, -6), to: today }
+    case 'all':
+    case 'custom':
+    default:
+      return { from: null, to: null }
+  }
+}
+
 /**
  * Hitung jumlah hari (inclusive) antara from & to. Min 1.
  */
@@ -93,6 +125,7 @@ function toISODate(d) {
 
 module.exports = {
   resolvePeriod,
+  resolveDateOnlyPeriod,
   daysBetween,
   toISODate,
   startOfDay,

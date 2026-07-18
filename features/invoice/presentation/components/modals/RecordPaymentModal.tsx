@@ -6,6 +6,7 @@ import { Invoice, InvoiceStatus } from '../../../domain/entities/Invoice'
 import PaymentProgressBar from '../PaymentProgressBar'
 import usePayment from '../../hooks/usePayment'
 import { useToast } from '@/components/toast/useToast'
+import { todayDateOnly } from '@/lib/dateOnly'
 
 function formatRupiah(amount: number): string {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(amount)
@@ -27,7 +28,7 @@ const QUICK_AMOUNTS = [50_000_000, 100_000_000]
 
 export default function RecordPaymentModal({ open, invoice, onClose, onSuccess }: Props) {
   const remaining = invoice ? invoice.remaining_amount : 0
-  const { form, errors, isSubmitting, update, submit, reset } = usePayment(invoice?.uuid ?? '', remaining)
+  const { form, errors, isSubmitting, update, submit, reset } = usePayment(invoice?.uuid ?? '', remaining, invoice?.invoice_date)
   const { push: pushToast } = useToast()
 
   // Pisahkan display string dari form.amount agar user bisa ketik bebas
@@ -108,6 +109,8 @@ export default function RecordPaymentModal({ open, invoice, onClose, onSuccess }
             className="form-input w-full text-sm"
             value={form.payment_date}
             onChange={e => update('payment_date', e.target.value)}
+            min={invoice?.invoice_date}
+            max={todayDateOnly()}
           />
           {errors.payment_date && <p className="text-xs text-red-500 mt-1">{errors.payment_date}</p>}
         </div>

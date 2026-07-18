@@ -1,6 +1,7 @@
 import { CreateInvoiceDto, CreateDownPaymentDto } from '../dto/CreateInvoiceDto'
 import { UpdateInvoiceDto } from '../dto/UpdateInvoiceDto'
 import { resolveEffectiveInvoiceServiceType } from '../../domain/services/invoiceServiceType'
+import { todayDateOnly } from '@/lib/dateOnly'
 
 export interface ValidationResult {
   valid: boolean
@@ -16,11 +17,16 @@ function validateDownPayment(
   dp: CreateDownPaymentDto | null | undefined,
   errors: Record<string, string>,
   prefix = 'down_payment',
+  invoiceDate?: string,
 ): void {
   if (dp === null || dp === undefined) return
 
   if (!dp.payment_date) {
     errors[`${prefix}.payment_date`] = 'Tanggal DP wajib diisi'
+  } else if (dp.payment_date > todayDateOnly()) {
+    errors[`${prefix}.payment_date`] = 'Tanggal DP tidak boleh melewati hari ini'
+  } else if (invoiceDate && dp.payment_date < invoiceDate) {
+    errors[`${prefix}.payment_date`] = 'Tanggal DP tidak boleh sebelum tanggal invoice'
   }
   if (typeof dp.amount !== 'number' || dp.amount <= 0) {
     errors[`${prefix}.amount`] = 'Nominal DP harus lebih dari 0'
@@ -77,7 +83,9 @@ export function validateCreateInvoice(dto: CreateInvoiceDto): ValidationResult {
     errors.delivery_pricing_mode = 'Mode harga pengiriman tidak valid'
   }
   if (!dto.invoice_date) errors.invoice_date = 'Tanggal invoice wajib diisi'
+  if (dto.invoice_date && dto.invoice_date > todayDateOnly()) errors.invoice_date = 'Tanggal invoice tidak boleh melewati hari ini'
   if (!dto.due_date) errors.due_date = 'Tanggal jatuh tempo wajib diisi'
+  if (dto.invoice_date && dto.due_date && dto.due_date < dto.invoice_date) errors.due_date = 'Tanggal jatuh tempo tidak boleh sebelum tanggal invoice'
   if (!dto.payment_method || !VALID_PAYMENT_METHODS.includes(dto.payment_method)) {
     errors.payment_method = 'Metode pembayaran wajib dipilih'
   }
@@ -104,17 +112,25 @@ export function validateCreateInvoice(dto: CreateInvoiceDto): ValidationResult {
 
   // Validasi DP jika dikirim.
   if (dto.down_payment) {
-    validateDownPayment(dto.down_payment, errors)
+    validateDownPayment(dto.down_payment, errors, 'down_payment', dto.invoice_date)
   }
 
   return { valid: Object.keys(errors).length === 0, errors }
 }
 
-export function validateUpdateInvoice(dto: UpdateInvoiceDto, serviceType?: 'delivery' | 'rental' | 'other', customServiceName?: string | null): ValidationResult {
+export function validateUpdateInvoice(
+  dto: UpdateInvoiceDto,
+  serviceType?: 'delivery' | 'rental' | 'other',
+  customServiceName?: string | null,
+  currentInvoiceDate?: string,
+): ValidationResult {
   const errors: Record<string, string> = {}
 
   if (dto.invoice_date !== undefined && !dto.invoice_date) {
     errors.invoice_date = 'Tanggal invoice wajib diisi'
+  }
+  if (dto.invoice_date && dto.invoice_date > todayDateOnly()) {
+    errors.invoice_date = 'Tanggal invoice tidak boleh melewati hari ini'
   }
   if (dto.due_date !== undefined && !dto.due_date) {
     errors.due_date = 'Tanggal jatuh tempo wajib diisi'
@@ -148,7 +164,7 @@ export function validateUpdateInvoice(dto: UpdateInvoiceDto, serviceType?: 'deli
     // Saat update kita tidak hitung total dari sini — BE akan validate dengan
     // total yang akurat (untuk kasus DP-only edit di invoice paid/sent).
     // FE hanya cek shape (date, amount > 0, method valid).
-    validateDownPayment(dto.down_payment, errors)
+    validateDownPayment(dto.down_payment, errors, 'down_payment', dto.invoice_date ?? currentInvoiceDate)
   }
 
   return { valid: Object.keys(errors).length === 0, errors }

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Search } from 'lucide-react'
 import ModalShell from '../../../../surat-jalan/presentation/components/modals/ModalShell'
+import { formatDateOnly } from '@/lib/dateOnly'
 import { Invoice, AttachedSJ } from '../../../domain/entities/Invoice'
 
 interface Props {
@@ -20,7 +21,7 @@ const SJ_STATUS_CONFIG: Record<string, { label: string; color: string }> = {
 }
 
 function formatDate(d: string): string {
-  return new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })
+  return formatDateOnly(d, { day: '2-digit', month: 'short' })
 }
 
 export default function AttachSJModal({ open, invoice, attachableSJ, onClose, onConfirm }: Props) {

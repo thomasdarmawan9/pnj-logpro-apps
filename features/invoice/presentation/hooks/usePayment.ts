@@ -4,10 +4,11 @@ import { AppDispatch } from '@/store'
 import { recordPayment } from '@/store/slices/invoiceSlice'
 import { RecordPaymentDto } from '../../application/dto/RecordPaymentDto'
 import { validatePayment } from '../../application/validators/PaymentValidator'
+import { todayDateOnly } from '@/lib/dateOnly'
 
-export default function usePayment(invoiceUuid: string, remainingAmount: number) {
+export default function usePayment(invoiceUuid: string, remainingAmount: number, invoiceDate?: string) {
   const dispatch = useDispatch<AppDispatch>()
-  const today = new Date().toISOString().split('T')[0]
+  const today = todayDateOnly()
 
   const [form, setForm] = useState<RecordPaymentDto>({
     payment_date: today,
@@ -25,7 +26,7 @@ export default function usePayment(invoiceUuid: string, remainingAmount: number)
   }
 
   const submit = async (): Promise<{ ok: boolean; error?: string }> => {
-    const result = validatePayment(form, remainingAmount)
+    const result = validatePayment(form, remainingAmount, invoiceDate)
     if (!result.valid) {
       setErrors(result.errors)
       return { ok: false }

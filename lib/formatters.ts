@@ -1,3 +1,5 @@
+import { formatDateOnly } from './dateOnly'
+
 export function formatRupiah(value: number): string {
   return new Intl.NumberFormat('id-ID', {
     style: 'currency',
@@ -17,19 +19,11 @@ export function formatRupiahShort(value: number): string {
 
 export function formatDate(dateStr: string, opts?: { long?: boolean }): string {
   if (!dateStr) return '-'
-  const date = new Date(dateStr)
-  if (opts?.long) {
-    return new Intl.DateTimeFormat('id-ID', {
-      day: '2-digit',
-      month: 'long',
-      year: 'numeric',
-    }).format(date)
-  }
-  return new Intl.DateTimeFormat('id-ID', {
+  return formatDateOnly(dateStr, {
     day: '2-digit',
-    month: 'short',
+    month: opts?.long ? 'long' : 'short',
     year: 'numeric',
-  }).format(date)
+  })
 }
 
 export function formatDateTime(dateStr: string): string {

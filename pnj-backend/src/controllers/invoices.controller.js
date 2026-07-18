@@ -48,6 +48,11 @@ const recordPayment = asyncHandler(async (req, res) => {
   res.status(201).json(success(data, 'Pembayaran berhasil dicatat.'))
 })
 
+const recordBulkPayments = asyncHandler(async (req, res) => {
+  const data = await service.recordBulkPayments(req.body, req.user)
+  res.status(201).json(success(data, `${data.length} pembayaran pelunasan berhasil dicatat.`))
+})
+
 const voidInvoice = asyncHandler(async (req, res) => {
   const data = await service.voidInvoice(req.params.uuid, req.body, req.user)
   res.json(success(data, 'Invoice berhasil di-void.'))
@@ -130,6 +135,7 @@ module.exports = {
   send,
   markOutstanding,
   recordPayment,
+  recordBulkPayments,
   voidInvoice,
   revertPayment,
   attachSJ,
