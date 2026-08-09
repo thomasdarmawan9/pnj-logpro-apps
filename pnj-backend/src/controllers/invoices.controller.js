@@ -93,6 +93,25 @@ const generatePdf = asyncHandler(async (req, res) => {
   res.status(202).json(success(pdfJobShape(job), 'PDF Invoice sedang diproses.'))
 })
 
+const pdfOptions = asyncHandler(async (_req, res) => {
+  const data = await pdfJobService.listInvoiceOptions()
+  res.json(success(data))
+})
+
+const generateBulkPdf = asyncHandler(async (req, res) => {
+  const entries = await pdfJobService.enqueueInvoiceBatch({
+    recordUuids: req.body.invoice_uuids,
+    options:     req.body?.options || {},
+    requestedBy: req.user,
+  })
+  const data = entries.map(entry => ({
+    invoice_uuid:   entry.recordUuid,
+    invoice_number: entry.recordLabel,
+    job:            pdfJobShape(entry.job),
+  }))
+  res.status(202).json(success(data, `${data.length} PDF Invoice sedang diproses.`))
+})
+
 // ── Lampiran ──────────────────────────────────────────────────────────────
 const fs = require('fs')
 const { BadRequestError } = require('../utils/AppError')
@@ -142,7 +161,9 @@ module.exports = {
   detachSJ,
   attachableSJ,
   exportXlsx,
+  pdfOptions,
   generatePdf,
+  generateBulkPdf,
   uploadLampiran,
   deleteLampiran,
   downloadLampiran,

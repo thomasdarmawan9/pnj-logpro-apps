@@ -18,7 +18,10 @@ const {
   detachSJParamSchema,
   listInvoiceQuery,
 } = require('../validators/invoice.validator')
-const { generateInvoicePdfSchema } = require('../validators/pdfJob.validator')
+const {
+  generateInvoicePdfSchema,
+  bulkGenerateInvoicePdfSchema,
+} = require('../validators/pdfJob.validator')
 const { uploadLampiran, processLampiran } = require('../middlewares/upload.middleware')
 const { logActivity } = require('../middlewares/activityLog.middleware')
 const controller = require('../controllers/invoices.controller')
@@ -48,6 +51,11 @@ router.get('/summary',
   isAnyRole,
   validate(listInvoiceQuery, 'query'),
   controller.summary,
+)
+
+router.get('/pdf-options',
+  isAnyRole,
+  controller.pdfOptions,
 )
 
 router.get('/:uuid',
@@ -128,6 +136,17 @@ router.get('/:uuid/attachable-sj',
   isAnyRole,
   validate(uuidParam, 'params'),
   controller.attachableSJ,
+)
+
+router.post('/generate-pdf/bulk',
+  isAnyRole,
+  validate(bulkGenerateInvoicePdfSchema),
+  logActivity('generate_pdf', 'invoice', {
+    uuidExtractor:  () => null,
+    labelExtractor: (_body, req) => `${req.body.invoice_uuids.length} invoice`,
+    skipBody:       true,
+  }),
+  controller.generateBulkPdf,
 )
 
 router.post('/:uuid/generate-pdf',

@@ -216,6 +216,25 @@ async function fetchAllInvoices() {
   return apiRequestAllPages<ApiInvoice>('/invoices?status=all&period=all', { method: 'GET' })
 }
 
+export interface BulkPdfInvoiceOption {
+  uuid: string
+  invoice_number: string
+  invoice_date: string
+  status: InvoiceStatus
+  customer: { name: string }
+}
+
+export async function fetchInvoicesForBulkPdf(): Promise<BulkPdfInvoiceOption[]> {
+  const response = await apiRequest<BulkPdfInvoiceOption[]>('/invoices/pdf-options', { method: 'GET' })
+  return response.data
+    .sort((a, b) => {
+      const dateComparison = b.invoice_date.localeCompare(a.invoice_date)
+      return dateComparison !== 0
+        ? dateComparison
+        : b.invoice_number.localeCompare(a.invoice_number)
+    })
+}
+
 function toItemPayload(item: CreateInvoiceItemDto) {
   return {
     uuid: item.uuid ?? null,
@@ -444,6 +463,38 @@ export async function generateInvoicePdf(
   const response = await apiRequest<{ uuid: string; status: string; download_url: string | null }>(`/invoices/${uuid}/generate-pdf`, {
     method: 'POST',
     body: { options },
+  })
+  return response.data
+}
+
+export interface BulkInvoicePdfJob {
+  invoice_uuid: string
+  invoice_number: string
+  job: {
+    uuid: string
+    status: string
+    download_url: string | null
+    error_message?: string | null
+  }
+}
+
+export async function generateBulkInvoicePdf(
+  invoiceUuids: string[],
+  options: {
+    includeLogo: boolean
+    includeSig: boolean
+    includeSJ: boolean
+    includeLampiran: boolean
+    copies: number
+    copyLabel: boolean
+  },
+) {
+  const response = await apiRequest<BulkInvoicePdfJob[]>('/invoices/generate-pdf/bulk', {
+    method: 'POST',
+    body: {
+      invoice_uuids: invoiceUuids,
+      options,
+    },
   })
   return response.data
 }

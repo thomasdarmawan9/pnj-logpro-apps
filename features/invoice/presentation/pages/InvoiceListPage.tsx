@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { useRouter } from 'next/navigation'
-import { FilePlus } from 'lucide-react'
+import { FilePlus, Printer } from 'lucide-react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { RootState, AppDispatch } from '@/store'
 import {
@@ -28,6 +28,7 @@ import VoidInvoiceModal from '../components/modals/VoidInvoiceModal'
 import RevertPaymentModal from '../components/modals/RevertPaymentModal'
 import RecordPaymentModal from '../components/modals/RecordPaymentModal'
 import BulkRecordPaymentModal from '../components/modals/BulkRecordPaymentModal'
+import BulkGeneratePDFModal from '../components/modals/BulkGeneratePDFModal'
 import AttachSJModal from '../components/modals/AttachSJModal'
 import { resolveEffectiveInvoiceServiceType } from '../../domain/services/invoiceServiceType'
 import DetachSJConfirmModal from '../components/modals/DetachSJConfirmModal'
@@ -53,6 +54,7 @@ export default function InvoiceListPage() {
   const [selectedRows, setSelectedRows] = useState<string[]>([])
   const [activeUuid, setActiveUuid] = useState<string | null>(null)
   const [bulkPaymentOpen, setBulkPaymentOpen] = useState(false)
+  const [bulkPdfOpen, setBulkPdfOpen] = useState(false)
 
   const currentInvoice = selectedInvoice ?? list.find(i => i.uuid === activeUuid) ?? null
   const selectedInvoices = useMemo(() => list.filter(inv => selectedRows.includes(inv.uuid)), [list, selectedRows])
@@ -196,14 +198,24 @@ export default function InvoiceListPage() {
         <div className="text-sm text-gray-600">
           {selectedRows.length > 0 ? `${selectedRows.length} invoice dipilih` : 'Belum ada invoice dipilih'}
         </div>
-        <button
-          onClick={() => setBulkPaymentOpen(true)}
-          disabled={selectedRows.length === 0}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white disabled:opacity-40 disabled:cursor-not-allowed"
-          style={{ backgroundColor: 'var(--green-primary)' }}
-        >
-          Catat Lunas Massal
-        </button>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <button
+            onClick={() => setBulkPdfOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium bg-white"
+            style={{ borderColor: 'var(--green-primary)', color: 'var(--green-primary)' }}
+          >
+            <Printer size={15} />
+            Cetak PDF Massal
+          </button>
+          <button
+            onClick={() => setBulkPaymentOpen(true)}
+            disabled={selectedRows.length === 0}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ backgroundColor: 'var(--green-primary)' }}
+          >
+            Catat Lunas Massal
+          </button>
+        </div>
       </div>
 
       <div className="mt-3 rounded-xl overflow-hidden shadow-sm border bg-white" style={{ borderColor: 'var(--border-card)' }}>
@@ -356,6 +368,25 @@ export default function InvoiceListPage() {
             title: 'Pelunasan Massal Gagal',
             description: `Tidak ada perubahan disimpan. ${failCount} invoice batal dilunasi agar data tetap konsisten.`,
             variant: 'error',
+          })
+        }}
+      />
+      <BulkGeneratePDFModal
+        open={bulkPdfOpen}
+        onClose={() => setBulkPdfOpen(false)}
+        onComplete={(successCount, failCount) => {
+          if (failCount === 0) {
+            pushToast({
+              title: 'PDF Berhasil Diunduh',
+              description: `${successCount} PDF invoice berhasil dibuat dan diunduh.`,
+              variant: 'success',
+            })
+            return
+          }
+          pushToast({
+            title: successCount > 0 ? 'Cetak PDF Selesai Sebagian' : 'Cetak PDF Gagal',
+            description: `${successCount} berhasil diunduh, ${failCount} gagal.`,
+            variant: successCount > 0 ? 'info' : 'error',
           })
         }}
       />
