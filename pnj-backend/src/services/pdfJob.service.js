@@ -2,6 +2,7 @@
 
 const fs   = require('fs')
 const path = require('path')
+const { Op } = require('sequelize')
 
 const { sequelize, PdfJob, DeliveryOrder, Invoice } = require('../models')
 const repo = require('../repositories/pdfJob.repository')
@@ -143,6 +144,173 @@ async function enqueue({ jobType, recordUuid, options, requestedBy }) {
 }
 
 /**
+ * Enqueue beberapa PDF invoice dalam satu request.
+ *
+ * Semua invoice divalidasi dan semua row PdfJob dibuat dalam satu transaksi,
+ * sehingga request tidak menghasilkan batch setengah jadi ketika salah satu
+ * invoice tidak valid atau masih memiliki job yang berjalan. Rendering tetap
+ * memakai queue/job satuan yang sama dengan flow cetak PDF existing.
+ */
+async function enqueueInvoiceBatch({ recordUuids, options, requestedBy }) {
+  const orderedUuids = [...new Set(recordUuids)]
+
+  const { entries, previousFilePaths } = await sequelize.transaction(async (t) => {
+    const invoices = await Invoice.findAll({
+      where:       { uuid: orderedUuids },
+      transaction: t,
+      lock:        t.LOCK.UPDATE,
+    })
+    const invoiceByUuid = new Map(invoices.map(invoice => [invoice.uuid, invoice]))
+    const missingUuids = orderedUuids.filter(uuid => !invoiceByUuid.has(uuid))
+
+    if (missingUuids.length > 0) {
+      throw new NotFoundError(`${missingUuids.length} invoice tidak ditemukan.`)
+    }
+
+    const orderedInvoices = orderedUuids.map(uuid => invoiceByUuid.get(uuid))
+    const draftInvoices = orderedInvoices.filter(invoice => invoice.status === 'draft')
+    if (draftInvoices.length > 0) {
+      throw new BadRequestError(
+        `Invoice draft belum dapat dicetak: ${draftInvoices.map(invoice => invoice.invoice_number).join(', ')}.`,
+      )
+    }
+
+    const recordIds = orderedInvoices.map(invoice => invoice.id)
+
+    // Satu query preflight untuk seluruh batch. Sebelumnya ini melakukan satu
+    // query per invoice, lalu diulang lagi saat clearPreviousJobs().
+    const inFlightJobs = await PdfJob.findAll({
+      where: {
+        job_type: 'invoice',
+        record_id: { [Op.in]: recordIds },
+        status: { [Op.in]: ['pending', 'processing'] },
+      },
+      order:       [['created_at', 'DESC']],
+      transaction: t,
+      lock:        t.LOCK.UPDATE,
+    })
+    const inFlightByRecord = new Map(inFlightJobs.map(job => [Number(job.record_id), job]))
+    const blockedInvoice = orderedInvoices.find(invoice => inFlightByRecord.has(Number(invoice.id)))
+    if (blockedInvoice) {
+      const activeJob = inFlightByRecord.get(Number(blockedInvoice.id))
+      throw new BadRequestError(
+        `PDF invoice ${blockedInvoice.invoice_number} sedang diproses. Tunggu sampai selesai sebelum mencetak ulang.`,
+        { code: 'PDF_JOB_IN_PROGRESS', existing_uuid: activeJob.uuid },
+      )
+    }
+
+    // Ambil dan hapus row lama secara bulk di dalam transaksi. File fisik baru
+    // dihapus setelah commit, supaya rollback tidak meninggalkan row lama yang
+    // menunjuk ke file yang sudah terhapus.
+    const previousJobs = await PdfJob.findAll({
+      where: {
+        job_type: 'invoice',
+        record_id: { [Op.in]: recordIds },
+      },
+      transaction: t,
+      lock:        t.LOCK.UPDATE,
+    })
+    if (previousJobs.length > 0) {
+      await PdfJob.destroy({
+        where:       { id: { [Op.in]: previousJobs.map(job => job.id) } },
+        transaction: t,
+        force:       true,
+      })
+    }
+
+    const jobRows = orderedInvoices.map((invoice) => {
+      const customServiceName = String(invoice.custom_service_name || '').toLowerCase()
+      const isRentalInvoice = invoice.service_type === 'rental' || (
+        invoice.service_type === 'other' &&
+        (customServiceName.includes('penyewaan') || customServiceName.includes('sewa'))
+      )
+      const resolvedOptions = {
+        ...(options || {}),
+        // Samakan dengan modal cetak satuan: invoice penyewaan tidak pernah
+        // menambahkan halaman daftar Surat Jalan.
+        includeSJ: !isRentalInvoice && options?.includeSJ === true,
+      }
+      return {
+        job_type:     'invoice',
+        record_id:    invoice.id,
+        status:       'pending',
+        options:      resolvedOptions,
+        requested_by: requestedBy?.id || null,
+      }
+    })
+    const createdJobs = await PdfJob.bulkCreate(jobRows, {
+      transaction: t,
+      returning:   true,
+    })
+    const jobByRecord = new Map(createdJobs.map(job => [Number(job.record_id), job]))
+
+    return {
+      entries: orderedInvoices.map(invoice => ({
+        recordUuid:  invoice.uuid,
+        recordLabel: invoice.invoice_number,
+        job:          jobByRecord.get(Number(invoice.id)),
+      })),
+      previousFilePaths: previousJobs.map(job => job.file_path).filter(Boolean),
+    }
+  })
+
+  previousFilePaths.forEach(safeUnlink)
+
+  // Queue setiap job secara independen. Kegagalan enqueue ditandai pada job
+  // terkait agar frontend tetap mendapat status lengkap untuk seluruh batch.
+  await Promise.all(entries.map(async (entry) => {
+    try {
+      await enqueuePdfJob({
+        pdfJobUuid:   entry.job.uuid,
+        job_type:     entry.job.job_type,
+        record_id:    entry.job.record_id,
+        options:      entry.job.options || {},
+        requested_by: entry.job.requested_by,
+      })
+    } catch (err) {
+      logger.error(`[pdfJob.service] gagal enqueue batch ${entry.job.uuid}: ${err.message}`)
+      await entry.job.update({
+        status:        'failed',
+        error_message: `Gagal enqueue: ${err.message}`,
+        completed_at:  new Date(),
+      })
+    }
+  }))
+
+  return entries
+}
+
+/**
+ * Payload ringan untuk dropdown cetak PDF massal. Sengaja tidak memakai list
+ * invoice umum karena endpoint tersebut ikut memuat item dan data finansial.
+ */
+async function listInvoiceOptions() {
+  const invoices = await Invoice.findAll({
+    attributes: ['uuid', 'invoice_number', 'invoice_date', 'status', 'created_at'],
+    include: [{
+      association: 'customer',
+      attributes:  ['name'],
+      // Invoice historis tetap harus tampil walau customernya sudah soft-delete.
+      // Nama customer lama masih tersedia di tabel dan aman dibaca read-only.
+      paranoid:    false,
+      required:    false,
+    }],
+    order: [
+      ['invoice_date', 'DESC'],
+      ['created_at', 'DESC'],
+    ],
+  })
+
+  return invoices.map(invoice => ({
+    uuid:           invoice.uuid,
+    invoice_number: invoice.invoice_number,
+    invoice_date:   invoice.invoice_date,
+    status:         invoice.status,
+    customer:       { name: invoice.customer?.name || 'Customer tidak tersedia' },
+  }))
+}
+
+/**
  * Get status untuk polling FE.
  */
 async function getStatus(uuid) {
@@ -173,6 +341,8 @@ module.exports = {
   JOB_TYPES,
   STATUSES,
   enqueue,
+  enqueueInvoiceBatch,
+  listInvoiceOptions,
   getStatus,
   resolveDownload,
   clearPreviousJobs,

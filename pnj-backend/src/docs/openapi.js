@@ -181,6 +181,12 @@ const openApiSpec = {
       },
     },
     responses: {
+      BadRequest: {
+        description: 'Request tidak valid.',
+        content: {
+          'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } },
+        },
+      },
       Unauthorized: {
         description: 'Token tidak valid, token tidak ada, atau login gagal.',
         content: {
@@ -1198,6 +1204,51 @@ Object.assign(openApiSpec.components.schemas, {
       },
     },
   },
+  BulkGenerateInvoicePdfRequest: {
+    type: 'object',
+    required: ['invoice_uuids'],
+    properties: {
+      invoice_uuids: {
+        type: 'array',
+        minItems: 1,
+        maxItems: 20,
+        uniqueItems: true,
+        items: { type: 'string', format: 'uuid' },
+      },
+      options: { $ref: '#/components/schemas/GenerateInvoicePdfRequest/properties/options' },
+    },
+  },
+  BulkInvoicePdfJobResponse: {
+    type: 'object',
+    properties: {
+      success: { type: 'boolean', example: true },
+      message: { type: 'string', example: '2 PDF Invoice sedang diproses.' },
+      data: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            invoice_uuid: { type: 'string', format: 'uuid' },
+            invoice_number: { type: 'string', example: 'INV-2026-2832' },
+            job: { $ref: '#/components/schemas/PdfJobResponse/properties/data' },
+          },
+        },
+      },
+    },
+  },
+  InvoicePdfOption: {
+    type: 'object',
+    properties: {
+      uuid: { type: 'string', format: 'uuid' },
+      invoice_number: { type: 'string', example: 'INV-2026-2832' },
+      invoice_date: { type: 'string', format: 'date', example: '2026-08-09' },
+      status: { type: 'string', enum: ['draft', 'sent', 'outstanding', 'paid', 'void'] },
+      customer: {
+        type: 'object',
+        properties: { name: { type: 'string', example: 'PT Customer' } },
+      },
+    },
+  },
 })
 
 const invoiceQueryParams = [
@@ -1237,6 +1288,30 @@ Object.assign(openApiSpec.paths, {
         403: { $ref: '#/components/responses/Forbidden' },
         404: { $ref: '#/components/responses/NotFound' },
         422: { $ref: '#/components/responses/ValidationError' },
+      },
+    },
+  },
+  '/invoices/pdf-options': {
+    get: {
+      tags: ['Invoice'],
+      summary: 'Daftar ringan invoice untuk pilihan cetak PDF massal',
+      security: [{ bearerAuth: [] }],
+      responses: {
+        200: {
+          description: 'Seluruh invoice dengan nomor, customer, tanggal, dan status.',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  success: { type: 'boolean', example: true },
+                  data: { type: 'array', items: { $ref: '#/components/schemas/InvoicePdfOption' } },
+                },
+              },
+            },
+          },
+        },
+        401: { $ref: '#/components/responses/Unauthorized' },
       },
     },
   },
@@ -1427,6 +1502,22 @@ Object.assign(openApiSpec.paths, {
       requestBody: { required: false, content: { 'application/json': { schema: { $ref: '#/components/schemas/GenerateInvoicePdfRequest' } } } },
       responses: {
         202: { description: 'PDF Invoice sedang diproses.', content: { 'application/json': { schema: { $ref: '#/components/schemas/PdfJobResponse' } } } },
+        401: { $ref: '#/components/responses/Unauthorized' },
+        404: { $ref: '#/components/responses/NotFound' },
+        422: { $ref: '#/components/responses/ValidationError' },
+      },
+    },
+  },
+  '/invoices/generate-pdf/bulk': {
+    post: {
+      tags: ['Invoice'],
+      summary: 'Generate beberapa PDF Invoice',
+      description: 'Membuat satu job async per invoice. Status dan download setiap file tetap memakai endpoint Pdf Jobs.',
+      security: [{ bearerAuth: [] }],
+      requestBody: { required: true, content: { 'application/json': { schema: { $ref: '#/components/schemas/BulkGenerateInvoicePdfRequest' } } } },
+      responses: {
+        202: { description: 'Seluruh job PDF Invoice berhasil dibuat.', content: { 'application/json': { schema: { $ref: '#/components/schemas/BulkInvoicePdfJobResponse' } } } },
+        400: { $ref: '#/components/responses/BadRequest' },
         401: { $ref: '#/components/responses/Unauthorized' },
         404: { $ref: '#/components/responses/NotFound' },
         422: { $ref: '#/components/responses/ValidationError' },

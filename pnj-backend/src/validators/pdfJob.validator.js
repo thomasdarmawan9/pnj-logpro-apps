@@ -26,10 +26,20 @@ const invoiceOptionsSchema = Joi.object({
 
 const generateSJPdfSchema      = Joi.object({ options: sjOptionsSchema })
 const generateInvoicePdfSchema = Joi.object({ options: invoiceOptionsSchema })
+const bulkGenerateInvoicePdfSchema = Joi.object({
+  invoice_uuids: Joi.array()
+    .items(Joi.string().uuid({ version: ['uuidv4'] }))
+    .min(1)
+    .max(20)
+    .unique()
+    .required(),
+  options: invoiceOptionsSchema,
+})
 
 module.exports = {
   generateSJPdfSchema,
   generateInvoicePdfSchema,
+  bulkGenerateInvoicePdfSchema,
   sjOptionsSchema,
   invoiceOptionsSchema,
 }
