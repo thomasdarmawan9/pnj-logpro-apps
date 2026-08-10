@@ -13,7 +13,7 @@ export interface AssignSJResult {
   sj?: SuratJalan
 }
 
-export function validateAssign(sj: SuratJalan, input: AssignSJInput): string | null {
+export function validateAssign(sj: SuratJalan, _input: AssignSJInput): string | null {
   if (!canTransition(sj.status, StatusOperasional.ASSIGNED)) {
     return `Tidak bisa assign SJ dengan status ${sj.status}`
   }

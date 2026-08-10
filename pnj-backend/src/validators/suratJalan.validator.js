@@ -47,6 +47,7 @@ const createSJSchema = Joi.object({
   operational_cost:    Joi.number().precision(2).min(0).default(0),
   internal_notes:      Joi.string().trim().allow('', null),
   sender_name:         Joi.string().trim().max(255).allow('', null),
+  recipient_name:      Joi.string().trim().max(255).allow('', null),
   publish:             Joi.boolean().default(false),
 }).oxor('project_uuid', 'project_id')
   .oxor('customer_uuid', 'customer_id')
@@ -77,6 +78,7 @@ const updateSJSchema = Joi.object({
   operational_cost:    Joi.number().precision(2).min(0),
   internal_notes:      Joi.string().trim().allow('', null),
   sender_name:         Joi.string().trim().max(255).allow('', null),
+  recipient_name:      Joi.string().trim().max(255).allow('', null),
   lampiran_paths:      Joi.array().items(Joi.string().trim().max(255)).allow(null),
 }).min(1).messages({
   'object.min': 'Minimal satu field harus diubah.',

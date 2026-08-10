@@ -105,6 +105,10 @@ module.exports = (sequelize) => {
       type:      DataTypes.STRING(255),
       allowNull: true,
     },
+    recipient_name: {
+      type:      DataTypes.STRING(255),
+      allowNull: true,
+    },
     created_by: {
       type:      DataTypes.BIGINT,
       allowNull: true,

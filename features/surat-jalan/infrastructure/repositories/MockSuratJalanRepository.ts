@@ -98,6 +98,7 @@ function toCreatePayload(dto: CreateSJDto) {
     operational_cost: dto.operational_cost,
     internal_notes: dto.internal_notes,
     sender_name: dto.sender_name,
+    recipient_name: dto.recipient_name,
     publish: dto.publish,
   }
 }
@@ -114,6 +115,7 @@ function toUpdatePayload(dto: UpdateSJDto) {
     operational_cost: dto.operational_cost,
     internal_notes: dto.internal_notes,
     sender_name: dto.sender_name,
+    recipient_name: dto.recipient_name,
     lampiran_paths: dto.lampiran_paths,
   }
 }

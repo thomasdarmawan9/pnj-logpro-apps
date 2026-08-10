@@ -7,13 +7,14 @@ import DashboardLayout from '@/components/layout/DashboardLayout'
 import { ArrowLeft, ArrowRightLeft } from 'lucide-react'
 import { AppDispatch, RootState } from '@/store'
 import { updateSuratJalan } from '@/store/slices/suratJalanSlice'
-import { fetchDrivers, fetchFleets } from '@/store/slices/masterSlice'
+import { fetchCustomers, fetchDrivers, fetchFleets } from '@/store/slices/masterSlice'
 import { useToast } from '@/components/toast/useToast'
 import useSuratJalanDetail from '../hooks/useSuratJalanDetail'
 import useSuratJalanForm from '../hooks/useSuratJalanForm'
 import SJFormArmadaSection from '../components/SJFormArmadaSection'
 import SJFormSupirSection from '../components/SJFormSupirSection'
 import SJFormItemsSection from '../components/SJFormItemsSection'
+import SJPartyNameCombobox from '../components/SJPartyNameCombobox'
 import SJLampiranUploadZone from '../components/SJLampiranUploadZone'
 import type { ArmadaOption, DriverOption } from '../utils/mockOptions'
 import { StatusOperasional, SJItem } from '../../domain/entities/SuratJalan'
@@ -28,7 +29,7 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
   const router = useRouter()
   const dispatch = useDispatch<AppDispatch>()
   const { push: pushToast } = useToast()
-  const { fleets, drivers } = useSelector((state: RootState) => state.master)
+  const { customers, fleets, drivers } = useSelector((state: RootState) => state.master)
   const { selectedSJ, isDetailLoading } = useSuratJalanDetail(uuid)
   const { form, setForm, updateField, errors, validate } = useSuratJalanForm({ mode: 'edit' })
 
@@ -42,9 +43,10 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
+    if (!customers.length) dispatch(fetchCustomers())
     if (!fleets.length) dispatch(fetchFleets())
     if (!drivers.length) dispatch(fetchDrivers())
-  }, [dispatch, fleets.length, drivers.length])
+  }, [dispatch, customers.length, fleets.length, drivers.length])
 
   const armadaOptions = useMemo(() => fleets
     .filter(fleet => fleet.status === 'active' || fleet.id === selectedSJ?.fleet_id)
@@ -85,6 +87,7 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
         operational_cost: selectedSJ.operational_cost,
         internal_notes: selectedSJ.internal_notes || '',
         sender_name: selectedSJ.sender_name ?? null,
+        recipient_name: selectedSJ.recipient_name ?? null,
         publish: false,
       })
       const foundArmada = armadaOptions.find(a => a.id === selectedSJ.fleet_id) || null
@@ -144,6 +147,7 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
         items: form.items.length > 0 ? form.items : null,
         internal_notes: form.internal_notes || null,
         sender_name: form.sender_name || null,
+        recipient_name: form.recipient_name || null,
         lampiran_paths: lampiranPaths.length > 0 ? lampiranPaths : null,
       },
     }))
@@ -224,15 +228,22 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
               <input type="date" className="form-input w-full mt-1 disabled" value={selectedSJ.sj_date} disabled readOnly />
             </label>
 
-            <label className="text-xs font-medium mt-4 block" style={{ color: '#374151' }}>
-              Nama Pengirim <span className="text-gray-400 font-normal">(opsional)</span>
-              <input
-                className="form-input w-full mt-1"
-                value={form.sender_name || ''}
-                onChange={e => updateField('sender_name', e.target.value || null)}
-                placeholder="contoh: Thomas Darmawan"
+            <div className="mt-4 space-y-4">
+              <SJPartyNameCombobox
+                label="Nama Pengirim"
+                value={form.sender_name}
+                customers={customers}
+                onChange={value => updateField('sender_name', value)}
+                placeholder="Cari customer atau ketik nama pengirim..."
               />
-            </label>
+              <SJPartyNameCombobox
+                label="Nama Penerima"
+                value={form.recipient_name}
+                customers={customers}
+                onChange={value => updateField('recipient_name', value)}
+                placeholder="Cari customer atau ketik nama penerima..."
+              />
+            </div>
           </div>
 
           <SJFormArmadaSection

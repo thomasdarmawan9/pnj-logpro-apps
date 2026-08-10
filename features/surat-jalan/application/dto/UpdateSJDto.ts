@@ -11,5 +11,6 @@ export interface UpdateSJDto {
   operational_cost?: number
   internal_notes?: string | null
   sender_name?: string | null
+  recipient_name?: string | null
   lampiran_paths?: string[] | null
 }

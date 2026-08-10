@@ -25,6 +25,7 @@ export default function useSuratJalanForm({ mode, initial }: UseSuratJalanFormOp
     operational_cost: initial?.operational_cost || 0,
     internal_notes: initial?.internal_notes || '',
     sender_name: initial?.sender_name ?? null,
+    recipient_name: initial?.recipient_name ?? null,
     publish: initial?.publish || false,
   })
 
@@ -51,6 +52,7 @@ export default function useSuratJalanForm({ mode, initial }: UseSuratJalanFormOp
     !!form.cargo_description?.trim() ||
     !!form.internal_notes?.trim() ||
     !!form.sender_name?.trim() ||
+    !!form.recipient_name?.trim() ||
     form.items.length > 0
   ), [form])
 

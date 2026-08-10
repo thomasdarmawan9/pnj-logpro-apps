@@ -36,6 +36,8 @@ export interface CreateDownPaymentDto {
 }
 
 export interface CreateInvoiceDto {
+  /** UUID yang dipakai ulang saat retry request create dengan payload yang sama. */
+  idempotency_key?: string
   project_id?: number | null
   customer_id?: number | null
   invoice_date: string

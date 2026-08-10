@@ -13,6 +13,7 @@ import SJFormProyekSection from '../components/SJFormProyekSection'
 import SJFormArmadaSection from '../components/SJFormArmadaSection'
 import SJFormSupirSection from '../components/SJFormSupirSection'
 import SJFormItemsSection from '../components/SJFormItemsSection'
+import SJPartyNameCombobox from '../components/SJPartyNameCombobox'
 import useSuratJalanForm from '../hooks/useSuratJalanForm'
 import { formatLongDate } from '../utils/format'
 import type { ArmadaOption, DriverOption, ProjectOption } from '../utils/mockOptions'
@@ -146,7 +147,7 @@ export default function CreateSuratJalanPage() {
     rute: `${form.origin || '-'} → ${form.destination || '-'}`,
     tanggal: formatLongDate(form.sj_date),
     jumlahItem: form.items.length,
-  }), [form, selectedArmada, selectedDriver, selectedProject, selectedCustomer, driverMode, scopeMode])
+  }), [form, selectedArmada, selectedDriver, selectedProject, selectedCustomer, armadaMode, driverMode, scopeMode])
 
   const handleSubmit = async (publish: boolean) => {
     const valid = validate(publish)
@@ -332,15 +333,22 @@ export default function CreateSuratJalanPage() {
               </label>
             )}
 
-            <label className="text-xs font-medium mt-4 block" style={{ color: '#374151' }}>
-              Nama Pengirim <span className="text-gray-400 font-normal">(opsional)</span>
-              <input
-                className="form-input w-full mt-1"
-                value={form.sender_name || ''}
-                onChange={e => updateField('sender_name', e.target.value || null)}
-                placeholder="contoh: Thomas Darmawan"
+            <div className="mt-4 space-y-4">
+              <SJPartyNameCombobox
+                label="Nama Pengirim"
+                value={form.sender_name}
+                customers={customers}
+                onChange={value => updateField('sender_name', value)}
+                placeholder="Cari customer atau ketik nama pengirim..."
               />
-            </label>
+              <SJPartyNameCombobox
+                label="Nama Penerima"
+                value={form.recipient_name}
+                customers={customers}
+                onChange={value => updateField('recipient_name', value)}
+                placeholder="Cari customer atau ketik nama penerima..."
+              />
+            </div>
           </div>
 
           <div className="rounded-xl bg-white p-6 border mt-4" style={{ borderColor: 'var(--border-card)' }}>

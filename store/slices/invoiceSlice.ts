@@ -279,8 +279,9 @@ const invoiceSlice = createSlice({
       .addCase(createInvoice.pending, state => { state.isSubmitting = true })
       .addCase(createInvoice.fulfilled, (state, action) => {
         state.isSubmitting = false
-        state.list = [action.payload, ...state.list]
-        state.pagination.total += 1
+        const alreadyLoaded = state.list.some(invoice => invoice.uuid === action.payload.uuid)
+        state.list = [action.payload, ...state.list.filter(invoice => invoice.uuid !== action.payload.uuid)]
+        if (!alreadyLoaded) state.pagination.total += 1
       })
       .addCase(createInvoice.rejected, (state, action) => {
         state.isSubmitting = false

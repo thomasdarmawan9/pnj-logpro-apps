@@ -97,6 +97,7 @@ export default function CreateInvoicePage() {
   const [sjDropdownOpen, setSjDropdownOpen] = useState(false)
   const [isLoadingSJs, setIsLoadingSJs] = useState(false)
   const formRef = useRef<HTMLDivElement>(null)
+  const createAttemptKeyRef = useRef<string | null>(null)
   const customerPickerRef = useRef<HTMLDivElement>(null)
   const projectPickerRef = useRef<HTMLDivElement>(null)
   const sjPickerRef = useRef<HTMLDivElement>(null)
@@ -593,10 +594,22 @@ export default function CreateInvoicePage() {
   const doSubmit = async (send: boolean, overwriteConfirmed = false, disableAutoSj = false) => {
     if (isSubmitting) return
     setIsSubmitting(true)
-    const dto = { ...getDto(send, overwriteConfirmed), ...(disableAutoSj ? { auto_create_sj: false, manual_sj_numbers: null } : {}) }
+    const requestPayload = {
+      ...getDto(send, overwriteConfirmed),
+      ...(disableAutoSj ? { auto_create_sj: false, manual_sj_numbers: null } : {}),
+    }
+    // Satu key untuk seluruh siklus submit halaman ini. Kalau response hilang
+    // lalu user mengubah form sebelum retry, backend akan menolak payload yang
+    // berbeda dengan 409 alih-alih berisiko membuat invoice kedua.
+    createAttemptKeyRef.current ??= crypto.randomUUID()
+    const dto = {
+      ...requestPayload,
+      idempotency_key: createAttemptKeyRef.current,
+    }
     const result = await dispatch(createInvoice(dto))
     setIsSubmitting(false)
     if (createInvoice.fulfilled.match(result)) {
+      createAttemptKeyRef.current = null
       pushToast({
         title: send ? 'Invoice Dikirim' : 'Invoice Disimpan',
         description: `Invoice #${result.payload.invoice_number} berhasil dibuat${send ? ' dan dikirim' : ' sebagai draft'}.`,
