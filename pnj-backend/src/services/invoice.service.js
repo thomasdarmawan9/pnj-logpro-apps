@@ -21,8 +21,13 @@ const {
 const { generateInvoiceNumber } = require('../utils/numberGenerator')
 const lampiranSvc = require('./lampiran.service')
 const { randomUUID } = require('crypto')
-const { Op } = require('sequelize')
+const { Op, UniqueConstraintError } = require('sequelize')
 const { addDaysDateOnly, todayDateOnly } = require('../utils/dateOnly')
+const {
+  normalizeIdempotencyKey,
+  hashIdempotencyPayload,
+  assertIdempotencyMatch,
+} = require('../utils/idempotency')
 
 const STATUS = {
   DRAFT:       'draft',
@@ -192,6 +197,9 @@ function decorate(row) {
     )
   }
   if (plain.status !== STATUS.PAID) plain.settlement_date = null
+  // Field ini hanya untuk koordinasi retry di backend dan tidak perlu diekspos.
+  delete plain.idempotency_key
+  delete plain.idempotency_payload_hash
 
   return plain
 }
@@ -952,127 +960,177 @@ async function upsertDownPayment(invoice, dp, actor, t) {
 }
 
 // ── CREATE ────────────────────────────────────────────────────────────────
-async function create(payload, actor) {
-  return sequelize.transaction(async (t) => {
-    assertNotFutureDate(payload.invoice_date, 'Tanggal invoice')
-    if (payload.due_date < payload.invoice_date) {
-      throw new BadRequestError('Tanggal jatuh tempo tidak boleh lebih kecil dari tanggal invoice.')
-    }
-    const scope = await resolveBillingScope(payload, t)
-    const serviceType = payload.service_type || 'delivery'
-    const customServiceName = serviceType === 'other' ? payload.custom_service_name || null : null
-    const effectiveType = effectiveServiceType(serviceType, customServiceName)
-    const deliveryPricingMode = resolveDeliveryPricingMode(effectiveType, payload.delivery_pricing_mode)
-    const linkedSjUuids = effectiveType === 'rental' ? [] : [...new Set(payload.linked_sj_uuids || [])]
+async function findIdempotentInvoice(idempotencyKey, payloadHash, actor, options = {}) {
+  if (!idempotencyKey) return null
 
-    assertRentalItemsUseFleet(payload.items, effectiveType)
-    assertDeliveryItemPricing(payload.items, effectiveType, deliveryPricingMode)
-    if ((payload.payment_method || 'transfer') === 'transfer' && !payload.bank_account_id) {
-      throw new BadRequestError('Rekening tujuan wajib dipilih untuk metode Transfer Bank.')
-    }
-    const fleetMap = await resolveItemFleets(payload.items, t)
-    const driverMap = await resolveItemDrivers(payload.items, t)
-    const invoiceNumber = await generateInvoiceNumber(t)
-
-    // Status awal — sesuai send_immediately flag.
-    const initialStatus = payload.send_immediately ? STATUS.SENT : STATUS.DRAFT
-    const sentAt        = payload.send_immediately ? new Date()  : null
-
-    // Buat invoice tanpa total dulu, set 0 — akan di-update setelah items dibuat.
-    const totals = calcTotals(payload.items, payload.tax_percent, payload.pph_percent, payload.insurance_amount)
-
-    const invoice = await Invoice.create({
-      invoice_number:   invoiceNumber,
-      project_id:       scope.projectId,
-      customer_id:      scope.customerId,
-      invoice_date:     payload.invoice_date,
-      due_date:         payload.due_date,
-      delivery_date:    effectiveType === 'rental' ? null : (payload.delivery_date || null),
-      service_type:     serviceType,
-      custom_service_name: customServiceName,
-      delivery_pricing_mode: deliveryPricingMode,
-      payment_method:   payload.payment_method || 'transfer',
-      bank_account_id:  payload.payment_method === 'transfer' ? (payload.bank_account_id || null) : null,
-      tax_percent:      payload.tax_percent || 0,
-      pph_percent:      payload.pph_percent || 0,
-      insurance_amount: round2(Number(payload.insurance_amount) || 0),
-      ...totals,
-      paid_amount:      0,
-      status:           initialStatus,
-      notes:            payload.notes || null,
-      origin:           effectiveType === 'rental' ? null : payload.origin || null,
-      destination:      effectiveType === 'rental' ? null : payload.destination || null,
-      cargo_description: effectiveType === 'rental' ? null : payload.cargo_description || null,
-      manual_sj_numbers: effectiveType === 'rental' ? null : payload.manual_sj_numbers || null,
-      sent_at:          sentAt,
-      created_by:       actor?.id || null,
-    }, { transaction: t })
-
-    const linkedSjIds = new Set()
-
-    if (linkedSjUuids.length > 0) {
-      const sjList = await DeliveryOrder.findAll({
-        where:       { uuid: linkedSjUuids },
-        transaction: t,
-        lock:        t.LOCK.UPDATE,
-      })
-      if (sjList.length !== linkedSjUuids.length) {
-        const found = new Set(sjList.map(sj => sj.uuid))
-        const missing = linkedSjUuids.filter(uuid => !found.has(uuid))
-        throw new NotFoundError(`SJ tidak ditemukan: ${missing.join(', ')}`)
-      }
-      for (const sj of sjList) {
-        if (!sameBillingScope(invoice, sj)) {
-          throw new BadRequestError(`SJ ${sj.sj_number} tidak sesuai dengan scope invoice.`)
-        }
-        if (!['assigned', 'delivered'].includes(sj.status)) {
-          throw new BadRequestError(`SJ ${sj.sj_number} status ${sj.status} — hanya SJ berstatus Terbit atau Terkirim yang bisa dilampirkan.`)
-        }
-        if (sj.invoice_id && sj.invoice_id !== invoice.id) {
-          throw new ConflictError(`SJ ${sj.sj_number} sudah ter-attach ke invoice lain.`)
-        }
-        linkedSjIds.add(Number(sj.id))
-      }
-
-      const firstSj = sjList[0]
-      const invoiceRouteUpdates = {}
-      if (firstSj) {
-        if (!invoice.origin && firstSj.origin) invoiceRouteUpdates.origin = firstSj.origin
-        if (!invoice.destination && firstSj.destination) invoiceRouteUpdates.destination = firstSj.destination
-        if (!invoice.cargo_description && firstSj.cargo_description) invoiceRouteUpdates.cargo_description = firstSj.cargo_description
-      }
-      if (Object.keys(invoiceRouteUpdates).length > 0) {
-        await invoice.update(invoiceRouteUpdates, { transaction: t })
-      }
-
-      await DeliveryOrder.update({
-        invoice_id:                invoice.id,
-        invoice_attachment_status: 'attached',
-      }, {
-        where:       { id: sjList.map(sj => sj.id) },
-        transaction: t,
-      })
-    }
-
-    const orphanSourceItem = (payload.items || []).find(item => item.source_sj_id && !linkedSjIds.has(Number(item.source_sj_id)))
-    if (orphanSourceItem) {
-      throw new BadRequestError('Item invoice dari sumber SJ harus berasal dari SJ yang dilampirkan.')
-    }
-
-    const itemRows = buildItemRows(payload.items, invoice.id, fleetMap, driverMap)
-    await InvoiceItem.bulkCreate(itemRows, { transaction: t })
-
-    // Optional DP saat create.
-    if (payload.down_payment) {
-      await upsertDownPayment(invoice, payload.down_payment, actor, t)
-    }
-
-    // Auto-create/overwrite SJ dari nomor manual (1 nomor) + tautkan.
-    await syncManualSj(invoice, payload, actor, t)
-
-    const fresh = await repo.findByUuid(invoice.uuid, { transaction: t })
-    return decorate(fresh)
+  const existing = await Invoice.findOne({
+    where: { idempotency_key: idempotencyKey },
+    ...options,
   })
+  if (!existing) return null
+
+  assertIdempotencyMatch(existing, {
+    actorId: actor?.id ?? null,
+    payloadHash,
+  })
+
+  const fresh = await repo.findByUuid(existing.uuid, options)
+  return decorate(fresh)
+}
+
+function isIdempotencyUniqueError(error) {
+  if (!(error instanceof UniqueConstraintError)) return false
+
+  const errorFields = Object.keys(error.fields || {})
+  const errorPaths = (error.errors || []).map(item => item.path)
+  const constraint = String(error.parent?.constraint || error.original?.constraint || '')
+  return errorFields.includes('idempotency_key') ||
+    errorPaths.includes('idempotency_key') ||
+    constraint.includes('idempotency_key')
+}
+
+async function create(payload, actor, options = {}) {
+  const idempotencyKey = normalizeIdempotencyKey(options.idempotencyKey)
+  const payloadHash = idempotencyKey ? hashIdempotencyPayload(payload) : null
+
+  const previous = await findIdempotentInvoice(idempotencyKey, payloadHash, actor)
+  if (previous) return { invoice: previous, replayed: true }
+
+  try {
+    const invoice = await sequelize.transaction(async (t) => {
+      assertNotFutureDate(payload.invoice_date, 'Tanggal invoice')
+      if (payload.due_date < payload.invoice_date) {
+        throw new BadRequestError('Tanggal jatuh tempo tidak boleh lebih kecil dari tanggal invoice.')
+      }
+      const scope = await resolveBillingScope(payload, t)
+      const serviceType = payload.service_type || 'delivery'
+      const customServiceName = serviceType === 'other' ? payload.custom_service_name || null : null
+      const effectiveType = effectiveServiceType(serviceType, customServiceName)
+      const deliveryPricingMode = resolveDeliveryPricingMode(effectiveType, payload.delivery_pricing_mode)
+      const linkedSjUuids = effectiveType === 'rental' ? [] : [...new Set(payload.linked_sj_uuids || [])]
+
+      assertRentalItemsUseFleet(payload.items, effectiveType)
+      assertDeliveryItemPricing(payload.items, effectiveType, deliveryPricingMode)
+      if ((payload.payment_method || 'transfer') === 'transfer' && !payload.bank_account_id) {
+        throw new BadRequestError('Rekening tujuan wajib dipilih untuk metode Transfer Bank.')
+      }
+      const fleetMap = await resolveItemFleets(payload.items, t)
+      const driverMap = await resolveItemDrivers(payload.items, t)
+      const invoiceNumber = await generateInvoiceNumber(t)
+
+      // Status awal — sesuai send_immediately flag.
+      const initialStatus = payload.send_immediately ? STATUS.SENT : STATUS.DRAFT
+      const sentAt        = payload.send_immediately ? new Date()  : null
+
+      // Buat invoice tanpa total dulu, set 0 — akan di-update setelah items dibuat.
+      const totals = calcTotals(payload.items, payload.tax_percent, payload.pph_percent, payload.insurance_amount)
+
+      const invoice = await Invoice.create({
+        invoice_number:   invoiceNumber,
+        idempotency_key:  idempotencyKey,
+        idempotency_payload_hash: payloadHash,
+        project_id:       scope.projectId,
+        customer_id:      scope.customerId,
+        invoice_date:     payload.invoice_date,
+        due_date:         payload.due_date,
+        delivery_date:    effectiveType === 'rental' ? null : (payload.delivery_date || null),
+        service_type:     serviceType,
+        custom_service_name: customServiceName,
+        delivery_pricing_mode: deliveryPricingMode,
+        payment_method:   payload.payment_method || 'transfer',
+        bank_account_id:  payload.payment_method === 'transfer' ? (payload.bank_account_id || null) : null,
+        tax_percent:      payload.tax_percent || 0,
+        pph_percent:      payload.pph_percent || 0,
+        insurance_amount: round2(Number(payload.insurance_amount) || 0),
+        ...totals,
+        paid_amount:      0,
+        status:           initialStatus,
+        notes:            payload.notes || null,
+        origin:           effectiveType === 'rental' ? null : payload.origin || null,
+        destination:      effectiveType === 'rental' ? null : payload.destination || null,
+        cargo_description: effectiveType === 'rental' ? null : payload.cargo_description || null,
+        manual_sj_numbers: effectiveType === 'rental' ? null : payload.manual_sj_numbers || null,
+        sent_at:          sentAt,
+        created_by:       actor?.id || null,
+      }, { transaction: t })
+
+      const linkedSjIds = new Set()
+
+      if (linkedSjUuids.length > 0) {
+        const sjList = await DeliveryOrder.findAll({
+          where:       { uuid: linkedSjUuids },
+          transaction: t,
+          lock:        t.LOCK.UPDATE,
+        })
+        if (sjList.length !== linkedSjUuids.length) {
+          const found = new Set(sjList.map(sj => sj.uuid))
+          const missing = linkedSjUuids.filter(uuid => !found.has(uuid))
+          throw new NotFoundError(`SJ tidak ditemukan: ${missing.join(', ')}`)
+        }
+        for (const sj of sjList) {
+          if (!sameBillingScope(invoice, sj)) {
+            throw new BadRequestError(`SJ ${sj.sj_number} tidak sesuai dengan scope invoice.`)
+          }
+          if (!['assigned', 'delivered'].includes(sj.status)) {
+            throw new BadRequestError(`SJ ${sj.sj_number} status ${sj.status} — hanya SJ berstatus Terbit atau Terkirim yang bisa dilampirkan.`)
+          }
+          if (sj.invoice_id && sj.invoice_id !== invoice.id) {
+            throw new ConflictError(`SJ ${sj.sj_number} sudah ter-attach ke invoice lain.`)
+          }
+          linkedSjIds.add(Number(sj.id))
+        }
+
+        const firstSj = sjList[0]
+        const invoiceRouteUpdates = {}
+        if (firstSj) {
+          if (!invoice.origin && firstSj.origin) invoiceRouteUpdates.origin = firstSj.origin
+          if (!invoice.destination && firstSj.destination) invoiceRouteUpdates.destination = firstSj.destination
+          if (!invoice.cargo_description && firstSj.cargo_description) invoiceRouteUpdates.cargo_description = firstSj.cargo_description
+        }
+        if (Object.keys(invoiceRouteUpdates).length > 0) {
+          await invoice.update(invoiceRouteUpdates, { transaction: t })
+        }
+
+        await DeliveryOrder.update({
+          invoice_id:                invoice.id,
+          invoice_attachment_status: 'attached',
+        }, {
+          where:       { id: sjList.map(sj => sj.id) },
+          transaction: t,
+        })
+      }
+
+      const orphanSourceItem = (payload.items || []).find(item => item.source_sj_id && !linkedSjIds.has(Number(item.source_sj_id)))
+      if (orphanSourceItem) {
+        throw new BadRequestError('Item invoice dari sumber SJ harus berasal dari SJ yang dilampirkan.')
+      }
+
+      const itemRows = buildItemRows(payload.items, invoice.id, fleetMap, driverMap)
+      await InvoiceItem.bulkCreate(itemRows, { transaction: t })
+
+      // Optional DP saat create.
+      if (payload.down_payment) {
+        await upsertDownPayment(invoice, payload.down_payment, actor, t)
+      }
+
+      // Auto-create/overwrite SJ dari nomor manual (1 nomor) + tautkan.
+      await syncManualSj(invoice, payload, actor, t)
+
+      const fresh = await repo.findByUuid(invoice.uuid, { transaction: t })
+      return decorate(fresh)
+    })
+
+    return { invoice, replayed: false }
+  } catch (error) {
+    // Dua retry yang tiba bersamaan dapat sama-sama melewati lookup awal.
+    // Unique index menjadi pagar terakhir; request yang kalah mengembalikan
+    // invoice hasil request pertama setelah transaction pertama commit.
+    if (idempotencyKey && isIdempotencyUniqueError(error)) {
+      const existing = await findIdempotentInvoice(idempotencyKey, payloadHash, actor)
+      if (existing) return { invoice: existing, replayed: true }
+    }
+    throw error
+  }
 }
 
 // ── UPDATE ────────────────────────────────────────────────────────────────

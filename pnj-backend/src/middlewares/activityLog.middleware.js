@@ -77,6 +77,8 @@ function logActivity(action, module, options = {}) {
       if (res.statusCode < 200 || res.statusCode >= 300) {
         return originalJson(body)
       }
+      // Retry idempotent mengembalikan record lama, bukan aktivitas create baru.
+      if (res.locals.idempotencyReplayed) return originalJson(body)
 
       try {
         const data = body?.data

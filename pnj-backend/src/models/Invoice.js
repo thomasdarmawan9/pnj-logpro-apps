@@ -20,6 +20,17 @@ module.exports = (sequelize) => {
       allowNull: false,
       unique:    true,
     },
+    idempotency_key: {
+      type:      DataTypes.UUID,
+      allowNull: true,
+      unique:    true,
+      comment:   'Kunci unik dari client untuk mencegah invoice ganda saat request create diulang.',
+    },
+    idempotency_payload_hash: {
+      type:      DataTypes.STRING(64),
+      allowNull: true,
+      comment:   'SHA-256 payload create untuk mendeteksi pemakaian ulang key dengan data berbeda.',
+    },
     project_id: {
       type:      DataTypes.BIGINT,
       allowNull: true,

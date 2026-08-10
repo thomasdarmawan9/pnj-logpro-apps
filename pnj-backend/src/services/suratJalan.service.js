@@ -33,6 +33,11 @@ const STATUS = {
   VOID:      'void',
 }
 
+function normalizeOptionalPartyName(value) {
+  if (typeof value !== 'string') return value || null
+  return value.trim() || null
+}
+
 const ALLOWED_TRANSITIONS = {
   [STATUS.DRAFT]:     [STATUS.ASSIGNED, STATUS.VOID],
   [STATUS.ASSIGNED]:  [STATUS.DELIVERED, STATUS.VOID],
@@ -425,7 +430,8 @@ async function create(payload, actor) {
       status,
       invoice_attachment_status: 'no_invoice',
       internal_notes:            payload.internal_notes || null,
-      sender_name:               payload.sender_name || null,
+      sender_name:               normalizeOptionalPartyName(payload.sender_name),
+      recipient_name:            normalizeOptionalPartyName(payload.recipient_name),
       created_by:                actor?.id || null,
       updated_by:                actor?.id || null,
     }, { transaction: t })
@@ -498,10 +504,13 @@ async function update(uuid, payload, actor) {
 
     const passthrough = [
       'driver_name_manual', 'sj_date', 'origin', 'destination',
-      'cargo_description', 'operational_cost', 'internal_notes', 'sender_name',
+      'cargo_description', 'operational_cost', 'internal_notes',
     ]
     for (const k of passthrough) {
       if (k in payload) updates[k] = payload[k]
+    }
+    for (const k of ['sender_name', 'recipient_name']) {
+      if (k in payload) updates[k] = normalizeOptionalPartyName(payload[k])
     }
     if ('items' in payload) {
       updates.items = await normalizeSJItems(payload.items, t)

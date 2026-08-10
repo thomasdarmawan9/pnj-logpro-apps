@@ -15,5 +15,6 @@ export interface CreateSJDto {
   operational_cost: number
   internal_notes: string | null
   sender_name: string | null
+  recipient_name: string | null
   publish: boolean
 }

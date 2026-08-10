@@ -82,9 +82,44 @@ function printableRowCount(sj) {
   return Math.max(6, buildRowData(sj).length)
 }
 
+function buildPartyLabels(sj) {
+  const labels = []
+  if (sj.project?.name || sj.project?.code) {
+    labels.push(sj.project.contract_number
+      ? `No Kontrak : ${sj.project.contract_number}`
+      : `Proyek : ${sj.project.code || sj.project.name}`)
+  }
+  if (sj.sender_name) labels.push(`Pengirim : ${sj.sender_name}`)
+  if (sj.recipient_name) labels.push(`Penerima : ${sj.recipient_name}`)
+  return labels
+}
+
+function fitSingleLine(doc, text, width) {
+  if (doc.widthOfString(text) <= width) return text
+
+  const suffix = '...'
+  const suffixWidth = doc.widthOfString(suffix)
+  if (suffixWidth >= width) return suffix
+
+  let low = 0
+  let high = text.length
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2)
+    const candidate = `${text.slice(0, middle).trimEnd()}${suffix}`
+    if (doc.widthOfString(candidate) <= width) low = middle
+    else high = middle - 1
+  }
+
+  return `${text.slice(0, low).trimEnd()}${suffix}`
+}
+
+function partySectionHeight(sj) {
+  return Math.max(32, 12 + buildPartyLabels(sj).length * 10)
+}
+
 function estimateCopyBottom(sj, y0, includeSign = true) {
   const rowCount = printableRowCount(sj)
-  const tableY = y0 + 131
+  const tableY = y0 + 99 + partySectionHeight(sj)
   const extraStart = tableY + 14 + rowCount * 14
   const spareBottom = extraStart + 14 + 14 + 14 + 14 + 18
   return includeSign ? spareBottom + 10 + SIGN_SPACE : spareBottom
@@ -200,7 +235,7 @@ function renderCopy(doc, sj, company, options, Y0, copyIndex = 0) {
 
   // ── 3. Kepada ────────────────────────────────────────────────────────────
   const KEP_Y = BAR_Y + BAR_H + 4
-  const KEP_H = 32
+  const KEP_H = partySectionHeight(sj)
 
   doc.font('Helvetica-Bold').fontSize(9).fillColor(C_DARK)
      .text('Kepada :', L + 2, KEP_Y)
@@ -212,22 +247,16 @@ function renderCopy(doc, sj, company, options, Y0, copyIndex = 0) {
   // Garis bawah nama
   hLine(doc, L + 2, KEP_Y + 24, W * 0.5, 0.5)
 
-  // Project / keterangan di sebelah kanan Kepada (opsional)
-  if (sj.project?.name || sj.project?.code) {
-    const projLabel = sj.project.contract_number
-      ? `No Kontrak : ${sj.project.contract_number}`
-      : `Proyek : ${sj.project.code || sj.project.name}`
+  // Project, nama pengirim, dan nama penerima di sebelah kanan (opsional).
+  buildPartyLabels(sj).forEach((label, index) => {
+    const labelWidth = W * 0.38
     doc.font('Helvetica').fontSize(8).fillColor(C_DARK)
-       .text(projLabel, L + W * 0.62, KEP_Y + 12, { width: W * 0.38, align: 'right' })
-  }
-
-  // Nama Pengirim di sebelah kanan (opsional)
-  if (sj.sender_name) {
-    const senderLabel = `Pengirim : ${sj.sender_name}`
-    const senderY = (sj.project?.name || sj.project?.code) ? KEP_Y + 22 : KEP_Y + 12
-    doc.font('Helvetica').fontSize(8).fillColor(C_DARK)
-       .text(senderLabel, L + W * 0.62, senderY, { width: W * 0.38, align: 'right' })
-  }
+       .text(fitSingleLine(doc, label, labelWidth), L + W * 0.62, KEP_Y + 12 + index * 10, {
+         width: labelWidth,
+         align: 'right',
+         lineBreak: false,
+       })
+  })
 
   // ── 4. Intro teks ────────────────────────────────────────────────────────
   const INTRO_Y = KEP_Y + KEP_H

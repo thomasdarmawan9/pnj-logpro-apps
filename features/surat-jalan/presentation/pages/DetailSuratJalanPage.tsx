@@ -263,6 +263,8 @@ export default function DetailSuratJalanPage({ uuid }: DetailSuratJalanPageProps
                     <div className="text-sm">{selectedSJ.cargo_description || '-'}</div>
                     <div className="text-xs text-gray-500 mt-2">Nama Pengirim</div>
                     <div className="text-sm">{selectedSJ.sender_name || '-'}</div>
+                    <div className="text-xs text-gray-500 mt-2">Nama Penerima</div>
+                    <div className="text-sm">{selectedSJ.recipient_name || '-'}</div>
                     <div className="text-xs text-gray-500 mt-2">Tgl SJ</div>
                     <div className="text-sm">{formatLongDate(selectedSJ.sj_date)}</div>
                   </div>

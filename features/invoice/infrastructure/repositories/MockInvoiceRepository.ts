@@ -297,6 +297,9 @@ export class MockInvoiceRepository implements IInvoiceRepository {
   async create(dto: CreateInvoiceDto): Promise<Invoice> {
     const response = await apiRequest<ApiInvoice>('/invoices', {
       method: 'POST',
+      headers: dto.idempotency_key
+        ? { 'Idempotency-Key': dto.idempotency_key }
+        : undefined,
       body: {
         project_id: dto.project_id ?? null,
         customer_id: dto.customer_id ?? null,

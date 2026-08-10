@@ -24,8 +24,17 @@ const getOne = asyncHandler(async (req, res) => {
 })
 
 const create = asyncHandler(async (req, res) => {
-  const data = await service.create(req.body, req.user)
-  res.status(201).json(success(data, 'Invoice berhasil dibuat.'))
+  const result = await service.create(req.body, req.user, {
+    idempotencyKey: req.get('Idempotency-Key'),
+  })
+  res.locals.idempotencyReplayed = result.replayed
+  if (result.replayed) res.set('Idempotency-Replayed', 'true')
+  res
+    .status(result.replayed ? 200 : 201)
+    .json(success(
+      result.invoice,
+      result.replayed ? 'Invoice sudah dibuat dari request sebelumnya.' : 'Invoice berhasil dibuat.',
+    ))
 })
 
 const update = asyncHandler(async (req, res) => {
