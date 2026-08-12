@@ -42,7 +42,7 @@ interface Props {
 function formatQty(value: number | null | undefined): string {
   const numeric = Number(value || 0)
   if (!Number.isFinite(numeric) || numeric <= 0) return '-'
-  return new Intl.NumberFormat('id-ID', { maximumFractionDigits: 2 }).format(numeric)
+  return new Intl.NumberFormat('id-ID', { maximumFractionDigits: 4 }).format(numeric)
 }
 
 function isDeliveryAdditionalCharge(item: InvoiceItem): boolean {

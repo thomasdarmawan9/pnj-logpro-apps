@@ -69,7 +69,7 @@ module.exports = (sequelize) => {
       defaultValue: 0,
     },
     qty: {
-      type:         DataTypes.DECIMAL(10, 2),
+      type:         DataTypes.DECIMAL(12, 4),
       defaultValue: 1,
     },
     unit: {
