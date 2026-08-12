@@ -102,7 +102,7 @@ function formatDateNumeric(input) {
 function formatQty(n) {
   const num = Number(n || 0)
   if (Number.isInteger(num)) return String(num)
-  return num.toLocaleString('id-ID', { maximumFractionDigits: 2 })
+  return num.toLocaleString('id-ID', { maximumFractionDigits: 4 })
 }
 
 function formatRentalDuration(item) {
