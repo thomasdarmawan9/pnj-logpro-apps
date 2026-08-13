@@ -23,7 +23,12 @@ export default function VoidInvoiceModal({ open, invoice, onClose, onConfirm }: 
     if (open) { setReason(''); setConfirmation('') }
   }, [open])
 
-  const canConfirm = reason.trim().length >= 10 && confirmation === invoice?.invoice_number
+  const hasDownPayment = Number(invoice?.down_payment?.amount ?? 0) > 0
+  const hasRecordedPayment = Number(invoice?.paid_amount ?? 0) > 0 ||
+    hasDownPayment ||
+    (invoice?.payments ?? []).some(payment => Number(payment.amount) > 0)
+  const paymentCount = (invoice?.payments.length ?? 0) + (hasDownPayment ? 1 : 0)
+  const canConfirm = !hasRecordedPayment && reason.trim().length >= 10 && confirmation === invoice?.invoice_number
 
   return (
     <ModalShell open={open} onClose={onClose} title="⚠ Void Invoice" subtitle="Tindakan ini tidak dapat dibatalkan">
@@ -43,10 +48,10 @@ export default function VoidInvoiceModal({ open, invoice, onClose, onConfirm }: 
           </div>
         )}
 
-        {(invoice?.paid_amount ?? 0) > 0 && (
+        {hasRecordedPayment && (
           <div className="rounded-xl p-3 text-sm" style={{ backgroundColor: '#FFFBEB', border: '1px solid #FDE68A', color: '#92400E' }}>
-            <strong>⚠ Invoice ini sudah memiliki {invoice?.payments.length} pembayaran ({formatRupiah(invoice?.paid_amount ?? 0)}).</strong>
-            <br />Pembayaran ini tidak akan dihapus — perlu penyesuaian manual.
+            <strong>⚠ Invoice ini sudah memiliki {paymentCount} pembayaran ({formatRupiah(invoice?.paid_amount ?? 0)}).</strong>
+            <br />Invoice belum dapat di-void. Batalkan atau hapus pembayaran terlebih dahulu.
           </div>
         )}
 

@@ -35,6 +35,10 @@ const STATUS = {
   OUTSTANDING: 'outstanding',
   PAID:        'paid',
   VOID:        'void',
+  // Status dari data impor/sistem lama. Tetap diterima agar pembatalan
+  // dilakukan lewat fitur Void oleh admin dan tercatat di audit trail.
+  CANCELLED:   'cancelled',
+  CANCELED:    'canceled',
 }
 
 const DELIVERY_PRICING_MODE = {
@@ -53,6 +57,8 @@ const ALLOWED_TRANSITIONS = {
   // recompute paid_amount), bukan lewat endpoint send() generik.
   [STATUS.PAID]:        [],
   [STATUS.VOID]:        [],
+  [STATUS.CANCELLED]:   [STATUS.VOID],
+  [STATUS.CANCELED]:    [STATUS.VOID],
 }
 
 function canTransition(current, next) {

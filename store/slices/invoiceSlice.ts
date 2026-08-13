@@ -154,8 +154,8 @@ export const voidInvoice = createAsyncThunk(
   async ({ uuid, reason }: { uuid: string; reason: string }, { rejectWithValue }) => {
     try {
       return await invoiceRepository.void(uuid, reason)
-    } catch {
-      return rejectWithValue('Gagal void invoice')
+    } catch (e) {
+      return rejectWithValue(e instanceof Error ? e.message : 'Gagal void invoice')
     }
   }
 )

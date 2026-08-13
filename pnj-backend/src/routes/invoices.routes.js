@@ -4,7 +4,7 @@ const express          = require('express')
 const router           = express.Router()
 
 const { authenticate } = require('../middlewares/auth.middleware')
-const { isAnyRole, isFinanceOrAbove } = require('../middlewares/rbac.middleware')
+const { isAnyRole, isFinanceOrAbove, isSuperAdmin } = require('../middlewares/rbac.middleware')
 const { validate }     = require('../middlewares/validate.middleware')
 const { uuidParam, uuidFilenameParam } = require('../validators/common.validator')
 const {
@@ -110,7 +110,7 @@ router.patch('/:uuid/revert-payment',
 )
 
 router.patch('/:uuid/void',
-  isAnyRole,
+  isSuperAdmin,
   validate(uuidParam, 'params'),
   validate(voidInvoiceSchema),
   logActivity('void_invoice', 'invoice'),
