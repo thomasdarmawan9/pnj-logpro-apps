@@ -5,6 +5,7 @@ import ModalShell from './ModalShell'
 import { StatusOperasional, SuratJalan } from '../../../domain/entities/SuratJalan'
 import SJPODUploadZone from '../SJPODUploadZone'
 import { downloadSuratJalanPOD, uploadSuratJalanPOD } from '../../../infrastructure/repositories/MockSuratJalanRepository'
+import { toWibDateTimeLocal, wibDateTimeLocalToISOString } from '../../utils/dateTime'
 
 interface ConfirmasiTibaModalProps {
   open: boolean
@@ -23,7 +24,7 @@ export default function ConfirmasiTibaModal({ open, sj, onClose, onConfirm }: Co
   useEffect(() => {
     if (open) {
       setStep(isReplacePhoto ? 2 : 1)
-      setDeliveredAt(new Date().toISOString().slice(0, 16))
+      setDeliveredAt(toWibDateTimeLocal())
       setPodPath(sj?.pod_photo_path || '')
     }
   }, [open, isReplacePhoto, sj?.pod_photo_path])
@@ -114,10 +115,13 @@ export default function ConfirmasiTibaModal({ open, sj, onClose, onConfirm }: Co
               </button>
             )}
             <button
-              onClick={() => onConfirm({ delivered_at: new Date(deliveredAt).toISOString(), pod_photo_path: podPath })}
+              onClick={() => {
+                const deliveredAtIso = wibDateTimeLocalToISOString(deliveredAt)
+                if (deliveredAtIso) onConfirm({ delivered_at: deliveredAtIso, pod_photo_path: podPath })
+              }}
               className="px-4 py-2 rounded-lg text-white"
-              style={{ backgroundColor: podPath ? 'var(--green-primary)' : '#A7D7B2' }}
-              disabled={!podPath}
+              style={{ backgroundColor: podPath && deliveredAt ? 'var(--green-primary)' : '#A7D7B2' }}
+              disabled={!podPath || !deliveredAt}
             >
               {isReplacePhoto ? 'Simpan Foto' : 'Konfirmasi Tiba ✓'}
             </button>

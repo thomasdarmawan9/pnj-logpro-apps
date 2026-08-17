@@ -1,6 +1,7 @@
 import { SJItem } from '../../domain/entities/SuratJalan'
 
 export interface UpdateSJDto {
+  sj_date?: string
   fleet_id?: number | null
   driver_id?: number | null
   driver_name_manual?: string | null

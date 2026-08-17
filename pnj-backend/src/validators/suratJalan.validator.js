@@ -1,10 +1,19 @@
 'use strict'
 
 const Joi = require('joi')
+const { normalizeDateOnly } = require('../utils/dateOnly')
 
 const STATUSES  = ['draft', 'assigned', 'delivered', 'void']
 const INV_STATES = ['no_invoice', 'attached']
 const PERIODS    = ['today', 'week', 'month', 'last_month', 'all']
+
+const dateOnlySchema = Joi.string().trim().custom((value, helpers) => {
+  const normalized = normalizeDateOnly(value)
+  return normalized || helpers.error('dateOnly.format')
+}).messages({
+  'dateOnly.format': '{{#label}} harus menggunakan tanggal valid dengan format YYYY-MM-DD.',
+  'string.base': '{{#label}} harus menggunakan format YYYY-MM-DD.',
+})
 
 const sjItemSchema = Joi.object({
   id:              Joi.string().trim().max(36).allow('', null),
@@ -39,7 +48,7 @@ const createSJSchema = Joi.object({
   driver_uuid:         Joi.string().uuid({ version: ['uuidv4'] }).allow(null),
   driver_id:           Joi.number().integer().min(1).allow(null),
   driver_name_manual:  Joi.string().trim().max(100).allow('', null),
-  sj_date:             Joi.date().iso().required(),
+  sj_date:             dateOnlySchema.required(),
   origin:              Joi.string().trim().min(2).max(200).required(),
   destination:         Joi.string().trim().min(2).max(200).required(),
   cargo_description:   Joi.string().trim().allow('', null),
@@ -69,7 +78,7 @@ const updateSJSchema = Joi.object({
   driver_uuid:         Joi.string().uuid({ version: ['uuidv4'] }).allow(null),
   driver_id:           Joi.number().integer().min(1).allow(null),
   driver_name_manual:  Joi.string().trim().max(100).allow('', null),
-  sj_date:             Joi.date().iso(),
+  sj_date:             dateOnlySchema,
   origin:              Joi.string().trim().min(2).max(200),
   destination:         Joi.string().trim().min(2).max(200),
   cargo_description:   Joi.string().trim().allow('', null),
@@ -116,8 +125,8 @@ const listSJQuery = Joi.object({
   customer_name:  Joi.string().trim().max(150).allow('', null),
   uuids:          Joi.string().trim().allow('', null),
   period:         Joi.string().valid(...PERIODS).default('all'),
-  from:           Joi.date().iso(),
-  to:             Joi.date().iso(),
+  from:           dateOnlySchema,
+  to:             dateOnlySchema,
 })
 
 const lookupSJQuery = Joi.object({

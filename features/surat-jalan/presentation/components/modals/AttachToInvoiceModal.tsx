@@ -5,6 +5,7 @@ import { FileText, AlertCircle, Loader2 } from 'lucide-react'
 import ModalShell from './ModalShell'
 import { SuratJalan } from '../../../domain/entities/SuratJalan'
 import { AvailableInvoice, InvoiceStatus } from '../../../../../features/invoice/domain/entities/Invoice'
+import { formatDateOnly } from '@/lib/dateOnly'
 
 interface AttachToInvoiceModalProps {
   open: boolean
@@ -29,7 +30,7 @@ function formatRupiah(n: number) {
 }
 
 function formatDate(s: string) {
-  return new Date(s).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
+  return formatDateOnly(s)
 }
 
 export default function AttachToInvoiceModal({

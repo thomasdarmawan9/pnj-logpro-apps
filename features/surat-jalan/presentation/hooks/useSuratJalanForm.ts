@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import { CreateSJDto } from '../../application/dto/CreateSJDto'
 import { UpdateSJDto } from '../../application/dto/UpdateSJDto'
 import { validateCreateSJ, validateUpdateSJ } from '../../application/validators/SJValidator'
+import { normalizeDateOnly, todayDateOnly } from '@/lib/dateOnly'
 
 interface UseSuratJalanFormOptions {
   mode: 'create' | 'edit'
@@ -17,7 +18,7 @@ export default function useSuratJalanForm({ mode, initial }: UseSuratJalanFormOp
     fleet_id: initial?.fleet_id ?? null,
     driver_id: initial?.driver_id ?? null,
     driver_name_manual: initial?.driver_name_manual ?? '',
-    sj_date: initial?.sj_date || new Date().toISOString().slice(0, 10),
+    sj_date: normalizeDateOnly(initial?.sj_date) || todayDateOnly(),
     origin: initial?.origin || '',
     destination: initial?.destination || '',
     cargo_description: initial?.cargo_description || '',

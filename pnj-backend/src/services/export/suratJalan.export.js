@@ -2,6 +2,7 @@
 
 const sjService = require('../suratJalan.service')
 const { newWorkbook, addSheet, streamWorkbook, FMT } = require('./xlsxRenderer')
+const { todayDateOnly } = require('../../utils/dateOnly')
 
 const STATUS_LABEL = {
   draft:     'Draft',
@@ -112,7 +113,7 @@ async function exportXlsx(filters, res) {
     rows,
   })
 
-  const filename = `surat_jalan_${new Date().toISOString().slice(0, 10)}.xlsx`
+  const filename = `surat_jalan_${todayDateOnly()}.xlsx`
   await streamWorkbook(wb, res, filename)
 }
 

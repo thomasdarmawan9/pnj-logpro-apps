@@ -130,6 +130,7 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
     const result = await dispatch(updateSuratJalan({
       uuid: selectedSJ.uuid,
       dto: {
+        sj_date: form.sj_date,
         // Armada "Belum Ditentukan" disimpan sebagai null dan tidak bergantung
         // pada tersedianya record master fleet berplat TBD.
         fleet_id: armadaMode === 'tbd' ? null : selectedArmada?.id,
@@ -221,7 +222,13 @@ export default function EditSuratJalanPage({ uuid }: EditSuratJalanPageProps) {
             </div>
             <label className="text-xs font-medium mt-4 block" style={{ color: '#374151' }}>
               Tanggal SJ
-              <input type="date" className="form-input w-full mt-1 disabled" value={selectedSJ.sj_date} disabled readOnly />
+              <input
+                type="date"
+                className={`form-input w-full mt-1 ${errors.sj_date ? 'error' : ''}`}
+                value={form.sj_date}
+                onChange={event => updateField('sj_date', event.target.value)}
+              />
+              {errors.sj_date && <div className="text-xs text-red-600 mt-1">{errors.sj_date}</div>}
             </label>
 
             <label className="text-xs font-medium mt-4 block" style={{ color: '#374151' }}>

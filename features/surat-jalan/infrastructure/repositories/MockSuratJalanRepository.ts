@@ -5,6 +5,7 @@ import { CreateSJDto } from '../../application/dto/CreateSJDto'
 import { UpdateSJDto } from '../../application/dto/UpdateSJDto'
 import { AssignSJInput } from '../../application/use-cases/AssignSuratJalan'
 import { DeliverSJInput } from '../../application/use-cases/DeliverSuratJalan'
+import { normalizeDateOnly } from '@/lib/dateOnly'
 
 type ApiSJ = Omit<SuratJalan, 'id' | 'project_id' | 'customer_id' | 'fleet_id' | 'driver_id' | 'invoice_id' | 'created_by' | 'operational_cost' | 'project' | 'customer' | 'fleet'> & {
   id: number | string
@@ -32,6 +33,7 @@ function normalizeSJ(sj: ApiSJ): SuratJalan {
 
   return {
     ...sj,
+    sj_date: normalizeDateOnly(sj.sj_date) || sj.sj_date,
     id: Number(sj.id),
     project_id: projectId,
     project: sj.project ? {
@@ -104,6 +106,7 @@ function toCreatePayload(dto: CreateSJDto) {
 
 function toUpdatePayload(dto: UpdateSJDto) {
   return {
+    sj_date: dto.sj_date,
     fleet_id: dto.fleet_id,
     driver_id: dto.driver_id,
     driver_name_manual: dto.driver_name_manual,
