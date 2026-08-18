@@ -25,6 +25,7 @@ const { generateSJNumber } = require('../utils/numberGenerator')
 const { generateStockDisbursementNumber } = require('../utils/numberGenerator')
 const { applyStockDelta, round2 } = require('../utils/stockBalance')
 const lampiranSvc = require('./lampiran.service')
+const { addDaysDateOnly, todayDateOnly } = require('../utils/dateOnly')
 
 const STATUS = {
   DRAFT:     'draft',
@@ -60,31 +61,26 @@ function fleetStatusLabel(status) {
 
 function periodToRange(period) {
   if (!period || period === 'all') return null
-  const now   = new Date()
-  const year  = now.getFullYear()
-  const month = now.getMonth()
-  const day   = now.getDate()
+  const today = todayDateOnly()
+  const [year, month] = today.split('-').map(Number)
+  const format = (y, m, d) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+  const lastDay = (y, m) => new Date(Date.UTC(y, m, 0)).getUTCDate()
 
   switch (period) {
-    case 'today': {
-      const d = new Date(year, month, day)
-      return { from: d, to: new Date(year, month, day, 23, 59, 59) }
-    }
-    case 'week': {
-      const d = new Date(now)
-      d.setDate(d.getDate() - 7)
-      return { from: d, to: now }
-    }
+    case 'today': return { from: today, to: today }
+    case 'week': return { from: addDaysDateOnly(today, -7), to: today }
     case 'month': {
       return {
-        from: new Date(year, month, 1),
-        to:   new Date(year, month + 1, 0, 23, 59, 59),
+        from: format(year, month, 1),
+        to:   format(year, month, lastDay(year, month)),
       }
     }
     case 'last_month': {
+      const previousMonth = month === 1 ? 12 : month - 1
+      const previousYear = month === 1 ? year - 1 : year
       return {
-        from: new Date(year, month - 1, 1),
-        to:   new Date(year, month, 0, 23, 59, 59),
+        from: format(previousYear, previousMonth, 1),
+        to:   format(previousYear, previousMonth, lastDay(previousYear, previousMonth)),
       }
     }
     default:

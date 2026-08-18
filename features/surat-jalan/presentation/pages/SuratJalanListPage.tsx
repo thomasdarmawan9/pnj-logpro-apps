@@ -44,6 +44,7 @@ import { useToast } from '@/components/toast/useToast'
 import { exportSuratJalan } from '../../infrastructure/repositories/MockSuratJalanRepository'
 import { fetchCustomers, fetchProjects } from '@/store/slices/masterSlice'
 import TablePagination from '@/features/master/presentation/components/TablePagination'
+import { todayDateOnly } from '@/lib/dateOnly'
 
 export default function SuratJalanListPage() {
   const router = useRouter()
@@ -169,7 +170,7 @@ export default function SuratJalanListPage() {
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = `surat-jalan-export-${new Date().toISOString().slice(0, 10)}.xlsx`
+      link.download = `surat-jalan-export-${todayDateOnly()}.xlsx`
       link.click()
       URL.revokeObjectURL(url)
       pushToast({

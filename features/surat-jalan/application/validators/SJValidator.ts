@@ -1,5 +1,6 @@
 import { CreateSJDto } from '../dto/CreateSJDto'
 import { UpdateSJDto } from '../dto/UpdateSJDto'
+import { normalizeDateOnly } from '@/lib/dateOnly'
 
 export interface ValidationResult {
   valid: boolean
@@ -11,6 +12,7 @@ export function validateCreateSJ(dto: CreateSJDto): ValidationResult {
 
   if (!dto.project_id && !dto.customer_id) errors.project_id = 'Pilih proyek atau customer'
   if (!dto.sj_date) errors.sj_date = 'Tanggal SJ wajib diisi'
+  else if (!normalizeDateOnly(dto.sj_date)) errors.sj_date = 'Format tanggal SJ tidak valid'
   if (!dto.origin?.trim()) errors.origin = 'Lokasi asal wajib diisi'
   if (!dto.destination?.trim()) errors.destination = 'Lokasi tujuan wajib diisi'
   if (dto.items.some(item => item.source_type === 'stock' && !item.stock_item_uuid && !item.stock_item_id)) {
@@ -22,6 +24,7 @@ export function validateCreateSJ(dto: CreateSJDto): ValidationResult {
 
 export function validateUpdateSJ(dto: UpdateSJDto): ValidationResult {
   const errors: Record<string, string> = {}
+  if (dto.sj_date !== undefined && !normalizeDateOnly(dto.sj_date)) errors.sj_date = 'Format tanggal SJ tidak valid'
   if (dto.origin !== undefined && !dto.origin.trim()) errors.origin = 'Lokasi asal tidak boleh kosong'
   if (dto.destination !== undefined && !dto.destination.trim()) errors.destination = 'Lokasi tujuan tidak boleh kosong'
   if (dto.items?.some(item => item.source_type === 'stock' && !item.stock_item_uuid && !item.stock_item_id)) {

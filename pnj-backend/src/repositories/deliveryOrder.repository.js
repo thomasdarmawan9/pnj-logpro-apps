@@ -85,7 +85,7 @@ function findBySjNumber(sjNumber, options = {}) {
 
 /**
  * List dengan filter lengkap. `periodRange` diberikan oleh service
- * sebagai { from, to } Date objects sudah translated dari keyword period.
+ * sebagai { from, to } string DATEONLY (`YYYY-MM-DD`).
  */
 function list({
   page, limit, search,
