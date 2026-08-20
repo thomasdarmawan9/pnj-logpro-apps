@@ -1141,8 +1141,8 @@ async function create(payload, actor, options = {}) {
 
 // ── UPDATE ────────────────────────────────────────────────────────────────
 /**
- * Edit policy: PPN/PPh boleh diubah di semua status kecuali void.
- * Items boleh diubah pada draft dan sent/terbit.
+ * Edit policy: PPN/PPh dan harga per barang/per pengiriman boleh diubah di
+ * semua status kecuali void. Struktur item hanya dibuka frontend pada draft/sent.
  * Kalau payload.items dikirim, items lama dihapus dan diganti.
  */
 async function update(uuid, payload, actor) {
@@ -1161,7 +1161,8 @@ async function update(uuid, payload, actor) {
     // Edit policy:
     //   - draft: edit penuh
     //   - sent/terbit: metode pembayaran/rekening + DP + rincian item
-    //   - outstanding/paid: DP, lampiran, PPN, dan PPh
+    //   - semua status non-void: harga per barang/per pengiriman
+    //   - outstanding/paid: DP, lampiran, dan PPN/PPh
     //   - void: hanya tanggal invoice (invoice_date)
     // invoice_date (tanggal pembuatan, semua status) & settlement_date (tanggal
     // pelunasan, hanya invoice lunas) ditangani terpisah — keluarkan dari
@@ -1177,7 +1178,11 @@ async function update(uuid, payload, actor) {
       'auto_create_sj', 'overwrite_sj_confirmed',
     ])
     const nonDateKeys = payloadKeys.filter(k => !policyIgnoredKeys.has(k))
-    const isRestrictedStatusEdit = nonDateKeys.every(k =>
+    // Harga tidak ikut restriction status: draft, sent, outstanding, paid,
+    // cancelled/canceled semuanya boleh. VOID tetap ditolak oleh guard di bawah.
+    const unrestrictedPricingKeys = new Set(['items', 'delivery_pricing_mode'])
+    const statusRestrictedKeys = nonDateKeys.filter(k => !unrestrictedPricingKeys.has(k))
+    const isRestrictedStatusEdit = statusRestrictedKeys.every(k =>
       ['down_payment', 'lampiran_paths', 'tax_percent', 'pph_percent'].includes(k)
     )
     const isSentBillingOnly = invoice.status === STATUS.SENT &&

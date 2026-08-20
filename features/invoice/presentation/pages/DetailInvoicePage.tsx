@@ -97,7 +97,7 @@ export default function DetailInvoicePage({ uuid }: Props) {
   }
 
   const canManage = invoice.status !== InvoiceStatus.PAID && invoice.status !== InvoiceStatus.VOID
-  const canEditDownPayment = invoice.status !== InvoiceStatus.VOID &&
+  const canEditInvoice = invoice.status !== InvoiceStatus.VOID &&
     (role === 'super_admin' || role === 'admin_finance')
   const effectiveInvoiceServiceType = resolveEffectiveInvoiceServiceType(invoice.service_type, invoice.custom_service_name)
   const isRentalInvoice = effectiveInvoiceServiceType === 'rental'
@@ -382,24 +382,13 @@ export default function DetailInvoicePage({ uuid }: Props) {
             <h3 className="text-sm font-semibold mb-3 text-gray-600">Aksi</h3>
             <div className="space-y-2">
               {!isReadOnly && invoice.status === InvoiceStatus.DRAFT && (
-                <>
-                  <button onClick={() => dispatch(openSendInvoiceModal())} className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: 'var(--green-primary)' }}>
-                    <Send size={14} />Kirim ke Customer
-                  </button>
-                  <button onClick={() => router.push(`/invoice/${uuid}/edit`)} className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm border" style={{ borderColor: 'var(--border-card)' }}>
-                    <Pencil size={14} />Edit Invoice
-                  </button>
-                </>
-              )}
-              {invoice.status === InvoiceStatus.SENT && (role === 'super_admin' || role === 'admin_finance') && (
-                <button onClick={() => router.push(`/invoice/${uuid}/edit`)} className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm border" style={{ borderColor: 'var(--border-card)' }}>
-                  <Pencil size={14} />Edit Invoice
+                <button onClick={() => dispatch(openSendInvoiceModal())} className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: 'var(--green-primary)' }}>
+                  <Send size={14} />Kirim ke Customer
                 </button>
               )}
-              {canEditDownPayment && (invoice.status === InvoiceStatus.OUTSTANDING || invoice.status === InvoiceStatus.PAID) && (
+              {canEditInvoice && (
                 <button onClick={() => router.push(`/invoice/${uuid}/edit`)} className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm border" style={{ borderColor: 'var(--border-card)' }}>
-                  {invoice.status === InvoiceStatus.PAID ? <Pencil size={14} /> : <Wallet size={14} />}
-                  {invoice.status === InvoiceStatus.PAID ? 'Edit Invoice' : 'Edit DP / Uang Muka'}
+                  <Pencil size={14} />Edit Invoice
                 </button>
               )}
               {(invoice.status === InvoiceStatus.SENT || invoice.status === InvoiceStatus.OUTSTANDING) && (
