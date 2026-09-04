@@ -5,6 +5,7 @@ import { CreateInvoiceDto, CreateInvoiceItemDto } from '../../application/dto/Cr
 import { UpdateInvoiceDto } from '../../application/dto/UpdateInvoiceDto'
 import { BulkRecordPaymentDto, RecordPaymentDto } from '../../application/dto/RecordPaymentDto'
 import { resolveEffectiveInvoiceServiceType } from '../../domain/services/invoiceServiceType'
+import { calculateRemainingAmount } from '../../domain/services/invoiceAmounts'
 
 type ApiId = number | string | null
 
@@ -205,7 +206,9 @@ function normalizeInvoice(inv: ApiInvoice): Invoice {
     down_payment: downPayment,
     down_payment_amount: downPaymentAmount,
     has_down_payment: Boolean(inv.has_down_payment || downPaymentAmount > 0 || downPayment),
-    remaining_amount: Number(inv.remaining_amount ?? total - paid),
+    // Selalu turunkan dari total + paid supaya detail hasil create/update dan
+    // data list memakai rumus yang identik. paid sudah mencakup DP.
+    remaining_amount: calculateRemainingAmount(total, paid),
     attached_sj: attached.map(normalizeAttachedSJ),
     payments: (inv.payments || []).map(normalizePayment),
     created_by: toNumber(inv.created_by),

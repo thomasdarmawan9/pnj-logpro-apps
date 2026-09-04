@@ -30,6 +30,7 @@ import ClearManualSJPrompt from '../components/modals/ClearManualSJPrompt'
 import { suratJalanRepository } from '../../../surat-jalan/infrastructure/repositories/MockSuratJalanRepository'
 import type { SjLookupResult } from '../../../surat-jalan/infrastructure/repositories/ISuratJalanRepository'
 import type { CreateDownPaymentDto } from '../../application/dto/CreateInvoiceDto'
+import { calculateRemainingAmount, roundInvoiceAmount } from '../../domain/services/invoiceAmounts'
 import { todayDateOnly } from '@/lib/dateOnly'
 
 const DELIVERY_ADDITIONAL_CHARGE_LABEL = 'Pembiayaan Lainnya'
@@ -91,7 +92,8 @@ export default function EditInvoicePage({ uuid }: Props) {
   const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false)
   const customerPickerRef = useRef<HTMLDivElement>(null)
   // Draft bisa edit penuh. Invoice Terbit bisa edit metode pembayaran + DP.
-  // Outstanding/paid hanya boleh edit DP. Void tidak bisa di-edit.
+  // Harga per barang/per pengiriman bisa dikoreksi di SEMUA status. Struktur
+  // item/rute tetap mengikuti policy status; hanya VOID yang mengunci harga.
   // Invoice VOID: hanya tanggal invoice yang bisa diubah (field lain terkunci).
   const isDraft = invoice?.status === InvoiceStatus.DRAFT
   const isVoid = invoice?.status === InvoiceStatus.VOID
@@ -99,6 +101,7 @@ export default function EditInvoicePage({ uuid }: Props) {
   const fullEditable = isDraft
   const canEditPaymentSetup = isDraft || invoice?.status === InvoiceStatus.SENT
   const canEditItems = isDraft || invoice?.status === InvoiceStatus.SENT
+  const canEditPricing = invoice?.status !== InvoiceStatus.VOID
   const canEditTaxes = !isVoid
 
   const { items, subtotalAmount, addItem, updateItem, removeItem, reorderItems, resetItems, calculateTax, totalAmount } = useInvoiceItems()
@@ -318,7 +321,14 @@ export default function EditInvoicePage({ uuid }: Props) {
       notes:        invoice.down_payment.notes,
     }
   }, [invoice?.down_payment])
-  const displayedDownPayment = downPayment ?? dpInitialValue
+  // `null` berarti user benar-benar menghapus DP; jangan fallback lagi ke DP
+  // awal karena akan membuat pratinjau sisa tagihan terlihat belum berubah.
+  const displayedDownPayment = downPayment
+  const editedTotalAmount = canEditPricing ? nettoAmount : (invoice?.total_amount ?? 0)
+  const existingDownPaymentAmount = Number(invoice?.down_payment_amount ?? invoice?.down_payment?.amount ?? 0)
+  const regularPaidAmount = calculateRemainingAmount(invoice?.paid_amount ?? 0, existingDownPaymentAmount)
+  const displayedPaidAmount = roundInvoiceAmount(regularPaidAmount + Number(displayedDownPayment?.amount ?? 0))
+  const displayedRemainingAmount = calculateRemainingAmount(editedTotalAmount, displayedPaidAmount)
   const today = todayDateOnly()
   const isDueDatePast = dueDate < today
   const invoiceDateMax = dueDate && dueDate < today ? dueDate : today
@@ -506,6 +516,10 @@ export default function EditInvoicePage({ uuid }: Props) {
       const nextErrors: Record<string, string> = {}
       if (!dpPayload.payment_date) nextErrors.down_payment = 'Tanggal DP wajib diisi'
       if (dpPayload.amount <= 0) nextErrors.down_payment = 'Nominal DP harus lebih dari 0'
+      const maximumDownPayment = calculateRemainingAmount(editedTotalAmount, regularPaidAmount)
+      if (roundInvoiceAmount(dpPayload.amount) > maximumDownPayment) {
+        nextErrors.down_payment = `Nominal DP tidak boleh melebihi ${formatRupiah(maximumDownPayment)} setelah pembayaran lain`
+      }
       if (Object.keys(nextErrors).length > 0) {
         setErrors(nextErrors)
         pushToast({ title: 'DP belum valid', description: nextErrors.down_payment, variant: 'error' })
@@ -672,6 +686,10 @@ export default function EditInvoicePage({ uuid }: Props) {
           }
         : {
             invoice_date: invoiceDate,
+            ...(canEditPricing && isDeliveryLikeInvoice ? {
+              delivery_pricing_mode: deliveryPricingMode,
+              items: itemPayload,
+            } : {}),
             tax_percent: taxEnabled ? taxPercent : 0,
             pph_percent: pphEnabled ? pphPercent : 0,
             down_payment: dpPayload,
@@ -724,7 +742,7 @@ export default function EditInvoicePage({ uuid }: Props) {
                 ? `Mode Edit Penuh — Invoice #${invoice?.invoice_number}`
                 : canEditPaymentSetup
                   ? `Mode Edit Invoice Terbit — Invoice #${invoice?.invoice_number}`
-                  : `Mode Edit DP & Pajak — Invoice #${invoice?.invoice_number}`
+                  : `Mode Edit Harga, DP & Pajak — Invoice #${invoice?.invoice_number}`
             }
           </div>
           <div className="text-xs" style={{ color: fullEditable ? '#B45309' : '#075985' }}>
@@ -734,7 +752,7 @@ export default function EditInvoicePage({ uuid }: Props) {
                 ? 'Anda sedang mengedit invoice draft. Perubahan belum disimpan.'
                 : canEditPaymentSetup
                   ? 'Invoice terbit bisa mengubah tanggal jatuh tempo, metode pembayaran, DP, rincian item, serta PPN/PPh/Asuransi.'
-                  : 'Invoice sudah berjalan. Tanggal invoice, DP/Uang Muka, PPN, dan PPh bisa diedit. Item tetap terkunci.'
+                  : 'Invoice sudah berjalan. Harga per barang/per pengiriman, tanggal invoice, DP/Uang Muka, PPN, dan PPh bisa diedit. Struktur item tetap terkunci.'
             }
           </div>
         </div>
@@ -907,81 +925,85 @@ export default function EditInvoicePage({ uuid }: Props) {
           </div>
 
           {/* Items */}
-          {canEditItems && (isDeliveryLikeInvoice ? (
+          {(canEditItems || (canEditPricing && isDeliveryLikeInvoice)) && (isDeliveryLikeInvoice ? (
             <>
-              <DeliveryOperationsSection
-                fleetId={deliveryFleetId}
-                fleetLabel={deliveryFleetLabel}
-                driverId={deliveryDriverId}
-                driverNameManual={deliveryDriverNameManual}
-                fleetOptions={fleetOptions}
-                driverOptions={driverOptions}
-                onChangeFleetId={setDeliveryFleetId}
-                onChangeFleetLabel={setDeliveryFleetLabel}
-                onChangeDriverId={setDeliveryDriverId}
-                onChangeDriverNameManual={setDeliveryDriverNameManual}
-                disabled={!canEditItems}
-              />
-              <div className="rounded-xl bg-white p-6 border" style={{ borderColor: 'var(--border-card)' }}>
-                <div className="text-sm font-semibold mb-4">Rute & Muatan</div>
-                <label className="text-xs font-medium" style={{ color: '#374151' }}>
-                  Lokasi Asal
-                  <input
-                    className="form-input w-full mt-1 disabled:bg-gray-50 disabled:text-gray-500"
-                    value={routeOrigin}
-                    onChange={event => setRouteOrigin(event.target.value)}
-                    placeholder="contoh: Gudang PNJ, Jl. Arteri Supadio Pontianak"
+              {canEditItems && (
+                <>
+                  <DeliveryOperationsSection
+                    fleetId={deliveryFleetId}
+                    fleetLabel={deliveryFleetLabel}
+                    driverId={deliveryDriverId}
+                    driverNameManual={deliveryDriverNameManual}
+                    fleetOptions={fleetOptions}
+                    driverOptions={driverOptions}
+                    onChangeFleetId={setDeliveryFleetId}
+                    onChangeFleetLabel={setDeliveryFleetLabel}
+                    onChangeDriverId={setDeliveryDriverId}
+                    onChangeDriverNameManual={setDeliveryDriverNameManual}
                     disabled={!canEditItems}
                   />
-                </label>
+                  <div className="rounded-xl bg-white p-6 border" style={{ borderColor: 'var(--border-card)' }}>
+                    <div className="text-sm font-semibold mb-4">Rute & Muatan</div>
+                    <label className="text-xs font-medium" style={{ color: '#374151' }}>
+                      Lokasi Asal
+                      <input
+                        className="form-input w-full mt-1 disabled:bg-gray-50 disabled:text-gray-500"
+                        value={routeOrigin}
+                        onChange={event => setRouteOrigin(event.target.value)}
+                        placeholder="contoh: Gudang PNJ, Jl. Arteri Supadio Pontianak"
+                        disabled={!canEditItems}
+                      />
+                    </label>
 
-                <div className="flex items-end gap-3 mt-4">
-                  <label className="text-xs font-medium flex-1" style={{ color: '#374151' }}>
-                    Lokasi Tujuan
-                    <input
-                      className="form-input w-full mt-1 disabled:bg-gray-50 disabled:text-gray-500"
-                      value={routeDestination}
-                      onChange={event => setRouteDestination(event.target.value)}
-                      placeholder="contoh: Lokasi PT. ATP BIO, Kubu Raya"
-                      disabled={!canEditItems}
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const prevOrigin = routeOrigin
-                      setRouteOrigin(routeDestination)
-                      setRouteDestination(prevOrigin)
-                    }}
-                    className="px-3 py-2 rounded-lg border disabled:opacity-50"
-                    style={{ borderColor: 'var(--border-card)' }}
-                    title="Tukar asal-tujuan"
-                    disabled={!canEditItems}
-                  >
-                    <ArrowRightLeft size={14} />
-                  </button>
-                </div>
+                    <div className="flex items-end gap-3 mt-4">
+                      <label className="text-xs font-medium flex-1" style={{ color: '#374151' }}>
+                        Lokasi Tujuan
+                        <input
+                          className="form-input w-full mt-1 disabled:bg-gray-50 disabled:text-gray-500"
+                          value={routeDestination}
+                          onChange={event => setRouteDestination(event.target.value)}
+                          placeholder="contoh: Lokasi PT. ATP BIO, Kubu Raya"
+                          disabled={!canEditItems}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const prevOrigin = routeOrigin
+                          setRouteOrigin(routeDestination)
+                          setRouteDestination(prevOrigin)
+                        }}
+                        className="px-3 py-2 rounded-lg border disabled:opacity-50"
+                        style={{ borderColor: 'var(--border-card)' }}
+                        title="Tukar asal-tujuan"
+                        disabled={!canEditItems}
+                      >
+                        <ArrowRightLeft size={14} />
+                      </button>
+                    </div>
 
-                <label className="text-xs font-medium mt-4 block" style={{ color: '#374151' }}>
-                  Deskripsi Muatan
-                  <textarea
-                    className="form-input w-full mt-1 disabled:bg-gray-50 disabled:text-gray-500"
-                    rows={3}
-                    value={cargoDescription}
-                    onChange={event => setCargoDescription(event.target.value)}
-                    placeholder="contoh: Kendaraan operasional untuk periode sewa"
-                    disabled={!canEditItems}
+                    <label className="text-xs font-medium mt-4 block" style={{ color: '#374151' }}>
+                      Deskripsi Muatan
+                      <textarea
+                        className="form-input w-full mt-1 disabled:bg-gray-50 disabled:text-gray-500"
+                        rows={3}
+                        value={cargoDescription}
+                        onChange={event => setCargoDescription(event.target.value)}
+                        placeholder="contoh: Kendaraan operasional untuk periode sewa"
+                        disabled={!canEditItems}
+                      />
+                    </label>
+                  </div>
+                  <DeliveryInvoiceItemsSection
+                    items={items}
+                    onAdd={addItem}
+                    onChange={updateDeliveryItem}
+                    onRemove={removeItem}
+                    errors={errors}
+                    readOnlyStructure={!canEditItems}
                   />
-                </label>
-              </div>
-              <DeliveryInvoiceItemsSection
-                items={items}
-                onAdd={addItem}
-                onChange={updateDeliveryItem}
-                onRemove={removeItem}
-                errors={errors}
-                readOnlyStructure={!canEditItems}
-              />
+                </>
+              )}
               <DeliveryPricingSection
                 items={items}
                 onChange={updateDeliveryPrice}
@@ -1039,7 +1061,7 @@ export default function EditInvoicePage({ uuid }: Props) {
               )}
             </div>
           ))}
-          {!canEditItems && isDeliveryLikeInvoice && (
+          {!canEditPricing && isDeliveryLikeInvoice && (
             <div>
               <div className="rounded-xl p-4 mb-4 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-sm" style={{ backgroundColor: '#F9FAFB', border: '1px solid var(--border-card)' }}>
                 <div><span className="text-gray-500">Jenis Jasa</span><span className="ml-2">{serviceLabel}</span></div>
@@ -1154,10 +1176,11 @@ export default function EditInvoicePage({ uuid }: Props) {
           {!isVoid && (
             <>
               <DownPaymentForm
-                totalAmount={canEditPaymentSetup ? nettoAmount : (invoice?.total_amount ?? 0)}
+                totalAmount={editedTotalAmount}
                 initialValue={dpInitialValue}
                 onChange={setDownPayment}
                 defaultDate={invoice?.invoice_date}
+                paidAmountExcludingDownPayment={regularPaidAmount}
                 paymentMethod={paymentMethod}
               />
               {errors.down_payment && <p className="text-xs text-red-500 -mt-2">{errors.down_payment}</p>}
@@ -1196,7 +1219,7 @@ export default function EditInvoicePage({ uuid }: Props) {
                   </div>
                   <div className="flex justify-between font-semibold">
                     <span>Sisa Tagihan</span>
-                    <span className="font-mono" style={{ fontFamily: 'var(--font-mono)' }}>{formatRupiah(Math.max(0, (canEditPaymentSetup ? nettoAmount : (invoice?.total_amount ?? 0)) - displayedDownPayment.amount))}</span>
+                    <span className="font-mono" style={{ fontFamily: 'var(--font-mono)' }}>{formatRupiah(displayedRemainingAmount)}</span>
                   </div>
                 </>
               )}

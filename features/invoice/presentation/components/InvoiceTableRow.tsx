@@ -45,6 +45,8 @@ export default function InvoiceTableRow({ invoice, checked, onToggle, onAction, 
   const isEligibleForBulkPayment = invoice.status === InvoiceStatus.SENT || invoice.status === InvoiceStatus.OUTSTANDING
   const isReadOnly = role === 'admin_finance'
   const canRecordPayment = role === 'super_admin' || role === 'admin_finance'
+  const canEditInvoice = invoice.status !== InvoiceStatus.VOID &&
+    (role === 'super_admin' || role === 'admin_finance')
   const serviceTypeLabel = effectiveServiceType === 'rental' && invoice.service_type !== 'other'
     ? 'Penyewaan'
     : invoice.service_type === 'other'
@@ -188,30 +190,16 @@ export default function InvoiceTableRow({ invoice, checked, onToggle, onAction, 
             >
               <ActionMenuItem icon={<Eye size={14}/>} label="Lihat Detail" onClick={() => { setMenuOpen(false); onAction('detail', invoice.uuid) }} />
               {!isReadOnly && invoice.status === InvoiceStatus.DRAFT && (
-                <>
-                  <ActionMenuItem icon={<Pencil size={14}/>} label="Edit Invoice" onClick={() => { setMenuOpen(false); onAction('edit', invoice.uuid) }} />
-                  <ActionMenuItem icon={<Send size={14}/>} label="Kirim ke Customer" onClick={() => { setMenuOpen(false); onAction('send', invoice.uuid) }} />
-                </>
+                <ActionMenuItem icon={<Send size={14}/>} label="Kirim ke Customer" onClick={() => { setMenuOpen(false); onAction('send', invoice.uuid) }} />
+              )}
+              {canEditInvoice && (
+                <ActionMenuItem icon={<Pencil size={14}/>} label="Edit Invoice" onClick={() => { setMenuOpen(false); onAction('edit', invoice.uuid) }} />
               )}
               {(invoice.status === InvoiceStatus.SENT || invoice.status === InvoiceStatus.OUTSTANDING) && (
                 <>
                   {canRecordPayment && <ActionMenuItem icon={<DollarSign size={14}/>} label="Catat Pembayaran" onClick={() => { setMenuOpen(false); onAction('payment', invoice.uuid) }} />}
                   {!isReadOnly && canAttachSJ && <ActionMenuItem icon={<Paperclip size={14}/>} label="Kelola SJ Terlampir" onClick={() => { setMenuOpen(false); onAction('attach-sj', invoice.uuid) }} />}
                 </>
-              )}
-              {!isReadOnly && invoice.status === InvoiceStatus.SENT && (role === 'super_admin' || role === 'admin_finance') && (
-                <ActionMenuItem
-                  icon={<Pencil size={14}/>}
-                  label="Edit Invoice"
-                  onClick={() => { setMenuOpen(false); onAction('edit', invoice.uuid) }}
-                />
-              )}
-              {!isReadOnly && (invoice.status === InvoiceStatus.OUTSTANDING || invoice.status === InvoiceStatus.PAID) && role === 'super_admin' && (
-                <ActionMenuItem
-                  icon={invoice.status === InvoiceStatus.PAID ? <Pencil size={14}/> : <Wallet size={14}/>}
-                  label={invoice.status === InvoiceStatus.PAID ? 'Edit Invoice' : 'Edit DP / Uang Muka'}
-                  onClick={() => { setMenuOpen(false); onAction('edit', invoice.uuid) }}
-                />
               )}
               {!isReadOnly && invoice.status === InvoiceStatus.PAID && (role === 'super_admin' || role === 'admin_finance') && (
                 <ActionMenuItem

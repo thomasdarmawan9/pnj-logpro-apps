@@ -28,6 +28,10 @@ const {
   hashIdempotencyPayload,
   assertIdempotencyMatch,
 } = require('../utils/idempotency')
+const {
+  calculateRemainingAmount,
+  calculatePaidAmountAfterDownPaymentChange,
+} = require('../utils/invoiceAmounts')
 
 const STATUS = {
   DRAFT:       'draft',
@@ -194,7 +198,7 @@ function decorate(row) {
   plain.down_payment        = dpRow
   plain.down_payment_amount = dpRow ? round2(dpRow.amount) : 0
   plain.has_down_payment    = !!dpRow
-  plain.remaining_amount    = round2(Math.max(0, total - paid))
+  plain.remaining_amount    = calculateRemainingAmount(total, paid)
   plain.payments            = regularPayments
   if (plain.status === STATUS.PAID && !plain.settlement_date && allPayments.length > 0) {
     plain.settlement_date = allPayments.reduce(
@@ -711,7 +715,7 @@ async function list(params) {
         effectiveServiceType(plain.service_type || 'delivery', plain.custom_service_name),
         plain.delivery_pricing_mode,
       )
-      plain.remaining_amount = round2(Math.max(0, total - paid))
+      plain.remaining_amount = calculateRemainingAmount(total, paid)
       plain.has_down_payment = dpInvoiceIds.has(Number(plain.id))
       return plain
     }),
@@ -1141,8 +1145,8 @@ async function create(payload, actor, options = {}) {
 
 // ── UPDATE ────────────────────────────────────────────────────────────────
 /**
- * Edit policy: PPN/PPh boleh diubah di semua status kecuali void.
- * Items boleh diubah pada draft dan sent/terbit.
+ * Edit policy: PPN/PPh dan harga per barang/per pengiriman boleh diubah di
+ * semua status kecuali void. Struktur item hanya dibuka frontend pada draft/sent.
  * Kalau payload.items dikirim, items lama dihapus dan diganti.
  */
 async function update(uuid, payload, actor) {
@@ -1161,7 +1165,8 @@ async function update(uuid, payload, actor) {
     // Edit policy:
     //   - draft: edit penuh
     //   - sent/terbit: metode pembayaran/rekening + DP + rincian item
-    //   - outstanding/paid: DP, lampiran, PPN, dan PPh
+    //   - semua status non-void: harga per barang/per pengiriman
+    //   - outstanding/paid: DP, lampiran, dan PPN/PPh
     //   - void: hanya tanggal invoice (invoice_date)
     // invoice_date (tanggal pembuatan, semua status) & settlement_date (tanggal
     // pelunasan, hanya invoice lunas) ditangani terpisah — keluarkan dari
@@ -1177,7 +1182,11 @@ async function update(uuid, payload, actor) {
       'auto_create_sj', 'overwrite_sj_confirmed',
     ])
     const nonDateKeys = payloadKeys.filter(k => !policyIgnoredKeys.has(k))
-    const isRestrictedStatusEdit = nonDateKeys.every(k =>
+    // Harga tidak ikut restriction status: draft, sent, outstanding, paid,
+    // cancelled/canceled semuanya boleh. VOID tetap ditolak oleh guard di bawah.
+    const unrestrictedPricingKeys = new Set(['items', 'delivery_pricing_mode'])
+    const statusRestrictedKeys = nonDateKeys.filter(k => !unrestrictedPricingKeys.has(k))
+    const isRestrictedStatusEdit = statusRestrictedKeys.every(k =>
       ['down_payment', 'lampiran_paths', 'tax_percent', 'pph_percent'].includes(k)
     )
     const isSentBillingOnly = invoice.status === STATUS.SENT &&
@@ -1338,19 +1347,32 @@ async function update(uuid, payload, actor) {
       const newTotals = calcTotals(items, nextTaxPercent, nextPphPercent, nextInsurance)
       Object.assign(updates, newTotals)
 
-      // Guard: kalau total baru < paid_amount existing (DP + payments) →
-      // user harus revisi DP/payment dulu sebelum bisa potong total.
+      // Jika total dan DP diubah bersamaan, validasi terhadap nominal akhir
+      // setelah perubahan DP. Ini menghindari penolakan keliru saat user sedang
+      // menurunkan DP agar sesuai dengan total invoice baru.
       const currentPaid = round2(invoice.paid_amount || 0)
-      if (currentPaid > round2(newTotals.total_amount) + 0.001) {
+      let paidAmountAfterUpdate = currentPaid
+      if ('down_payment' in payload) {
+        const regularPaid = await Payment.sum('amount', {
+          where: { invoice_id: invoice.id, is_down_payment: false },
+          transaction: t,
+        })
+        paidAmountAfterUpdate = calculatePaidAmountAfterDownPaymentChange(
+          currentPaid,
+          regularPaid || 0,
+          payload.down_payment,
+        )
+      }
+      if (paidAmountAfterUpdate > round2(newTotals.total_amount) + 0.001) {
         throw new BadRequestError(
-          `Total invoice baru (Rp ${newTotals.total_amount.toLocaleString('id-ID')}) lebih kecil dari total pembayaran tercatat (Rp ${currentPaid.toLocaleString('id-ID')}). ` +
+          `Total invoice baru (Rp ${newTotals.total_amount.toLocaleString('id-ID')}) lebih kecil dari total pembayaran akhir (Rp ${paidAmountAfterUpdate.toLocaleString('id-ID')}). ` +
           `Hapus/turunkan DP atau pembayaran dulu sebelum mengubah items/pajak.`,
           { code: 'TOTAL_BELOW_PAID' },
         )
       }
       // Bila pajak dinaikkan pada invoice lunas, pembayaran yang sudah tercatat
       // bisa menjadi kurang dari total baru. Kembalikan status ke outstanding.
-      if (invoice.status === STATUS.PAID && currentPaid + 0.001 < round2(newTotals.total_amount)) {
+      if (invoice.status === STATUS.PAID && paidAmountAfterUpdate + 0.001 < round2(newTotals.total_amount)) {
         updates.status = STATUS.OUTSTANDING
         updates.settlement_date = null
       }
@@ -1548,7 +1570,7 @@ async function recordPayment(invoiceUuid, payload, actor) {
 
     const total     = Number(invoice.total_amount || 0)
     const paid      = Number(invoice.paid_amount  || 0)
-    const remaining = round2(Math.max(0, total - paid))
+    const remaining = calculateRemainingAmount(total, paid)
     const amount    = round2(payload.amount)
 
     if (amount > remaining + 0.001) {
@@ -1615,7 +1637,7 @@ async function recordBulkPayments(payload, actor) {
 
       const total = round2(invoice.total_amount)
       const paid = round2(invoice.paid_amount)
-      const remaining = round2(Math.max(0, total - paid))
+      const remaining = calculateRemainingAmount(total, paid)
       if (remaining <= 0) {
         throw new ConflictError(`Invoice ${invoice.invoice_number} tidak memiliki sisa tagihan.`)
       }

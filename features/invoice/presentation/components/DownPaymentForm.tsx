@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Wallet, Trash2 } from 'lucide-react'
 import type { CreateDownPaymentDto } from '../../application/dto/CreateInvoiceDto'
 import { todayDateOnly } from '@/lib/dateOnly'
+import { calculateRemainingAmount, roundInvoiceAmount } from '../../domain/services/invoiceAmounts'
 
 function formatRupiah(n: number): string {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n)
@@ -15,6 +16,8 @@ interface DownPaymentFormProps {
   onChange: (value: CreateDownPaymentDto | null) => void
   readOnly?: boolean
   defaultDate?: string
+  /** Pembayaran reguler yang sudah tercatat; tidak termasuk DP yang sedang diedit. */
+  paidAmountExcludingDownPayment?: number
   /** Metode pembayaran dari invoice (dipakai sebagai method DP). */
   paymentMethod: 'transfer' | 'cash' | 'check'
 }
@@ -25,6 +28,7 @@ export default function DownPaymentForm({
   onChange,
   readOnly = false,
   defaultDate,
+  paidAmountExcludingDownPayment = 0,
   paymentMethod,
 }: DownPaymentFormProps) {
   const [enabled, setEnabled] = useState<boolean>(!!initialValue)
@@ -65,13 +69,19 @@ export default function DownPaymentForm({
 
     onChange(value)
 
+    const maximumDownPayment = calculateRemainingAmount(totalAmount, paidAmountExcludingDownPayment)
     if (amount <= 0) {
       setError('Nominal DP harus lebih dari 0.')
       return
     }
+    if (roundInvoiceAmount(amount) > maximumDownPayment) {
+      const suffix = paidAmountExcludingDownPayment > 0 ? ' setelah pembayaran lain' : ''
+      setError(`Nominal DP maksimal ${formatRupiah(maximumDownPayment)}${suffix}.`)
+      return
+    }
     setError(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, payment_date, amount, paymentMethod, notes, totalAmount])
+  }, [enabled, payment_date, amount, paymentMethod, notes, totalAmount, paidAmountExcludingDownPayment])
 
   const handleToggle = () => {
     if (readOnly) return
@@ -85,8 +95,10 @@ export default function DownPaymentForm({
     setNotes('')
   }
 
-  const sisa = Math.max(0, totalAmount - amount)
-  const isValidDP = enabled && amount > 0 && amount <= totalAmount && !error
+  const maximumDownPayment = calculateRemainingAmount(totalAmount, paidAmountExcludingDownPayment)
+  const totalPaidWithDownPayment = roundInvoiceAmount(paidAmountExcludingDownPayment + amount)
+  const sisa = calculateRemainingAmount(totalAmount, totalPaidWithDownPayment)
+  const isValidDP = enabled && amount > 0 && roundInvoiceAmount(amount) <= maximumDownPayment && !error
 
   return (
     <div className="bg-white rounded-xl border p-5" style={{ borderColor: 'var(--border-card)' }}>
@@ -143,7 +155,7 @@ export default function DownPaymentForm({
               />
               {totalAmount > 0 && (
                 <p className="text-[11px] text-gray-500 mt-1">
-                  Maks: {formatRupiah(totalAmount)}
+                  Maks: {formatRupiah(maximumDownPayment)}
                 </p>
               )}
             </div>
@@ -177,6 +189,12 @@ export default function DownPaymentForm({
                 <span className="text-gray-600">DP Diterima</span>
                 <span className="font-medium text-green-700">- {formatRupiah(amount)}</span>
               </div>
+              {paidAmountExcludingDownPayment > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Pembayaran Lain</span>
+                  <span className="font-medium text-green-700">- {formatRupiah(paidAmountExcludingDownPayment)}</span>
+                </div>
+              )}
               <div className="flex justify-between border-t border-green-200 pt-1 mt-1">
                 <span className="font-semibold">Sisa Tagihan</span>
                 <span className="font-bold">{formatRupiah(sisa)}</span>
