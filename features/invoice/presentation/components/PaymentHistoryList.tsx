@@ -4,6 +4,7 @@ import { DollarSign, ExternalLink } from 'lucide-react'
 import { Payment, InvoiceStatus } from '../../domain/entities/Invoice'
 import PaymentProgressBar from './PaymentProgressBar'
 import { formatDateOnly } from '@/lib/dateOnly'
+import { calculateRemainingAmount } from '../../domain/services/invoiceAmounts'
 
 function formatRupiah(amount: number): string {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(amount)
@@ -34,8 +35,8 @@ export default function PaymentHistoryList({ payments, totalAmount, paidAmount, 
   const canRecord = (invoiceStatus === InvoiceStatus.SENT || invoiceStatus === InvoiceStatus.OUTSTANDING) &&
     (role === 'super_admin' || role === 'admin_finance')
 
-  const remaining = totalAmount - paidAmount
-  const regularPaid = Math.max(0, paidAmount - downPaymentAmount)
+  const remaining = calculateRemainingAmount(totalAmount, paidAmount)
+  const regularPaid = calculateRemainingAmount(paidAmount, downPaymentAmount)
 
   return (
     <div>

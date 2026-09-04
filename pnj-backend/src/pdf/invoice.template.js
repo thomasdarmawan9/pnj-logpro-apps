@@ -8,13 +8,14 @@
  *   2. Bar info dokumen (No | Tanggal | "Invoice")
  *   3. Kepada + No Kontrak
  *   4. Tabel item (No | Deskripsi | Keterangan | Qty | Harga | Jumlah)
- *   5. Footer: metode pembayaran + catatan (kiri) | sub total / PPN / Netto (kanan)
+ *   5. Footer: metode pembayaran + catatan (kiri) | rincian total dan sisa tagihan (kanan)
  *   6. Tanda tangan (Tanda Terima | Hormat Kami)
  */
 
 const fs   = require('fs')
 const path = require('path')
 const { formatIDR, formatDateShort } = require('./utils')
+const { calculateRemainingAmount } = require('../utils/invoiceAmounts')
 
 // ── Warna ──────────────────────────────────────────────────────────────────
 const C_BLACK    = '#000000'
@@ -78,8 +79,51 @@ function estimateCompactContentHeight(doc, invoice) {
     tableH += Math.max(MIN_ROW, hQtyEff + PAD * 2)
   }
   tableH += 10 // spacer bawah tabel
-  // 272 = perkiraan overhead kompak (aktual ~250pt + sigH 65pt) + 7pt safety margin
-  return 272 + tableH
+  // 286 = overhead kompak + tambahan baris Sisa Tagihan pada footer.
+  return 286 + tableH
+}
+
+function resolveDownPaymentAmount(invoice) {
+  const directAmount = Number(invoice.down_payment_amount || 0)
+  if (directAmount > 0) return directAmount
+  if (!Array.isArray(invoice.payments)) return 0
+  const downPayment = invoice.payments.find(payment => payment.is_down_payment === true)
+  return Number(downPayment?.amount || 0)
+}
+
+function buildFooterTotalRows(invoice) {
+  const rows = [{ label: 'Sub Total', amount: Number(invoice.subtotal_amount || 0) }]
+
+  if (Number(invoice.tax_percent) > 0) {
+    rows.push({ label: `PPN (${invoice.tax_percent}%)`, amount: Number(invoice.tax_amount || 0) })
+  }
+  if (Number(invoice.pph_percent) > 0) {
+    rows.push({ label: `PPh (${invoice.pph_percent}%)`, amount: Number(invoice.pph_amount || 0), negative: true })
+  }
+  if (Number(invoice.insurance_amount) > 0) {
+    rows.push({ label: 'Asuransi', amount: Number(invoice.insurance_amount || 0) })
+  }
+
+  const downPaymentAmount = resolveDownPaymentAmount(invoice)
+  if (downPaymentAmount > 0) {
+    rows.push({ label: 'Down Payment', amount: downPaymentAmount })
+  }
+
+  // paid_amount mencakup DP dan pembayaran reguler. Baris ini selalu dicetak;
+  // invoice lunas/kelebihan bayar ditampilkan sebagai Rp 0, bukan nilai negatif.
+  rows.push({
+    label: 'Sisa Tagihan',
+    amount: calculateRemainingAmount(invoice.total_amount, invoice.paid_amount),
+    bold: true,
+  })
+  rows.push({
+    label: 'Netto',
+    amount: Number(invoice.total_amount || 0),
+    bold: true,
+    doubleBorder: true,
+  })
+
+  return rows
 }
 
 // ── Draw horizontal rule ───────────────────────────────────────────────────
@@ -877,28 +921,10 @@ function drawFooter(doc, invoice, company, startY, ctx = null) {
     rightY = rowBotY
   }
 
-  totalRow('Sub Total', formatIDR(invoice.subtotal_amount))
-  if (Number(invoice.tax_percent) > 0) {
-    totalRow(`PPN (${invoice.tax_percent}%)`, formatIDR(invoice.tax_amount))
-  }
-  if (Number(invoice.pph_percent) > 0) {
-    totalRow(`PPh (${invoice.pph_percent}%)`, `(${formatIDR(invoice.pph_amount)})`)
-  }
-  if (Number(invoice.insurance_amount) > 0) {
-    totalRow('Asuransi', formatIDR(invoice.insurance_amount))
-  }
-
-  // DP Diterima — tampil sebelum Netto
-  let dpAmount = Number(invoice.down_payment_amount || 0)
-  if (!dpAmount && Array.isArray(invoice.payments)) {
-    const dp = invoice.payments.find(p => p.is_down_payment === true)
-    if (dp) dpAmount = Number(dp.amount || 0)
-  }
-  if (dpAmount > 0) {
-    totalRow('Down Payment', formatIDR(dpAmount))
-  }
-
-  totalRow('Netto', formatIDR(invoice.total_amount), true, true)
+  buildFooterTotalRows(invoice).forEach(row => {
+    const value = row.negative ? `(${formatIDR(row.amount)})` : formatIDR(row.amount)
+    totalRow(row.label, value, row.bold, row.doubleBorder)
+  })
 
   return Math.max(leftY, rightY) + 6
 }
@@ -1040,7 +1066,7 @@ function renderOneCopy(doc, invoice, company, options = {}, copyIndex = 0, ctx =
 
   // 5. Footer (pembayaran + totals)
   if (!compact) {
-    const minFooterH = 80
+    const minFooterH = Math.max(80, buildFooterTotalRows(invoice).length * 16 + 10)
     if (y + minFooterH > doc.page.height - doc.page.margins.bottom - 120) {
       doc.addPage()
       y = doc.page.margins.top
@@ -1195,4 +1221,4 @@ function render(doc, invoice, company, options = {}) {
   }
 }
 
-module.exports = { render }
+module.exports = { render, buildFooterTotalRows, resolveDownPaymentAmount }

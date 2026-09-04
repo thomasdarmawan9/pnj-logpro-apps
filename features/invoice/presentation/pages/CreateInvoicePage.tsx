@@ -20,6 +20,7 @@ import DeliveryPricingSection, { type AdditionalDeliveryCharge } from '../compon
 import InvoiceTaxCalculator from '../components/InvoiceTaxCalculator'
 import DownPaymentForm from '../components/DownPaymentForm'
 import type { CreateDownPaymentDto } from '../../application/dto/CreateInvoiceDto'
+import { calculateRemainingAmount, roundInvoiceAmount } from '../../domain/services/invoiceAmounts'
 import type { DeliveryPricingMode, InvoiceServiceType } from '../../domain/entities/Invoice'
 import { resolveEffectiveInvoiceServiceType } from '../../domain/services/invoiceServiceType'
 import type { Customer } from '@/features/master/domain/entities/Customer'
@@ -570,6 +571,9 @@ export default function CreateInvoicePage() {
     if (downPayment) {
       if (!downPayment.payment_date) result.errors.down_payment = 'Tanggal DP wajib diisi'
       if (downPayment.amount <= 0) result.errors.down_payment = 'Nominal DP harus lebih dari 0'
+      if (roundInvoiceAmount(downPayment.amount) > roundInvoiceAmount(nettoAmount)) {
+        result.errors.down_payment = 'Nominal DP tidak boleh melebihi total invoice'
+      }
       result.valid = Object.keys(result.errors).length === 0
     }
     if (isDeliveryLikeService && sjInputMode === 'manual' && manualSjNumbers.trim().includes(',')) {
@@ -1374,7 +1378,7 @@ export default function CreateInvoicePage() {
               {downPayment && downPayment.amount > 0 && (
                 <>
                   <div style={{ color: '#15803D' }}><span className="text-gray-400">DP        :</span> − {formatRupiah(downPayment.amount)}</div>
-                  <div className="font-bold"><span className="text-gray-400">SISA      :</span> {formatRupiah(Math.max(0, nettoAmount - downPayment.amount))}</div>
+                  <div className="font-bold"><span className="text-gray-400">SISA      :</span> {formatRupiah(calculateRemainingAmount(nettoAmount, downPayment.amount))}</div>
                 </>
               )}
             </div>

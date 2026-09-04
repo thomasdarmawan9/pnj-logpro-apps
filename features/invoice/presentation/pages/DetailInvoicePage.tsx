@@ -132,6 +132,7 @@ export default function DetailInvoicePage({ uuid }: Props) {
       ? `${deliveryFleetItem.fleet.name}${deliveryFleetItem.fleet.plate_number ? ` (${deliveryFleetItem.fleet.plate_number})` : ''}`
       : '-'
   const deliveryDriverLabel = deliveryDriverItem?.driver?.name || deliveryDriverItem?.driver_name_manual || '-'
+  const remainingAmount = invoice.remaining_amount
 
   const handleSaveLampiran = async () => {
     setIsSavingLampiran(true)
@@ -217,9 +218,11 @@ export default function DetailInvoicePage({ uuid }: Props) {
                   <div className="font-mono text-lg font-bold text-green-800" style={{ fontFamily: 'var(--font-mono)' }}>
                     {formatRupiah(invoice.down_payment_amount ?? 0)}
                   </div>
-                  <div className="text-xs text-green-800">
-                    Sisa tagihan {formatRupiah(invoice.remaining_amount)}
-                  </div>
+                  {remainingAmount > 0 && (
+                    <div className="text-xs font-semibold text-green-800">
+                      Sisa tagihan {formatRupiah(remainingAmount)}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

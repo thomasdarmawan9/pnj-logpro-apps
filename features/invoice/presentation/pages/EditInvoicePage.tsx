@@ -30,6 +30,7 @@ import ClearManualSJPrompt from '../components/modals/ClearManualSJPrompt'
 import { suratJalanRepository } from '../../../surat-jalan/infrastructure/repositories/MockSuratJalanRepository'
 import type { SjLookupResult } from '../../../surat-jalan/infrastructure/repositories/ISuratJalanRepository'
 import type { CreateDownPaymentDto } from '../../application/dto/CreateInvoiceDto'
+import { calculateRemainingAmount, roundInvoiceAmount } from '../../domain/services/invoiceAmounts'
 import { todayDateOnly } from '@/lib/dateOnly'
 
 const DELIVERY_ADDITIONAL_CHARGE_LABEL = 'Pembiayaan Lainnya'
@@ -320,7 +321,14 @@ export default function EditInvoicePage({ uuid }: Props) {
       notes:        invoice.down_payment.notes,
     }
   }, [invoice?.down_payment])
-  const displayedDownPayment = downPayment ?? dpInitialValue
+  // `null` berarti user benar-benar menghapus DP; jangan fallback lagi ke DP
+  // awal karena akan membuat pratinjau sisa tagihan terlihat belum berubah.
+  const displayedDownPayment = downPayment
+  const editedTotalAmount = canEditPricing ? nettoAmount : (invoice?.total_amount ?? 0)
+  const existingDownPaymentAmount = Number(invoice?.down_payment_amount ?? invoice?.down_payment?.amount ?? 0)
+  const regularPaidAmount = calculateRemainingAmount(invoice?.paid_amount ?? 0, existingDownPaymentAmount)
+  const displayedPaidAmount = roundInvoiceAmount(regularPaidAmount + Number(displayedDownPayment?.amount ?? 0))
+  const displayedRemainingAmount = calculateRemainingAmount(editedTotalAmount, displayedPaidAmount)
   const today = todayDateOnly()
   const isDueDatePast = dueDate < today
   const invoiceDateMax = dueDate && dueDate < today ? dueDate : today
@@ -508,6 +516,10 @@ export default function EditInvoicePage({ uuid }: Props) {
       const nextErrors: Record<string, string> = {}
       if (!dpPayload.payment_date) nextErrors.down_payment = 'Tanggal DP wajib diisi'
       if (dpPayload.amount <= 0) nextErrors.down_payment = 'Nominal DP harus lebih dari 0'
+      const maximumDownPayment = calculateRemainingAmount(editedTotalAmount, regularPaidAmount)
+      if (roundInvoiceAmount(dpPayload.amount) > maximumDownPayment) {
+        nextErrors.down_payment = `Nominal DP tidak boleh melebihi ${formatRupiah(maximumDownPayment)} setelah pembayaran lain`
+      }
       if (Object.keys(nextErrors).length > 0) {
         setErrors(nextErrors)
         pushToast({ title: 'DP belum valid', description: nextErrors.down_payment, variant: 'error' })
@@ -1164,10 +1176,11 @@ export default function EditInvoicePage({ uuid }: Props) {
           {!isVoid && (
             <>
               <DownPaymentForm
-                totalAmount={canEditPaymentSetup ? nettoAmount : (invoice?.total_amount ?? 0)}
+                totalAmount={editedTotalAmount}
                 initialValue={dpInitialValue}
                 onChange={setDownPayment}
                 defaultDate={invoice?.invoice_date}
+                paidAmountExcludingDownPayment={regularPaidAmount}
                 paymentMethod={paymentMethod}
               />
               {errors.down_payment && <p className="text-xs text-red-500 -mt-2">{errors.down_payment}</p>}
@@ -1206,7 +1219,7 @@ export default function EditInvoicePage({ uuid }: Props) {
                   </div>
                   <div className="flex justify-between font-semibold">
                     <span>Sisa Tagihan</span>
-                    <span className="font-mono" style={{ fontFamily: 'var(--font-mono)' }}>{formatRupiah(Math.max(0, (canEditPaymentSetup ? nettoAmount : (invoice?.total_amount ?? 0)) - displayedDownPayment.amount))}</span>
+                    <span className="font-mono" style={{ fontFamily: 'var(--font-mono)' }}>{formatRupiah(displayedRemainingAmount)}</span>
                   </div>
                 </>
               )}
