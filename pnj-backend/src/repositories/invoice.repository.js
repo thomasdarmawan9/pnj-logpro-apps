@@ -1,6 +1,7 @@
 'use strict'
 
 const { Op, literal } = require('sequelize')
+const { financeTotalSql } = require('../utils/financeInvoiceView')
 const {
   Invoice,
   InvoiceItem,
@@ -114,7 +115,7 @@ function findByNumber(invoiceNumber, options = {}) {
 function list({
   page, limit, search,
   status, projectId, customerId,
-  periodRange,
+  periodRange, financeTaxView = false,
 }) {
   const where = {}
 
@@ -123,7 +124,9 @@ function list({
       // "Outstanding" = piutang aktif: invoice terbit (atau sudah ditandai
       // outstanding manual) yang sisa tagihannya masih > 0.
       where.status = { [Op.in]: ['sent', 'outstanding'] }
-      where[Op.and] = literal('(total_amount - paid_amount) > 0')
+      where[Op.and] = literal(financeTaxView
+        ? `(${financeTotalSql} - paid_amount) > 0`
+        : '(total_amount - paid_amount) > 0')
     } else {
       where.status = status
     }

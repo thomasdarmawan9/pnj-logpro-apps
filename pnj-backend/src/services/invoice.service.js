@@ -32,6 +32,7 @@ const {
   calculateRemainingAmount,
   calculatePaidAmountAfterDownPaymentChange,
 } = require('../utils/invoiceAmounts')
+const { financeTotalSql } = require('../utils/financeInvoiceView')
 
 const STATUS = {
   DRAFT:       'draft',
@@ -669,6 +670,7 @@ async function list(params) {
     page, limit, search, status,
     project_uuid, customer_uuid,
     period, from, to,
+    financeTaxView = false,
   } = params
 
   let projectId  = null
@@ -694,7 +696,7 @@ async function list(params) {
   // List view tidak include payments → decorate ringan (just remaining_amount).
   const { rows, count } = await repo.list({
     page, limit, search, status,
-    projectId, customerId, periodRange,
+    projectId, customerId, periodRange, financeTaxView,
   })
 
   const invoiceIds = rows.map(r => r.id).filter(Boolean)
@@ -732,7 +734,7 @@ async function list(params) {
  */
 async function getSummaryStats(params) {
   const { Op, fn, literal } = require('sequelize')
-  const { search, status, project_uuid, customer_uuid, period, from, to } = params
+  const { search, status, project_uuid, customer_uuid, period, from, to, financeTaxView = false } = params
 
   let projectId  = null
   let customerId = null
@@ -794,12 +796,15 @@ async function getSummaryStats(params) {
   let jatuhTempo = 0
   let countOutstanding = 0
   if (receivableStatus) {
+    const remainingSql = financeTaxView
+      ? `(${financeTotalSql} - paid_amount)`
+      : '(total_amount - paid_amount)'
     const row = await Invoice.findOne({
       where: { ...baseWhere, status: receivableStatus },
       attributes: [
-        [fn('COALESCE', fn('SUM', literal('GREATEST(total_amount - paid_amount, 0)')), 0), 'total_piutang'],
-        [fn('COUNT', literal('CASE WHEN (total_amount - paid_amount) > 0 THEN 1 END')), 'count_outstanding'],
-        [fn('COUNT', literal(`CASE WHEN (total_amount - paid_amount) > 0 AND due_date < '${businessToday}' THEN 1 END`)), 'jatuh_tempo'],
+        [fn('COALESCE', fn('SUM', literal(`GREATEST(${remainingSql}, 0)`)), 0), 'total_piutang'],
+        [fn('COUNT', literal(`CASE WHEN ${remainingSql} > 0 THEN 1 END`)), 'count_outstanding'],
+        [fn('COUNT', literal(`CASE WHEN ${remainingSql} > 0 AND due_date < '${businessToday}' THEN 1 END`)), 'jatuh_tempo'],
       ],
       raw: true,
     })

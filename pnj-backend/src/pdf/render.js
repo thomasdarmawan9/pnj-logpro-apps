@@ -22,6 +22,7 @@ const invoiceRepo = require('../repositories/invoice.repository')
 const { getCompanyInfo } = require('../services/companySettings.service')
 const sjTemplate      = require('./suratJalan.template')
 const invoiceTemplate = require('./invoice.template')
+const { financeInvoiceView } = require('../utils/financeInvoiceView')
 
 /**
  * Konversi satu image file (webp/png/jpg) ke JPEG Buffer.
@@ -129,7 +130,10 @@ async function renderPdf(job) {
     throw new Error(`Unsupported job_type: ${job_type}`)
   }
 
-  const plain = typeof record.get === 'function' ? record.get({ plain: true }) : record
+  const actual = typeof record.get === 'function' ? record.get({ plain: true }) : record
+  const plain = job_type === 'invoice' && options.financeTaxView === true
+    ? financeInvoiceView(actual)
+    : actual
 
   // Pre-process foto lampiran + POD sebelum render (sharp async, harus di luar Promise)
   let resolvedOptions = { ...options }

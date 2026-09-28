@@ -9,12 +9,12 @@ const { success, paginate } = require('../utils/response')
 
 const list = asyncHandler(async (req, res) => {
   const { page, limit } = req.query
-  const { rows, count } = await service.list(req.query)
+  const { rows, count } = await service.list({ ...req.query, financeTaxView: req.user.role === 'admin_finance' })
   res.json(paginate(rows, count, page, limit))
 })
 
 const summary = asyncHandler(async (req, res) => {
-  const data = await service.getSummaryStats(req.query)
+  const data = await service.getSummaryStats({ ...req.query, financeTaxView: req.user.role === 'admin_finance' })
   res.json(success(data))
 })
 
@@ -89,7 +89,7 @@ const attachableSJ = asyncHandler(async (req, res) => {
 })
 
 const exportXlsx = asyncHandler(async (req, res) => {
-  await exportService.exportXlsx(req.query, res)
+  await exportService.exportXlsx({ ...req.query, financeTaxView: req.user.role === 'admin_finance' }, res)
 })
 
 const generatePdf = asyncHandler(async (req, res) => {
