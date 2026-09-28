@@ -18,6 +18,7 @@ import {
 } from '@/store/slices/invoiceSlice'
 import { InvoiceStatus } from '../../domain/entities/Invoice'
 import { resolveEffectiveInvoiceServiceType } from '../../domain/services/invoiceServiceType'
+import { actualTaxFlag, financeInvoiceView } from '../../domain/services/financeInvoiceView'
 import useInvoiceDetail from '../hooks/useInvoiceDetail'
 import { useToast } from '@/components/toast/useToast'
 import InvoiceStatusBadge from '../components/InvoiceStatusBadge'
@@ -132,7 +133,8 @@ export default function DetailInvoicePage({ uuid }: Props) {
       ? `${deliveryFleetItem.fleet.name}${deliveryFleetItem.fleet.plate_number ? ` (${deliveryFleetItem.fleet.plate_number})` : ''}`
       : '-'
   const deliveryDriverLabel = deliveryDriverItem?.driver?.name || deliveryDriverItem?.driver_name_manual || '-'
-  const remainingAmount = invoice.remaining_amount
+  const viewedInvoice = role === 'admin_finance' ? financeInvoiceView(invoice) : invoice
+  const remainingAmount = viewedInvoice.remaining_amount
 
   const handleSaveLampiran = async () => {
     setIsSavingLampiran(true)
@@ -185,17 +187,27 @@ export default function DetailInvoicePage({ uuid }: Props) {
             </div>
             <div className="flex items-center gap-3 mb-4">
               <InvoiceStatusBadge status={invoice.status} />
+              {role === 'admin_finance' && (
+                <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900">
+                  {actualTaxFlag(invoice)}
+                </span>
+              )}
               <span className="text-sm text-gray-500">Dibuat {formatShortDate(invoice.invoice_date)}</span>
               <span className="text-gray-300">·</span>
               <span className="text-sm text-gray-500">Jatuh Tempo {formatShortDate(invoice.due_date)}</span>
             </div>
+            {role === 'admin_finance' && (
+              <p className="mb-4 text-xs text-amber-800">
+                PPN dan PPh pada tampilan ini adalah perhitungan finance. Status dan pembayaran tetap mengikuti data aktual.
+              </p>
+            )}
             {/* Payment progress */}
             <div>
               <div className="flex justify-between text-sm mb-2">
                 <span className="font-medium text-gray-600">Pembayaran</span>
-                <span className="font-mono font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>{formatRupiah(invoice.paid_amount)} / {formatRupiah(invoice.total_amount)}</span>
+                <span className="font-mono font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>{formatRupiah(invoice.paid_amount)} / {formatRupiah(viewedInvoice.total_amount)}</span>
               </div>
-              <PaymentProgressBar paidAmount={invoice.paid_amount} totalAmount={invoice.total_amount} isOverdue={isOverdue} />
+              <PaymentProgressBar paidAmount={invoice.paid_amount} totalAmount={viewedInvoice.total_amount} isOverdue={isOverdue} />
             </div>
           </div>
 
@@ -312,12 +324,12 @@ export default function DetailInvoicePage({ uuid }: Props) {
                 serviceType={effectiveInvoiceServiceType}
                 deliveryPricingMode={invoice.delivery_pricing_mode}
                 subtotalAmount={invoice.subtotal_amount}
-                taxPercent={invoice.tax_percent}
-                taxAmount={invoice.tax_amount}
-                pphPercent={invoice.pph_percent}
-                pphAmount={invoice.pph_amount}
+                taxPercent={viewedInvoice.tax_percent}
+                taxAmount={viewedInvoice.tax_amount}
+                pphPercent={viewedInvoice.pph_percent}
+                pphAmount={viewedInvoice.pph_amount}
                 insuranceAmount={invoice.insurance_amount}
-                totalAmount={invoice.total_amount}
+                totalAmount={viewedInvoice.total_amount}
               />
             </div>
           )}
@@ -346,7 +358,7 @@ export default function DetailInvoicePage({ uuid }: Props) {
           {activeTab === 'payments' && (
             <PaymentHistoryList
               payments={invoice.payments}
-              totalAmount={invoice.total_amount}
+              totalAmount={viewedInvoice.total_amount}
               paidAmount={invoice.paid_amount}
               downPaymentAmount={invoice.down_payment_amount}
               invoiceStatus={invoice.status}

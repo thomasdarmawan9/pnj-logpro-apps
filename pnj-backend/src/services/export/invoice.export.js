@@ -3,6 +3,7 @@
 const invoiceService = require('../invoice.service')
 const { newWorkbook, addSheet, streamWorkbook, FMT } = require('./xlsxRenderer')
 const { todayDateOnly } = require('../../utils/dateOnly')
+const { financeInvoiceView } = require('../../utils/financeInvoiceView')
 
 const STATUS_LABEL = {
   draft:       'Draft',
@@ -55,7 +56,8 @@ async function exportXlsx(filters, res) {
     { header: 'Status',           key: 'status',         width: 12, align: 'center' },
   ]
 
-  const rows = allRows.map(inv => {
+  const rows = allRows.map(actual => {
+    const inv = filters.financeTaxView ? financeInvoiceView(actual) : actual
     const total     = Number(inv.total_amount || 0)
     const paid      = Number(inv.paid_amount  || 0)
     return {

@@ -11,6 +11,7 @@ const logger = require('../utils/logger')
 const {
   NotFoundError,
   BadRequestError,
+  ForbiddenError,
 } = require('../utils/AppError')
 const { enqueuePdfJob } = require('../queues/pdf.queue')
 
@@ -105,6 +106,11 @@ async function enqueue({ jobType, recordUuid, options, requestedBy }) {
     throw new BadRequestError(`Unknown jobType: ${jobType}`)
   }
 
+  // Opsi ini selalu berasal dari role terautentikasi, bukan dari request body.
+  const resolvedOptions = jobType === 'invoice'
+    ? { ...(options || {}), financeTaxView: requestedBy?.role === 'admin_finance' }
+    : (options || {})
+
   const pdfJob = await sequelize.transaction(async (t) => {
     const ctx = await resolveRecordContext({ jobType, recordUuid }, t)
 
@@ -114,7 +120,7 @@ async function enqueue({ jobType, recordUuid, options, requestedBy }) {
       job_type:      jobType,
       record_id:     ctx.recordId,
       status:        'pending',
-      options:       options || null,
+      options:       resolvedOptions,
       requested_by:  requestedBy?.id || null,
     }, { transaction: t })
 
@@ -127,7 +133,7 @@ async function enqueue({ jobType, recordUuid, options, requestedBy }) {
       pdfJobUuid:  pdfJob.uuid,
       job_type:    pdfJob.job_type,
       record_id:   pdfJob.record_id,
-      options:     options || {},
+      options:     resolvedOptions,
       requested_by: pdfJob.requested_by,
     })
   } catch (err) {
@@ -226,6 +232,7 @@ async function enqueueInvoiceBatch({ recordUuids, options, requestedBy }) {
       )
       const resolvedOptions = {
         ...(options || {}),
+        financeTaxView: requestedBy?.role === 'admin_finance',
         // Samakan dengan modal cetak satuan: invoice penyewaan tidak pernah
         // menambahkan halaman daftar Surat Jalan.
         includeSJ: !isRentalInvoice && options?.includeSJ === true,
@@ -313,18 +320,27 @@ async function listInvoiceOptions() {
 /**
  * Get status untuk polling FE.
  */
-async function getStatus(uuid) {
+function assertPdfAccess(job, requester) {
+  if (job.job_type === 'invoice' && job.options?.financeTaxView &&
+      (requester?.role !== 'admin_finance' || Number(job.requested_by) !== Number(requester?.id))) {
+    throw new ForbiddenError('PDF tampilan finance hanya dapat dibuka oleh pembuatnya.')
+  }
+}
+
+async function getStatus(uuid, requester) {
   const job = await repo.findByUuid(uuid)
   if (!job) throw new NotFoundError('PDF job tidak ditemukan.')
+  assertPdfAccess(job, requester)
   return job
 }
 
 /**
  * Resolve absolute file path untuk download. Block kalau status bukan done.
  */
-async function resolveDownload(uuid) {
+async function resolveDownload(uuid, requester) {
   const job = await repo.findByUuid(uuid)
   if (!job) throw new NotFoundError('PDF job tidak ditemukan.')
+  assertPdfAccess(job, requester)
   if (job.status !== 'done' || !job.file_path) {
     throw new BadRequestError(`PDF belum siap (status: ${job.status}).`)
   }
@@ -345,6 +361,7 @@ module.exports = {
   listInvoiceOptions,
   getStatus,
   resolveDownload,
+  assertPdfAccess,
   clearPreviousJobs,
   safeUnlink,
 }

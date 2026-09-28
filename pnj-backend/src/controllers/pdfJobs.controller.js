@@ -25,7 +25,7 @@ function publicShape(job) {
 }
 
 const getOne = asyncHandler(async (req, res) => {
-  const job = await service.getStatus(req.params.uuid)
+  const job = await service.getStatus(req.params.uuid, req.user)
   res.json(success(publicShape(job)))
 })
 
@@ -34,7 +34,7 @@ const getOne = asyncHandler(async (req, res) => {
  * /api/v1/pdf-jobs/:uuid/download.
  */
 const download = asyncHandler(async (req, res) => {
-  const { absPath, filename } = await service.resolveDownload(req.params.uuid)
+  const { absPath, filename } = await service.resolveDownload(req.params.uuid, req.user)
   res.setHeader('Content-Type', 'application/pdf')
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
   fs.createReadStream(absPath).pipe(res)

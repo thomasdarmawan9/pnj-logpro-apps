@@ -18,6 +18,7 @@ import {
   sendInvoice, voidInvoice, revertInvoicePayment, attachSJ, detachSJ,
 } from '@/store/slices/invoiceSlice'
 import { Invoice, InvoiceStatus } from '../../domain/entities/Invoice'
+import { financeInvoiceView } from '../../domain/services/financeInvoiceView'
 import useInvoiceList from '../hooks/useInvoiceList'
 import { useToast } from '@/components/toast/useToast'
 import InvoiceSummaryCards from '../components/InvoiceSummaryCards'
@@ -168,6 +169,9 @@ export default function InvoiceListPage() {
         <div>
           <div className="text-xs text-gray-500">Dashboard / Invoice</div>
           <h1 className="text-2xl font-bold">Invoice</h1>
+          {role === 'admin_finance' && (
+            <div className="mt-1 text-xs text-amber-800">Tampilan finance: nilai tagihan dihitung dengan PPN + PPh.</div>
+          )}
         </div>
         {(role === 'super_admin' || role === 'admin_finance') && (
           <button
@@ -264,7 +268,7 @@ export default function InvoiceListPage() {
             {!isLoading && list.map(inv => (
               <InvoiceTableRow
                 key={inv.uuid}
-                invoice={inv}
+                invoice={role === 'admin_finance' ? financeInvoiceView(inv) : inv}
                 checked={selectedRows.includes(inv.uuid)}
                 onToggle={uuid => setSelectedRows(prev => prev.includes(uuid) ? prev.filter(u => u !== uuid) : [...prev, uuid])}
                 onAction={handleAction}
