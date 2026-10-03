@@ -57,7 +57,9 @@ export default function InvoiceListPage() {
   const [bulkPaymentOpen, setBulkPaymentOpen] = useState(false)
   const [bulkPdfOpen, setBulkPdfOpen] = useState(false)
 
-  const currentInvoice = selectedInvoice ?? list.find(i => i.uuid === activeUuid) ?? null
+  const currentInvoice = selectedInvoice?.uuid === activeUuid
+    ? selectedInvoice
+    : list.find(i => i.uuid === activeUuid) ?? null
   const selectedInvoices = useMemo(() => list.filter(inv => selectedRows.includes(inv.uuid)), [list, selectedRows])
   const eligibleRowsOnPage = useMemo(() => list.filter(isEligibleForBulkPayment).map(inv => inv.uuid), [list])
   const allEligibleSelected = eligibleRowsOnPage.length > 0 && eligibleRowsOnPage.every(uuid => selectedRows.includes(uuid))
@@ -111,7 +113,8 @@ export default function InvoiceListPage() {
     }
     if (action === 'payment') {
       setActiveUuid(uuid)
-      await dispatch(fetchInvoiceDetail(uuid))
+      const result = await dispatch(fetchInvoiceDetail(uuid))
+      if (!fetchInvoiceDetail.fulfilled.match(result)) return
       dispatch(openRecordPaymentModal())
     }
     if (action === 'void') {

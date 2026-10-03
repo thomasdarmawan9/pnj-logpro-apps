@@ -3,6 +3,7 @@ import { useDispatch } from 'react-redux'
 import { AppDispatch } from '@/store'
 import { recordPayment } from '@/store/slices/invoiceSlice'
 import { RecordPaymentDto } from '../../application/dto/RecordPaymentDto'
+import { InvoiceStatus } from '../../domain/entities/Invoice'
 import { validatePayment } from '../../application/validators/PaymentValidator'
 import { todayDateOnly } from '@/lib/dateOnly'
 
@@ -25,7 +26,7 @@ export default function usePayment(invoiceUuid: string, remainingAmount: number,
     setErrors(prev => ({ ...prev, [field]: '' }))
   }
 
-  const submit = async (): Promise<{ ok: boolean; error?: string }> => {
+  const submit = async (): Promise<{ ok: boolean; error?: string; status?: InvoiceStatus }> => {
     const result = validatePayment(form, remainingAmount, invoiceDate)
     if (!result.valid) {
       setErrors(result.errors)
@@ -37,11 +38,11 @@ export default function usePayment(invoiceUuid: string, remainingAmount: number,
     if (recordPayment.rejected.match(action)) {
       return { ok: false, error: action.payload as string }
     }
-    return { ok: true }
+    return { ok: true, status: action.payload.status }
   }
 
-  const reset = () => {
-    setForm({ payment_date: today, amount: 0, method: 'transfer', proof_path: null, notes: '' })
+  const reset = (taxPercent?: number, pphPercent?: number) => {
+    setForm({ payment_date: today, amount: 0, method: 'transfer', proof_path: null, notes: '', tax_percent: taxPercent, pph_percent: pphPercent })
     setErrors({})
     setIsSubmitting(false)
   }

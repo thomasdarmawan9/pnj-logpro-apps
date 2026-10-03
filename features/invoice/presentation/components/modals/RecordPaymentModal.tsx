@@ -16,6 +16,10 @@ function formatNumber(n: number): string {
   return n > 0 ? n.toLocaleString('id-ID') : ''
 }
 
+function round2(n: number): number {
+  return Math.round(n * 100) / 100
+}
+
 
 interface Props {
   open: boolean
@@ -27,7 +31,23 @@ interface Props {
 const QUICK_AMOUNTS = [50_000_000, 100_000_000]
 
 export default function RecordPaymentModal({ open, invoice, onClose, onSuccess }: Props) {
-  const remaining = invoice ? invoice.remaining_amount : 0
+  const [selectedTaxPercent, setSelectedTaxPercent] = useState<number | undefined>()
+  const [selectedPphPercent, setSelectedPphPercent] = useState<number | undefined>()
+  const taxPercent = selectedTaxPercent ?? invoice?.tax_percent ?? 0
+  const pphPercent = selectedPphPercent ?? invoice?.pph_percent ?? 0
+  const taxChanged = !!invoice && (taxPercent !== invoice.tax_percent || pphPercent !== invoice.pph_percent)
+  const subtotal = invoice && taxChanged
+    ? invoice.items.reduce((sum, item) => sum + Number(item.qty || 0) * Number(item.unit_price || 0), 0)
+    : invoice?.subtotal_amount ?? 0
+  const rawTaxAmount = subtotal * taxPercent / 100
+  const rawPphAmount = subtotal * pphPercent / 100
+  const taxAmount = taxChanged ? round2(rawTaxAmount) : invoice?.tax_amount ?? 0
+  const pphAmount = taxChanged ? round2(rawPphAmount) : invoice?.pph_amount ?? 0
+  const previewTotal = taxChanged
+    ? round2(subtotal + rawTaxAmount - rawPphAmount + (invoice?.insurance_amount ?? 0))
+    : invoice?.total_amount ?? 0
+  const remaining = round2(Math.max(0, previewTotal - (invoice?.paid_amount ?? 0)))
+  const exceedsExistingPayments = !!invoice && invoice.paid_amount > previewTotal + 0.001
   const { form, errors, isSubmitting, update, submit, reset } = usePayment(invoice?.uuid ?? '', remaining, invoice?.invoice_date)
   const { push: pushToast } = useToast()
 
@@ -38,7 +58,9 @@ export default function RecordPaymentModal({ open, invoice, onClose, onSuccess }
   // Reset display saat modal dibuka ulang
   useEffect(() => {
     if (open) {
-      reset()
+      reset(invoice?.tax_percent, invoice?.pph_percent)
+      setSelectedTaxPercent(invoice?.tax_percent ?? 0)
+      setSelectedPphPercent(invoice?.pph_percent ?? 0)
       setAmountDisplay('')
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -70,10 +92,19 @@ export default function RecordPaymentModal({ open, invoice, onClose, onSuccess }
   }
 
   const previewPaid = (invoice?.paid_amount ?? 0) + (form.amount || 0)
-  const previewRemaining = Math.max(0, (invoice?.total_amount ?? 0) - previewPaid)
-  const willBePaid = previewPaid >= (invoice?.total_amount ?? 0)
+  const previewRemaining = round2(Math.max(0, previewTotal - previewPaid))
+  const willBePaid = previewTotal > 0 && previewPaid >= previewTotal
+
+  const toggleTax = (field: 'tax_percent' | 'pph_percent', enabled: boolean) => {
+    const current = field === 'tax_percent' ? invoice?.tax_percent : invoice?.pph_percent
+    const percent = enabled ? (current && current > 0 ? current : field === 'tax_percent' ? 1.1 : 2) : 0
+    if (field === 'tax_percent') setSelectedTaxPercent(percent)
+    else setSelectedPphPercent(percent)
+    update(field, percent)
+  }
 
   const handleSubmit = async () => {
+    if (isSubmitting || exceedsExistingPayments) return
     const result = await submit()
     if (!result.ok) {
       if (result.error) {
@@ -81,23 +112,24 @@ export default function RecordPaymentModal({ open, invoice, onClose, onSuccess }
       }
       return
     }
-    onSuccess?.(willBePaid ? InvoiceStatus.PAID : invoice?.status ?? InvoiceStatus.OUTSTANDING)
+    onSuccess?.(result.status ?? (willBePaid ? InvoiceStatus.PAID : invoice?.status ?? InvoiceStatus.OUTSTANDING))
   }
 
   return (
     <ModalShell
       open={open}
-      onClose={onClose}
+      onClose={() => { if (!isSubmitting) onClose() }}
       title="Catat Pembayaran"
       subtitle={`Invoice #${invoice?.invoice_number} · Sisa: ${formatRupiah(remaining)}`}
+      widthClass="max-w-[480px] max-h-[calc(100dvh-2rem)] overflow-y-auto"
     >
       <div className="space-y-4">
         {invoice && (
           <div>
             <div className="flex justify-between text-xs text-gray-500 mb-1">
-              <span>{formatRupiah(invoice.paid_amount)} / {formatRupiah(invoice.total_amount)}</span>
+              <span>{formatRupiah(invoice.paid_amount)} / {formatRupiah(previewTotal)}</span>
             </div>
-            <PaymentProgressBar paidAmount={invoice.paid_amount} totalAmount={invoice.total_amount} showLabel={false} />
+            <PaymentProgressBar paidAmount={invoice.paid_amount} totalAmount={previewTotal} showLabel={false} />
           </div>
         )}
 
@@ -113,6 +145,29 @@ export default function RecordPaymentModal({ open, invoice, onClose, onSuccess }
             max={todayDateOnly()}
           />
           {errors.payment_date && <p className="text-xs text-red-500 mt-1">{errors.payment_date}</p>}
+        </div>
+
+        {/* Pilihan pajak saat pembayaran, langsung mengubah netto invoice. */}
+        <div className="rounded-xl border p-3 space-y-3" style={{ borderColor: 'var(--border-card)' }}>
+          <div className="text-xs font-semibold text-gray-700">Pajak invoice saat pembayaran</div>
+          <div className="flex flex-wrap gap-4 text-sm">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={taxPercent > 0} onChange={e => toggleTax('tax_percent', e.target.checked)} />
+              <span>Aktifkan PPN ({taxPercent > 0 ? taxPercent : invoice?.tax_percent || 1.1}%)</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={pphPercent > 0} onChange={e => toggleTax('pph_percent', e.target.checked)} />
+              <span>Aktifkan PPh ({pphPercent > 0 ? pphPercent : invoice?.pph_percent || 2}%)</span>
+            </label>
+          </div>
+          <div className="border-t pt-2 space-y-1 text-xs" style={{ borderColor: 'var(--border-card)' }}>
+            <div className="flex justify-between"><span>Subtotal</span><span>{formatRupiah(subtotal)}</span></div>
+            {taxPercent > 0 && <div className="flex justify-between"><span>PPN {taxPercent}%</span><span>+ {formatRupiah(taxAmount)}</span></div>}
+            {pphPercent > 0 && <div className="flex justify-between"><span>PPh {pphPercent}%</span><span>− {formatRupiah(pphAmount)}</span></div>}
+            {!!invoice?.insurance_amount && <div className="flex justify-between"><span>Asuransi</span><span>+ {formatRupiah(invoice.insurance_amount)}</span></div>}
+            <div className="flex justify-between font-semibold border-t pt-1" style={{ borderColor: 'var(--border-card)' }}><span>Netto invoice</span><span>{formatRupiah(previewTotal)}</span></div>
+          </div>
+          {exceedsExistingPayments && <p className="text-xs text-red-600">Netto baru lebih kecil dari pembayaran yang sudah tercatat. Pilih pajak lain sebelum menyimpan.</p>}
         </div>
 
         {/* Nominal */}
@@ -148,7 +203,8 @@ export default function RecordPaymentModal({ open, invoice, onClose, onSuccess }
             <button
               type="button"
               onClick={() => setQuickAmount(remaining)}
-              className="text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors hover:bg-green-50"
+              disabled={remaining <= 0}
+              className="text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors hover:bg-green-50 disabled:opacity-50"
               style={{ borderColor: 'var(--green-primary)', color: 'var(--green-primary)' }}
             >
               Lunas ({formatRupiah(remaining)})
@@ -205,7 +261,7 @@ export default function RecordPaymentModal({ open, invoice, onClose, onSuccess }
             <div className="flex justify-between mt-1">
               <span className="text-gray-600">Status setelah:</span>
               <span className="font-semibold" style={{ color: willBePaid ? '#166534' : '#9A3412' }}>
-                {willBePaid ? '✓ LUNAS' : 'OUTSTANDING'}
+                {willBePaid ? '✓ LUNAS' : invoice?.status === InvoiceStatus.SENT ? 'TERBIT' : 'OUTSTANDING'}
               </span>
             </div>
           </div>
@@ -224,7 +280,7 @@ export default function RecordPaymentModal({ open, invoice, onClose, onSuccess }
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={isSubmitting}
+            disabled={isSubmitting || exceedsExistingPayments}
             className="px-4 py-2 rounded-xl text-sm font-medium text-white disabled:opacity-60"
             style={{ backgroundColor: 'var(--green-primary)' }}
           >

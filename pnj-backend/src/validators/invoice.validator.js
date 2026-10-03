@@ -218,6 +218,8 @@ const recordPaymentSchema = Joi.object({
   payment_date:  dateOnlySchema.required(),
   amount:        Joi.number().precision(2).min(0.01).required(),
   method:        Joi.string().valid(...PAYMENT_METHODS).required(),
+  tax_percent:   Joi.number().precision(2).min(0).max(100),
+  pph_percent:   Joi.number().precision(2).min(0).max(100),
   proof_path:    Joi.string().trim().max(255).allow('', null),
   notes:         Joi.string().trim().allow('', null),
 })
