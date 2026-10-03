@@ -5,6 +5,7 @@ const assert = require('node:assert/strict')
 const {
   roundInvoiceAmount,
   calculateRemainingAmount,
+  calculateInvoiceTotals,
   calculatePaidAmountAfterDownPaymentChange,
 } = require('../src/utils/invoiceAmounts')
 const { buildFooterTotalRows } = require('../src/pdf/invoice.template')
@@ -17,6 +18,19 @@ test('sisa tagihan memakai presisi dua desimal dan tidak pernah negatif', () => 
   assert.equal(roundInvoiceAmount('1000.555'), 1000.56)
   assert.equal(calculateRemainingAmount('1000.555', '250.125'), 750.43)
   assert.equal(calculateRemainingAmount(1_000, 1_100), 0)
+})
+
+test('pelunasan dengan PPN dan PPh menghitung ulang netto dan sisa dari subtotal', () => {
+  const items = [{ qty: 1, unit_price: 10_000_000 }]
+  const totals = calculateInvoiceTotals(items, 1.1, 2, 0)
+  assert.deepEqual(totals, {
+    subtotal_amount: 10_000_000,
+    tax_amount: 110_000,
+    pph_amount: 200_000,
+    insurance_amount: 0,
+    total_amount: 9_910_000,
+  })
+  assert.equal(calculateRemainingAmount(totals.total_amount, 2_000_000), 7_910_000)
 })
 
 test('perubahan total dan DP bersamaan divalidasi terhadap pembayaran akhir', () => {

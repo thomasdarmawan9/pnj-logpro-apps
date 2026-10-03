@@ -30,6 +30,7 @@ const {
 } = require('../utils/idempotency')
 const {
   calculateRemainingAmount,
+  calculateInvoiceTotals,
   calculatePaidAmountAfterDownPaymentChange,
 } = require('../utils/invoiceAmounts')
 const { financeTotalSql } = require('../utils/financeInvoiceView')
@@ -102,23 +103,7 @@ function periodToRange(period) {
 }
 
 // ── HELPER: hitung total invoice dari list items + tax/pph percent ────────
-function calcTotals(items, taxPercent, pphPercent, insuranceAmount = 0) {
-  const subtotal    = items.reduce(
-    (sum, it) => sum + Number(it.qty || 0) * Number(it.unit_price || 0),
-    0,
-  )
-  const taxAmount  = subtotal * Number(taxPercent || 0) / 100
-  const pphAmount  = subtotal * Number(pphPercent || 0) / 100
-  const insurance  = round2(Number(insuranceAmount) || 0)
-  const total      = subtotal + taxAmount - pphAmount + insurance
-  return {
-    subtotal_amount:  round2(subtotal),
-    tax_amount:       round2(taxAmount),
-    pph_amount:       round2(pphAmount),
-    insurance_amount: insurance,
-    total_amount:     round2(total),
-  }
-}
+const calcTotals = calculateInvoiceTotals
 
 function round2(n) {
   return Math.round(Number(n) * 100) / 100
@@ -1573,8 +1558,32 @@ async function recordPayment(invoiceUuid, payload, actor) {
 
     await assertRegularPaymentDate(invoice, payload.payment_date, t)
 
-    const total     = Number(invoice.total_amount || 0)
+    const taxChanged = payload.tax_percent !== undefined && Number(payload.tax_percent) !== Number(invoice.tax_percent || 0)
+    const pphChanged = payload.pph_percent !== undefined && Number(payload.pph_percent) !== Number(invoice.pph_percent || 0)
+    let taxUpdates = {}
+    if (taxChanged || pphChanged) {
+      const items = await InvoiceItem.findAll({
+        where: { invoice_id: invoice.id },
+        transaction: t,
+      })
+      const totals = calcTotals(
+        items,
+        taxChanged ? payload.tax_percent : invoice.tax_percent,
+        pphChanged ? payload.pph_percent : invoice.pph_percent,
+        invoice.insurance_amount,
+      )
+      taxUpdates = {
+        ...totals,
+        tax_percent: taxChanged ? payload.tax_percent : invoice.tax_percent,
+        pph_percent: pphChanged ? payload.pph_percent : invoice.pph_percent,
+      }
+    }
+
+    const total     = taxUpdates.total_amount ?? Number(invoice.total_amount || 0)
     const paid      = Number(invoice.paid_amount  || 0)
+    if (paid > total + 0.001) {
+      throw new BadRequestError(`Total invoice baru (Rp ${total.toLocaleString('id-ID')}) lebih kecil dari pembayaran yang sudah tercatat (Rp ${paid.toLocaleString('id-ID')}).`)
+    }
     const remaining = calculateRemainingAmount(total, paid)
     const amount    = round2(payload.amount)
 
@@ -1595,7 +1604,7 @@ async function recordPayment(invoiceUuid, payload, actor) {
     }, { transaction: t })
 
     const newPaid = round2(paid + amount)
-    const updates = { paid_amount: newPaid }
+    const updates = { ...taxUpdates, paid_amount: newPaid }
 
     // Auto-transition outstanding → paid kalau lunas.
     if (newPaid >= total && total > 0) {

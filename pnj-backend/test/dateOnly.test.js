@@ -51,6 +51,12 @@ test('validator pembayaran menolak ISO timestamp', () => {
   assert.ok(error)
 })
 
+test('validator pembayaran menerima pilihan pajak dan menolak tarif di luar batas', () => {
+  const payment = { payment_date: '2026-07-18', amount: 1000, method: 'transfer' }
+  assert.equal(recordPaymentSchema.validate({ ...payment, tax_percent: 1.1, pph_percent: 2 }).error, undefined)
+  assert.equal(recordPaymentSchema.validate({ ...payment, tax_percent: 101 }).error?.details[0].path[0], 'tax_percent')
+})
+
 test('validator bulk menolak invoice duplikat', () => {
   const invoiceUuid = '7e73d676-570a-4a79-8f38-caaa01c9f74b'
   const { error } = bulkRecordPaymentSchema.validate({

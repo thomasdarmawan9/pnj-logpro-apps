@@ -4,6 +4,8 @@ export interface RecordPaymentDto {
   method: 'transfer' | 'cash' | 'check'
   proof_path?: string | null
   notes?: string | null
+  tax_percent?: number
+  pph_percent?: number
 }
 
 export interface BulkRecordPaymentDto {

@@ -19,6 +19,24 @@ function calculateRemainingAmount(totalAmount, paidAmount) {
   return roundInvoiceAmount(Math.max(0, total - paid))
 }
 
+/** Hitung ulang invoice saat rincian atau pilihan pajak berubah. */
+function calculateInvoiceTotals(items, taxPercent, pphPercent, insuranceAmount = 0) {
+  const subtotal = items.reduce(
+    (sum, item) => sum + Number(item.qty || 0) * Number(item.unit_price || 0),
+    0,
+  )
+  const taxAmount = subtotal * Number(taxPercent || 0) / 100
+  const pphAmount = subtotal * Number(pphPercent || 0) / 100
+  const insurance = roundInvoiceAmount(insuranceAmount)
+  return {
+    subtotal_amount: roundInvoiceAmount(subtotal),
+    tax_amount: roundInvoiceAmount(taxAmount),
+    pph_amount: roundInvoiceAmount(pphAmount),
+    insurance_amount: insurance,
+    total_amount: roundInvoiceAmount(subtotal + taxAmount - pphAmount + insurance),
+  }
+}
+
 /**
  * Nilai paid_amount yang akan berlaku setelah perubahan DP.
  * `undefined` berarti DP tidak disentuh, sedangkan `null` berarti DP dihapus.
@@ -38,5 +56,6 @@ function calculatePaidAmountAfterDownPaymentChange(
 module.exports = {
   roundInvoiceAmount,
   calculateRemainingAmount,
+  calculateInvoiceTotals,
   calculatePaidAmountAfterDownPaymentChange,
 }
