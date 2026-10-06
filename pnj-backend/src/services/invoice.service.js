@@ -1546,6 +1546,24 @@ async function revertToUnpaid(uuid, payload, actor) {
 }
 
 // ── PAYMENT ───────────────────────────────────────────────────────────────
+async function calculatePaymentTaxUpdates(invoice, taxOptions, t) {
+  const taxChanged = taxOptions.tax_percent !== undefined && Number(taxOptions.tax_percent) !== Number(invoice.tax_percent || 0)
+  const pphChanged = taxOptions.pph_percent !== undefined && Number(taxOptions.pph_percent) !== Number(invoice.pph_percent || 0)
+  if (!taxChanged && !pphChanged) return {}
+
+  const items = await InvoiceItem.findAll({
+    where: { invoice_id: invoice.id },
+    transaction: t,
+  })
+  const taxPercent = taxChanged ? taxOptions.tax_percent : invoice.tax_percent
+  const pphPercent = pphChanged ? taxOptions.pph_percent : invoice.pph_percent
+  return {
+    ...calcTotals(items, taxPercent, pphPercent, invoice.insurance_amount),
+    tax_percent: taxPercent,
+    pph_percent: pphPercent,
+  }
+}
+
 async function recordPayment(invoiceUuid, payload, actor) {
   return sequelize.transaction(async (t) => {
     const invoice = await Invoice.findOne({ where: { uuid: invoiceUuid }, transaction: t, lock: t.LOCK.UPDATE })
@@ -1558,26 +1576,7 @@ async function recordPayment(invoiceUuid, payload, actor) {
 
     await assertRegularPaymentDate(invoice, payload.payment_date, t)
 
-    const taxChanged = payload.tax_percent !== undefined && Number(payload.tax_percent) !== Number(invoice.tax_percent || 0)
-    const pphChanged = payload.pph_percent !== undefined && Number(payload.pph_percent) !== Number(invoice.pph_percent || 0)
-    let taxUpdates = {}
-    if (taxChanged || pphChanged) {
-      const items = await InvoiceItem.findAll({
-        where: { invoice_id: invoice.id },
-        transaction: t,
-      })
-      const totals = calcTotals(
-        items,
-        taxChanged ? payload.tax_percent : invoice.tax_percent,
-        pphChanged ? payload.pph_percent : invoice.pph_percent,
-        invoice.insurance_amount,
-      )
-      taxUpdates = {
-        ...totals,
-        tax_percent: taxChanged ? payload.tax_percent : invoice.tax_percent,
-        pph_percent: pphChanged ? payload.pph_percent : invoice.pph_percent,
-      }
-    }
+    const taxUpdates = await calculatePaymentTaxUpdates(invoice, payload, t)
 
     const total     = taxUpdates.total_amount ?? Number(invoice.total_amount || 0)
     const paid      = Number(invoice.paid_amount  || 0)
@@ -1649,11 +1648,20 @@ async function recordBulkPayments(payload, actor) {
       }
       await assertRegularPaymentDate(invoice, payload.payment_date, t)
 
-      const total = round2(invoice.total_amount)
+      const taxUpdates = await calculatePaymentTaxUpdates(invoice, entry, t)
+      const total = taxUpdates.total_amount ?? round2(invoice.total_amount)
       const paid = round2(invoice.paid_amount)
+      if (paid > total + 0.001) {
+        throw new BadRequestError(
+          `Total invoice ${invoice.invoice_number} baru (Rp ${total.toLocaleString('id-ID')}) lebih kecil dari pembayaran yang sudah tercatat (Rp ${paid.toLocaleString('id-ID')}).`,
+        )
+      }
       const remaining = calculateRemainingAmount(total, paid)
       if (remaining <= 0) {
         throw new ConflictError(`Invoice ${invoice.invoice_number} tidak memiliki sisa tagihan.`)
+      }
+      if (entry.amount !== undefined && Math.abs(round2(entry.amount) - remaining) > 0.001) {
+        throw new ConflictError(`Nominal pelunasan invoice ${invoice.invoice_number} berubah. Muat ulang daftar invoice sebelum menyimpan.`)
       }
 
       await Payment.create({
@@ -1667,6 +1675,7 @@ async function recordBulkPayments(payload, actor) {
       }, { transaction: t })
 
       await invoice.update({
+        ...taxUpdates,
         paid_amount: total,
         status: STATUS.PAID,
         settlement_date: payload.payment_date,

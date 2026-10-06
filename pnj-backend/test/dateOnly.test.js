@@ -69,6 +69,19 @@ test('validator bulk menolak invoice duplikat', () => {
   assert.ok(error)
 })
 
+test('validator bulk menerima pilihan pajak dan nominal per invoice', () => {
+  const payment = {
+    invoice_uuid: '7e73d676-570a-4a79-8f38-caaa01c9f74b',
+    method: 'transfer',
+    amount: 7_910_000,
+    tax_percent: 1.1,
+    pph_percent: 2,
+  }
+  const payload = { payment_date: '2026-07-18', payments: [payment] }
+  assert.equal(bulkRecordPaymentSchema.validate(payload).error, undefined)
+  assert.equal(bulkRecordPaymentSchema.validate({ ...payload, payments: [{ ...payment, tax_percent: 101 }] }).error?.details[0].path[2], 'tax_percent')
+})
+
 test('formatter PDF tidak menggeser date-only', () => {
   assert.equal(formatDateShort('2026-07-18'), '18/07/26')
 })

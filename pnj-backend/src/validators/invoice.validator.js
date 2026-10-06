@@ -229,6 +229,9 @@ const bulkRecordPaymentSchema = Joi.object({
   payments: Joi.array().items(Joi.object({
     invoice_uuid: Joi.string().uuid({ version: ['uuidv4'] }).required(),
     method: Joi.string().valid(...PAYMENT_METHODS).required(),
+    amount: Joi.number().precision(2).min(0.01),
+    tax_percent: Joi.number().precision(2).min(0).max(100),
+    pph_percent: Joi.number().precision(2).min(0).max(100),
   })).min(1).max(100).unique('invoice_uuid').required(),
   notes: Joi.string().trim().max(500).allow('', null),
 })

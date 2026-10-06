@@ -13,6 +13,9 @@ export interface BulkRecordPaymentDto {
   payments: Array<{
     invoice_uuid: string
     method: 'transfer' | 'cash' | 'check'
+    amount?: number
+    tax_percent?: number
+    pph_percent?: number
   }>
   notes?: string | null
 }
