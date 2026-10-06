@@ -363,19 +363,11 @@ export default function InvoiceListPage() {
         open={bulkPaymentOpen}
         invoices={selectedInvoices}
         onClose={() => setBulkPaymentOpen(false)}
-        onSuccess={(successCount, failCount) => {
+        onSuccess={successCount => {
           setBulkPaymentOpen(false)
           setSelectedRows([])
           dispatch(fetchInvoiceList())
-          if (failCount === 0) {
-            pushToast({ title: 'Pembayaran Dicatat', description: `${successCount} invoice berhasil dilunasi.`, variant: 'success' })
-            return
-          }
-          pushToast({
-            title: 'Pelunasan Massal Gagal',
-            description: `Tidak ada perubahan disimpan. ${failCount} invoice batal dilunasi agar data tetap konsisten.`,
-            variant: 'error',
-          })
+          pushToast({ title: 'Pembayaran Dicatat', description: `${successCount} invoice berhasil dilunasi.`, variant: 'success' })
         }}
       />
       <BulkGeneratePDFModal
