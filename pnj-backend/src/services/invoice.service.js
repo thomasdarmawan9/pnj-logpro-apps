@@ -117,18 +117,13 @@ function assertNotFutureDate(date, label) {
 
 async function assertRegularPaymentDate(invoice, paymentDate, t) {
   assertNotFutureDate(paymentDate, 'Tanggal pembayaran')
-  if (paymentDate < invoice.invoice_date) {
-    throw new BadRequestError('Tanggal pembayaran tidak boleh sebelum tanggal invoice.')
-  }
   const latest = await Payment.findOne({
-    where: { invoice_id: invoice.id, is_down_payment: false },
+    where: { invoice_id: invoice.id },
     attributes: ['payment_date'],
     order: [['payment_date', 'DESC'], ['id', 'DESC']],
     transaction: t,
   })
-  if (latest && paymentDate < latest.payment_date) {
-    throw new BadRequestError(`Tanggal pembayaran tidak boleh sebelum pembayaran terakhir (${latest.payment_date}).`)
-  }
+  return latest?.payment_date > paymentDate ? latest.payment_date : paymentDate
 }
 
 function fleetStatusLabel(status) {
@@ -1234,18 +1229,17 @@ async function update(uuid, payload, actor) {
       }
     }
 
-    // Tanggal invoice tidak boleh dimajukan melewati transaksi pembayaran
-    // yang sudah tersimpan, termasuk DP.
+    // DP tetap harus jatuh pada atau setelah tanggal invoice.
     if (updates.invoice_date && updates.invoice_date !== invoice.invoice_date) {
       const earliestPayment = await Payment.findOne({
-        where: { invoice_id: invoice.id },
+        where: { invoice_id: invoice.id, is_down_payment: true },
         attributes: ['payment_date'],
         order: [['payment_date', 'ASC'], ['id', 'ASC']],
         transaction: t,
       })
       if (earliestPayment && updates.invoice_date > earliestPayment.payment_date) {
         throw new BadRequestError(
-          `Tanggal invoice tidak boleh setelah pembayaran pertama (${earliestPayment.payment_date}).`,
+          `Tanggal invoice tidak boleh setelah tanggal DP (${earliestPayment.payment_date}).`,
         )
       }
     }
@@ -1393,9 +1387,6 @@ async function update(uuid, payload, actor) {
       }
       const newDate = payload.settlement_date
       assertNotFutureDate(newDate, 'Tanggal pelunasan')
-      if (newDate < invoice.invoice_date) {
-        throw new BadRequestError('Tanggal pelunasan tidak boleh sebelum tanggal invoice.')
-      }
       const payments = await Payment.findAll({ where: { invoice_id: invoice.id }, transaction: t })
       if (payments.length === 0) {
         throw new BadRequestError('Tidak ada pembayaran yang bisa diubah tanggal pelunasannya.')
@@ -1574,7 +1565,7 @@ async function recordPayment(invoiceUuid, payload, actor) {
       )
     }
 
-    await assertRegularPaymentDate(invoice, payload.payment_date, t)
+    const latestPaymentDate = await assertRegularPaymentDate(invoice, payload.payment_date, t)
 
     const taxUpdates = await calculatePaymentTaxUpdates(invoice, payload, t)
 
@@ -1608,7 +1599,7 @@ async function recordPayment(invoiceUuid, payload, actor) {
     // Auto-transition outstanding → paid kalau lunas.
     if (newPaid >= total && total > 0) {
       updates.status = STATUS.PAID
-      updates.settlement_date = payload.payment_date
+      updates.settlement_date = latestPaymentDate
     } else if (invoice.status === STATUS.SENT) {
       // Kalau ada payment masuk pada status sent, tidak otomatis pindah outstanding —
       // outstanding adalah pilihan manual user. Status tetap.
@@ -1646,7 +1637,7 @@ async function recordBulkPayments(payload, actor) {
           `Invoice ${invoice.invoice_number} tidak dapat dilunasi dari status ${invoice.status}.`,
         )
       }
-      await assertRegularPaymentDate(invoice, payload.payment_date, t)
+      const latestPaymentDate = await assertRegularPaymentDate(invoice, payload.payment_date, t)
 
       const taxUpdates = await calculatePaymentTaxUpdates(invoice, entry, t)
       const total = taxUpdates.total_amount ?? round2(invoice.total_amount)
@@ -1678,7 +1669,7 @@ async function recordBulkPayments(payload, actor) {
         ...taxUpdates,
         paid_amount: total,
         status: STATUS.PAID,
-        settlement_date: payload.payment_date,
+        settlement_date: latestPaymentDate,
       }, { transaction: t })
       results.push(invoice.uuid)
     }

@@ -77,13 +77,9 @@ export default function BulkRecordPaymentModal({ open, invoices, onClose, onSucc
     return { invoice, choice, taxPercent, pphPercent, ...paymentPreview(invoice, taxPercent, pphPercent) }
   })
   const total = rows.reduce((sum, row) => sum + row.amount, 0)
-  const minimumPaymentDate = invoices.reduce(
-    (latest, invoice) => invoice.invoice_date > latest ? invoice.invoice_date : latest,
-    '',
-  )
   const allMethodsSelected = rows.length > 0 && rows.every(row => methods[row.invoice.uuid])
   const allAmountsValid = rows.every(row => !row.belowPaid && row.amount > 0)
-  const canSubmit = allMethodsSelected && allAmountsValid && !!paymentDate && paymentDate >= minimumPaymentDate && paymentDate <= today && !isSubmitting
+  const canSubmit = allMethodsSelected && allAmountsValid && !!paymentDate && paymentDate <= today && !isSubmitting
 
   const updateTaxChoice = (invoice: Invoice, field: keyof TaxChoice, checked: boolean) => {
     setTaxChoices(prev => ({
@@ -134,12 +130,8 @@ export default function BulkRecordPaymentModal({ open, invoices, onClose, onSucc
             className="form-input w-full text-sm"
             value={paymentDate}
             onChange={e => setPaymentDate(e.target.value)}
-            min={minimumPaymentDate || undefined}
             max={today}
           />
-          {paymentDate && paymentDate < minimumPaymentDate && (
-            <p className="text-xs text-red-500 mt-1">Tanggal pelunasan tidak boleh sebelum tanggal invoice yang dipilih.</p>
-          )}
         </div>
 
         {/* Nominal Pembayaran */}

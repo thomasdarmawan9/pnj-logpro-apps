@@ -7,7 +7,7 @@ import { InvoiceStatus } from '../../domain/entities/Invoice'
 import { validatePayment } from '../../application/validators/PaymentValidator'
 import { todayDateOnly } from '@/lib/dateOnly'
 
-export default function usePayment(invoiceUuid: string, remainingAmount: number, invoiceDate?: string) {
+export default function usePayment(invoiceUuid: string, remainingAmount: number) {
   const dispatch = useDispatch<AppDispatch>()
   const today = todayDateOnly()
 
@@ -27,7 +27,7 @@ export default function usePayment(invoiceUuid: string, remainingAmount: number,
   }
 
   const submit = async (): Promise<{ ok: boolean; error?: string; status?: InvoiceStatus }> => {
-    const result = validatePayment(form, remainingAmount, invoiceDate)
+    const result = validatePayment(form, remainingAmount)
     if (!result.valid) {
       setErrors(result.errors)
       return { ok: false }
