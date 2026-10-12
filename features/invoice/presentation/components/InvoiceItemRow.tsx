@@ -48,6 +48,8 @@ const UNIT_OTHER_VALUE = 'Lainnya'
 interface FleetOption {
   id: number
   label: string
+  rentalStatus: 'rented' | null
+  rentalInvoiceNumber: string | null
 }
 
 interface ApiFleetOption {
@@ -55,6 +57,7 @@ interface ApiFleetOption {
   name: string
   plate_number: string
   rental_status?: 'rented' | null
+  rental_invoice_number?: string | null
 }
 
 function parseRupiah(val: string): number {
@@ -122,17 +125,19 @@ export default function InvoiceItemRow({
       .then(data => {
         if (!alive) return
         setFleetOptions(data
-          .filter(fleet => fleet.plate_number !== 'TBD' && fleet.rental_status !== 'rented')
+          .filter(fleet => fleet.plate_number !== 'TBD' && (serviceType === 'rental' || fleet.rental_status !== 'rented'))
           .map(fleet => ({
             id: Number(fleet.id),
             label: `${fleet.name} ${fleet.plate_number}`,
+            rentalStatus: fleet.rental_status ?? null,
+            rentalInvoiceNumber: fleet.rental_invoice_number ?? null,
           })))
       })
       .catch(() => {
         if (alive) setFleetOptions([])
       })
     return () => { alive = false }
-  }, [])
+  }, [serviceType])
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -146,6 +151,9 @@ export default function InvoiceItemRow({
     const q = fleetSearch.trim().toLowerCase()
     return (q ? fleetOptions.filter(f => f.label.toLowerCase().includes(q)) : fleetOptions).slice(0, 25)
   }, [fleetOptions, fleetSearch])
+  const selectedRentalFleet = serviceType === 'rental' && !readOnlyStructure
+    ? fleetOptions.find(f => f.id === item.fleet_id && f.rentalStatus === 'rented')
+    : null
 
   return (
     <div
@@ -227,7 +235,12 @@ export default function InvoiceItemRow({
                       className="w-full px-3 py-2 text-left text-sm hover:bg-green-50 flex items-center gap-2"
                     >
                       <span className="w-4 text-green-600 shrink-0">{selected && <Check size={13} />}</span>
-                      <span className="truncate">{f.label}</span>
+                      <span className="min-w-0 flex-1 truncate">{f.label}</span>
+                      {serviceType === 'rental' && f.rentalStatus === 'rented' && (
+                        <span className="max-w-[45%] shrink-0 truncate text-[11px] text-amber-700" title={f.rentalInvoiceNumber ? `Sedang disewa · invoice #${f.rentalInvoiceNumber}` : 'Sedang disewa'}>
+                          Sedang disewa{f.rentalInvoiceNumber ? ` · #${f.rentalInvoiceNumber}` : ''}
+                        </span>
+                      )}
                     </button>
                   )
                 }) : (
@@ -237,6 +250,11 @@ export default function InvoiceItemRow({
             </div>
           )}
         </div>
+        {selectedRentalFleet && (
+          <p className="text-xs text-amber-700 mb-2">
+            Armada tercatat dalam periode sewa aktif{selectedRentalFleet.rentalInvoiceNumber ? ` (contoh: invoice #${selectedRentalFleet.rentalInvoiceNumber})` : ''}. Pastikan periode tagihan tidak terduplikasi.
+          </p>
+        )}
         <label className="text-xs text-gray-500 mb-1 block">{serviceType === 'rental' ? 'Jenis kendaraan di invoice *' : 'Armada di invoice *'}</label>
         <input
           className={`form-input w-full text-sm ${errors[`${errPrefix}.fleet_label`] ? 'border-red-400' : ''}`}

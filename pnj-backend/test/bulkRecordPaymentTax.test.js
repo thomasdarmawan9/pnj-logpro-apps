@@ -117,6 +117,18 @@ test('pelunasan massal menghitung pajak baru per invoice dan mempertahankan paja
   })
 })
 
+test('pelunasan massal menerima tanggal sebelum invoice yang dipilih', async () => {
+  const invoices = [makeInvoice(3, { invoice_date: '2025-08-10' }), makeInvoice(4, { invoice_date: '2025-08-20' })]
+  await withBulkStubs(invoices, async ({ created }) => {
+    const result = await recordBulkPayments({
+      payment_date: '2025-07-15',
+      payments: invoices.map(invoice => entry(invoice, 10_000_000, 0, 0)),
+    })
+    assert.deepEqual(created.map(payment => payment.payment_date), ['2025-07-15', '2025-07-15'])
+    assert.ok(result.every(invoice => invoice.status === STATUS.PAID && invoice.settlement_date === '2025-07-15'))
+  })
+})
+
 test('pelunasan massal menolak opsi pajak yang membuat netto di bawah pembayaran lama', async () => {
   const invoice = makeInvoice(3, { paid_amount: 9_500_000 })
   await withBulkStubs([invoice], async ({ created }) => {

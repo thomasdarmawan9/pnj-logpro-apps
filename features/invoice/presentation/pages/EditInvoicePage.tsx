@@ -469,17 +469,10 @@ export default function EditInvoicePage({ uuid }: Props) {
       return
     }
 
-    // Tanggal pelunasan (hanya untuk invoice lunas): wajib terisi & tidak boleh
-    // sebelum tanggal invoice.
+    // Tanggal pelunasan (hanya untuk invoice lunas) wajib terisi.
     if (isPaid) {
       if (!settlementDate) {
         const message = 'Tanggal pelunasan wajib diisi'
-        setErrors({ settlement_date: message })
-        pushToast({ title: 'Tanggal tidak valid', description: message, variant: 'error' })
-        return
-      }
-      if (settlementDate < invoiceDate) {
-        const message = 'Tanggal pelunasan tidak boleh sebelum tanggal invoice'
         setErrors({ settlement_date: message })
         pushToast({ title: 'Tanggal tidak valid', description: message, variant: 'error' })
         return
@@ -889,7 +882,6 @@ export default function EditInvoicePage({ uuid }: Props) {
                   type="date"
                   className="form-input w-full disabled:bg-gray-50 disabled:text-gray-500"
                   value={settlementDate}
-                  min={invoiceDate || invoice?.invoice_date}
                   max={today}
                   onChange={e => setSettlementDate(e.target.value)}
                   disabled={!isPaid}

@@ -48,7 +48,7 @@ export default function RecordPaymentModal({ open, invoice, onClose, onSuccess }
     : invoice?.total_amount ?? 0
   const remaining = round2(Math.max(0, previewTotal - (invoice?.paid_amount ?? 0)))
   const exceedsExistingPayments = !!invoice && invoice.paid_amount > previewTotal + 0.001
-  const { form, errors, isSubmitting, update, submit, reset } = usePayment(invoice?.uuid ?? '', remaining, invoice?.invoice_date)
+  const { form, errors, isSubmitting, update, submit, reset } = usePayment(invoice?.uuid ?? '', remaining)
   const { push: pushToast } = useToast()
 
   // Pisahkan display string dari form.amount agar user bisa ketik bebas
@@ -141,7 +141,6 @@ export default function RecordPaymentModal({ open, invoice, onClose, onSuccess }
             className="form-input w-full text-sm"
             value={form.payment_date}
             onChange={e => update('payment_date', e.target.value)}
-            min={invoice?.invoice_date}
             max={todayDateOnly()}
           />
           {errors.payment_date && <p className="text-xs text-red-500 mt-1">{errors.payment_date}</p>}

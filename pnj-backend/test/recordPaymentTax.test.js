@@ -77,6 +77,29 @@ test('pembayaran biasa mempertahankan total dan tidak menghitung ulang item', as
   })
 })
 
+test('pelunasan dapat dicatat sebelum tanggal invoice', async () => {
+  await withPaymentStubs({ invoice_date: '2025-08-10', paid_amount: 0 }, async ({ invoice, created }) => {
+    const result = await recordPayment(invoice.uuid, {
+      payment_date: '2025-07-15', amount: 10_000_000, method: 'cash',
+    })
+    assert.equal(created[0].payment_date, '2025-07-15')
+    assert.equal(result.status, STATUS.PAID)
+    assert.equal(result.settlement_date, '2025-07-15')
+  })
+})
+
+test('tanggal lunas tetap mengikuti pembayaran terakhir saat pelunasan dicatat mundur', async () => {
+  await withPaymentStubs({ invoice_date: '2025-08-10' }, async ({ invoice, created }) => {
+    Payment.findOne = async () => ({ payment_date: '2025-09-01' })
+    const result = await recordPayment(invoice.uuid, {
+      payment_date: '2025-07-15', amount: 8_000_000, method: 'transfer',
+    })
+    assert.equal(created[0].payment_date, '2025-07-15')
+    assert.equal(result.status, STATUS.PAID)
+    assert.equal(result.settlement_date, '2025-09-01')
+  })
+})
+
 test('PPN dan PPh diaktifkan bersamaan dengan pelunasan', async () => {
   await withPaymentStubs({}, async ({ invoice, created, getItemReads }) => {
     const result = await recordPayment(invoice.uuid, payment(7_910_000, { tax_percent: 1.1, pph_percent: 2 }))
