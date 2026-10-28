@@ -8,7 +8,7 @@
  *   2. Bar info dokumen  (No | Tanggal | "Surat Jalan")
  *   3. Kepada + garis bawah
  *   4. Intro teks: "Bersama dengan ini kami terima sejumlah barang berikut :"
- *   5. Tabel (No | Nama Barang | QUANTITY) + kolom kanan (Nama Sopir / No Pol)
+ *   5. Tabel barang + rute di kiri, Nama Sopir / No Pol di kanan
  *   6. Tanda tangan (Tanda Terima, | Hormat Kami,)
  */
 
@@ -34,6 +34,11 @@ const TOP_COPY_Y  = 12
 const BOT_COPY_Y  = TOP_COPY_Y + COPY_H + 14     // 416
 const SAME_PAGE_GAP = 12
 const SIGN_SPACE = 48
+const INFO_LEFT_W = 435
+const INFO_RIGHT_W = COPY_W - INFO_LEFT_W
+const INFO_FONT_SZ = 8.5
+const INFO_LABEL_H = 14
+const INFO_VALUE_PAD = 4
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 function hLine(doc, x, y, w, lw = 0.5, color = C_BORDER) {
@@ -117,18 +122,33 @@ function partySectionHeight(sj) {
   return Math.max(32, 12 + buildPartyLabels(sj).length * 10)
 }
 
-function estimateCopyBottom(sj, y0, includeSign = true) {
+function routeText(sj) {
+  return `${sj.origin || '-'} - ${sj.destination || '-'}`
+}
+
+function infoValueHeight(doc, leftValue, rightValue) {
+  doc.font('Helvetica').fontSize(INFO_FONT_SZ)
+  const leftH = leftValue ? doc.heightOfString(leftValue, { width: INFO_LEFT_W - 8 }) : 0
+  const rightH = rightValue ? doc.heightOfString(rightValue, { width: INFO_RIGHT_W - 8 }) : 0
+  return Math.max(INFO_LABEL_H, Math.max(leftH, rightH) + INFO_VALUE_PAD * 2)
+}
+
+function estimateCopyBottom(doc, sj, y0, includeSign = true) {
   const rowCount = printableRowCount(sj)
   const tableY = y0 + 99 + partySectionHeight(sj)
   const extraStart = tableY + 14 + rowCount * 14
-  const spareBottom = extraStart + 14 + 14 + 14 + 14 + 18
-  return includeSign ? spareBottom + 10 + SIGN_SPACE : spareBottom
+  const driverName = sj.driver?.name || sj.driver_name_manual || '-'
+  const plateNumber = !sj.fleet || sj.fleet.is_tbd ? '-' : (sj.fleet.plate_number || '-')
+  const spareBottom = extraStart +
+    INFO_LABEL_H + infoValueHeight(doc, routeText(sj), driverName) +
+    INFO_LABEL_H + infoValueHeight(doc, '', plateNumber) + 18
+  return spareBottom + 10 + (includeSign ? SIGN_SPACE : 0)
 }
 
-function canRenderTwoCopiesSamePage(sj, options) {
+function canRenderTwoCopiesSamePage(doc, sj, options) {
   if (buildRowData(sj).length > 8) return false
-  const firstBottom = estimateCopyBottom(sj, TOP_COPY_Y, options.includeSign !== false)
-  const secondBottom = estimateCopyBottom(sj, BOT_COPY_Y, options.includeSign !== false)
+  const firstBottom = estimateCopyBottom(doc, sj, TOP_COPY_Y, options.includeSign !== false)
+  const secondBottom = estimateCopyBottom(doc, sj, BOT_COPY_Y, options.includeSign !== false)
   return firstBottom + SAME_PAGE_GAP <= BOT_COPY_Y && secondBottom <= PAGE_H - 12
 }
 
@@ -338,36 +358,34 @@ function renderCopy(doc, sj, company, options, Y0, copyIndex = 0) {
     }
   }
 
-  // --- Extra rows kanan bawah (Nama Sopir / No Pol) — stacked layout ---
+  // --- Extra rows bawah: Rute di kiri, Nama Sopir / No Pol di kanan ---
   const fleetIsTbd = !sj.fleet || sj.fleet.is_tbd
   const platNomor  = fleetIsTbd ? '-' : (sj.fleet.plate_number || '-')
   const namaSopir  = sj.driver?.name || sj.driver_name_manual || '-'
 
   const EXTRA_START = TABLE_Y + ROW_H + TABLE_ROWS * ROW_H
-  const FONT_SZ = 8.5
-  const LBL_H  = 14   // tinggi baris label
-  const VAL_PAD = 4   // padding vertikal dalam value row
   const LEFT_W = MAIN_W
 
-  // Render satu field stacked: [label row] + [value row], return total height
-  function stackedRow(y, label, value) {
-    doc.font('Helvetica').fontSize(FONT_SZ)
-    const textH = doc.heightOfString(value, { width: RIGHT_W - 8 })
-    const valH  = Math.max(LBL_H, textH + VAL_PAD * 2)
+  // Render dua field sejajar: [label row] + [value row], return total height
+  function stackedRow(y, label, value, leftLabel = '', leftValue = '') {
+    const valH = infoValueHeight(doc, leftValue, value)
 
     // Baris label
     if (rowBg) {
-      doc.rect(X_NO,  y, LEFT_W,  LBL_H).fillAndStroke(rowBg, C_BORDER)
-      doc.rect(X_RGT, y, RIGHT_W, LBL_H).fillAndStroke(rowBg, C_BORDER)
+      doc.rect(X_NO,  y, LEFT_W,  INFO_LABEL_H).fillAndStroke(rowBg, C_BORDER)
+      doc.rect(X_RGT, y, RIGHT_W, INFO_LABEL_H).fillAndStroke(rowBg, C_BORDER)
     } else {
-      doc.rect(X_NO,  y, LEFT_W,  LBL_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
-      doc.rect(X_RGT, y, RIGHT_W, LBL_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+      doc.rect(X_NO,  y, LEFT_W,  INFO_LABEL_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
+      doc.rect(X_RGT, y, RIGHT_W, INFO_LABEL_H).strokeColor(C_BORDER).lineWidth(0.5).stroke()
     }
-    doc.font('Helvetica-Bold').fontSize(FONT_SZ).fillColor(C_DARK)
-       .text(label, X_RGT + 4, y + (LBL_H - FONT_SZ) / 2, { width: RIGHT_W - 8, lineBreak: false })
+    doc.font('Helvetica-Bold').fontSize(INFO_FONT_SZ).fillColor(C_DARK)
+    if (leftLabel) {
+      doc.text(leftLabel, X_NO + 4, y + (INFO_LABEL_H - INFO_FONT_SZ) / 2, { width: LEFT_W - 8, lineBreak: false })
+    }
+    doc.text(label, X_RGT + 4, y + (INFO_LABEL_H - INFO_FONT_SZ) / 2, { width: RIGHT_W - 8, lineBreak: false })
 
     // Baris nilai
-    const vY = y + LBL_H
+    const vY = y + INFO_LABEL_H
     if (rowBg) {
       doc.rect(X_NO,  vY, LEFT_W,  valH).fillAndStroke(rowBg, C_BORDER)
       doc.rect(X_RGT, vY, RIGHT_W, valH).fillAndStroke(rowBg, C_BORDER)
@@ -375,13 +393,16 @@ function renderCopy(doc, sj, company, options, Y0, copyIndex = 0) {
       doc.rect(X_NO,  vY, LEFT_W,  valH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
       doc.rect(X_RGT, vY, RIGHT_W, valH).strokeColor(C_BORDER).lineWidth(0.5).stroke()
     }
-    doc.font('Helvetica').fontSize(FONT_SZ).fillColor(C_DARK)
-       .text(value, X_RGT + 4, vY + VAL_PAD, { width: RIGHT_W - 8 })
+    doc.font('Helvetica').fontSize(INFO_FONT_SZ).fillColor(C_DARK)
+    if (leftValue) {
+      doc.text(leftValue, X_NO + 4, vY + INFO_VALUE_PAD, { width: LEFT_W - 8 })
+    }
+    doc.text(value, X_RGT + 4, vY + INFO_VALUE_PAD, { width: RIGHT_W - 8 })
 
-    return LBL_H + valH
+    return INFO_LABEL_H + valH
   }
 
-  const hNamaSopir = stackedRow(EXTRA_START, 'Nama Sopir :', namaSopir)
+  const hNamaSopir = stackedRow(EXTRA_START, 'Nama Sopir :', namaSopir, 'Rute :', routeText(sj))
   const rNoPol     = EXTRA_START + hNamaSopir
   const hNoPol     = stackedRow(rNoPol, 'No Pol :', platNomor)
   const rSpare     = rNoPol + hNoPol
@@ -529,7 +550,7 @@ function render(doc, sj, company, options = {}) {
   const copies    = typeof options.copies === 'number' && options.copies > 0
     ? options.copies
     : 3
-  const twoCopiesSamePage = canRenderTwoCopiesSamePage(sj, options)
+  const twoCopiesSamePage = canRenderTwoCopiesSamePage(doc, sj, options)
 
   for (let i = 0; i < copies; i++) {
     const isSecondCopyOnSamePage = twoCopiesSamePage && i % 2 === 1
